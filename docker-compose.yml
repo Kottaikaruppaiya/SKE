@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://ske_user:ske_secure_password_2026@postgres:5432/ske_export_db?schema=public
+      - JWT_SECRET=ske_production_secret_key_change_me_in_vps
+    volumes:
+      - ske_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=ske_user
+      - POSTGRES_PASSWORD=ske_secure_password_2026
+      - POSTGRES_DB=ske_export_db
+    volumes:
+      - ske_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ske_user -d ske_export_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  ske_storage:
+  ske_pgdata:

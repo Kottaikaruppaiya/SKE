@@ -1,0 +1,283 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  VIEWER
+}
+
+enum DocumentCategory {
+  COMMERCIAL_INVOICE
+  SHIPPING_BILL
+  FIRC_PAYMENT
+  BILL_OF_LADING
+  BRC_COPY_1
+  BRC_COPY_2
+  ADDITIONAL_DOC
+}
+
+enum ReviewStatus {
+  EXTRACTED
+  NEEDS_REVIEW
+  CONFIRMED
+  MANUALLY_ENTERED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PART_PAID
+  FULLY_PAID
+  EXCESS_RECEIVED
+  REVIEW_REQUIRED
+}
+
+enum IncentiveType {
+  DRAWBACK
+  RODTEP
+  ROSCTL
+}
+
+enum IncentiveStatus {
+  PENDING
+  PART_RECEIVED
+  RECEIVED
+}
+
+enum BrcUploadMode {
+  SINGLE
+  MULTIPLE
+}
+
+enum BrcStatus {
+  PENDING
+  ISSUED
+  REALISED
+  OVERDUE
+}
+
+model User {
+  id           String      @id @default(uuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         Role        @default(ADMIN)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  auditLogs    AuditLog[]
+  documents    Document[]
+}
+
+model FinancialYear {
+  id        String     @id @default(uuid())
+  label     String     @unique // e.g. "2026-27"
+  startDate DateTime
+  endDate   DateTime
+  isCurrent Boolean    @default(false)
+  shipments Shipment[]
+}
+
+model ConsigneeMaster {
+  id              String     @id @default(uuid())
+  name            String     @unique
+  country         String
+  portOfDischarge String?
+  paymentTerms    String?
+  currency        String     @default("USD")
+  contactEmail    String?
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  shipments       Shipment[]
+}
+
+model BankMaster {
+  id            String     @id @default(uuid())
+  name          String     @unique
+  branch        String?
+  adCode        String?
+  ifscCode      String?
+  swiftCode     String?
+  accountNumber String?
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  payments      Payment[]
+}
+
+model Shipment {
+  id                   String              @id @default(uuid())
+  financialYearId      String
+  financialYear        FinancialYear       @relation(fields: [financialYearId], references: [id])
+  invoiceNumber        String
+  normalizedInvoiceKey String
+  invoiceDate          DateTime
+  consigneeId          String
+  consignee            ConsigneeMaster     @relation(fields: [consigneeId], references: [id])
+  portCode             String
+  packageCount         Int?
+  invoiceValueUsd      Decimal             @db.Decimal(18, 2)
+  shippingBillNumber   String
+  shippingBillDate     DateTime
+  sbExchangeRate       Decimal             @db.Decimal(12, 4)
+  fobValueInr          Decimal             @db.Decimal(18, 2)
+  blNumber             String?
+  blDate               DateTime?
+  vesselName           String?
+  paymentStatus        PaymentStatus       @default(UNPAID)
+  reviewStatus         ReviewStatus        @default(NEEDS_REVIEW)
+  remarks              String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  items                InvoiceItem[]
+  documents            Document[]
+  allocations          PaymentAllocation[]
+  incentives           IncentiveRecord[]
+  brcRecord            BrcRecord?
+
+  @@unique([financialYearId, normalizedInvoiceKey])
+  @@index([financialYearId])
+  @@index([normalizedInvoiceKey])
+  @@index([shippingBillNumber])
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  shipmentId  String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  description String
+  hsnCode     String?
+  quantity    Decimal  @db.Decimal(14, 2)
+  unit        String   @default("PCS")
+  rateUsd     Decimal  @db.Decimal(14, 4)
+  amountUsd   Decimal  @db.Decimal(18, 2)
+}
+
+model Payment {
+  id              String              @id @default(uuid())
+  irmNumber       String              @unique
+  senderReference String?
+  currency        String              @default("USD")
+  verifiedAmount  Decimal             @db.Decimal(18, 2)
+  inrAmount       Decimal?            @db.Decimal(18, 2)
+  exchangeRate    Decimal?            @db.Decimal(12, 4)
+  valueDate       DateTime
+  creditDate      DateTime
+  fircIssueDate   DateTime?
+  bankId          String
+  bank            BankMaster          @relation(fields: [bankId], references: [id])
+  purposeCode     String?             @default("P0102")
+  remarks         String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  allocations     PaymentAllocation[]
+  documents       Document[]
+}
+
+model PaymentAllocation {
+  id                 String   @id @default(uuid())
+  paymentId          String
+  payment            Payment  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  shipmentId         String
+  shipment           Shipment @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  allocatedAmountUsd Decimal  @db.Decimal(18, 2)
+  notes              String?
+  allocatedAt        DateTime @default(now())
+  allocatedByUserId  String
+
+  @@index([paymentId])
+  @@index([shipmentId])
+}
+
+model IncentiveRecord {
+  id             String          @id @default(uuid())
+  shipmentId     String
+  shipment       Shipment        @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  type           IncentiveType
+  claimedAmount  Decimal         @db.Decimal(18, 2)
+  status         IncentiveStatus @default(PENDING)
+  receivedAmount Decimal         @default(0) @db.Decimal(18, 2)
+  receivedDate   DateTime?
+  scrollNumber   String?
+  remarks        String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([shipmentId])
+}
+
+model BrcRecord {
+  id                String        @id @default(uuid())
+  shipmentId        String        @unique
+  shipment          Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  brcNumber         String?
+  issueDate         DateTime?
+  realisationDate   DateTime?
+  realisedAmount    Decimal?      @db.Decimal(18, 2)
+  realisedCurrency  String?       @default("USD")
+  uploadMode        BrcUploadMode @default(SINGLE)
+  statutoryDeadline DateTime?
+  status            BrcStatus     @default(PENDING)
+  remarks           String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([brcNumber])
+}
+
+model Document {
+  id               String           @id @default(uuid())
+  shipmentId       String?
+  shipment         Shipment?        @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  paymentId        String?
+  payment          Payment?         @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  category         DocumentCategory
+  originalFilename String
+  storedPath       String
+  mimeType         String
+  fileSizeBytes    BigInt
+  version          Int              @default(1)
+  isCurrent        Boolean          @default(true)
+  reviewStatus     ReviewStatus     @default(EXTRACTED)
+  extractedData    Json?
+  uploadedByUserId String
+  uploadedByUser   User             @relation(fields: [uploadedByUserId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([shipmentId])
+  @@index([paymentId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String?
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([timestamp])
+}
+
+model AppSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
