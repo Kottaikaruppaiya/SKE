@@ -111,6 +111,144 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
     }
   };
 
+  // BRC Edit state
+  const [isEditingBrc, setIsEditingBrc] = useState(false);
+  const [brcNumber, setBrcNumber] = useState('');
+  const [brcStatus, setBrcStatus] = useState<'PENDING' | 'ISSUED' | 'REALISED'>('PENDING');
+  const [brcIssueDate, setBrcIssueDate] = useState('');
+  const [brcRealisationDate, setBrcRealisationDate] = useState('');
+  const [brcUploadMode, setBrcUploadMode] = useState<'SINGLE' | 'MULTIPLE'>('SINGLE');
+  const [brcRemarks, setBrcRemarks] = useState('');
+
+  // Incentive Edit / Add state
+  const [editingIncentive, setEditingIncentive] = useState<any | null>(null);
+  const [isAddingIncentive, setIsAddingIncentive] = useState(false);
+  const [incType, setIncType] = useState<'DRAWBACK' | 'RODTEP' | 'ROSCTL'>('DRAWBACK');
+  const [incClaimed, setIncClaimed] = useState<number>(0);
+  const [incStatus, setIncStatus] = useState<string>('CLAIMED');
+  const [incReceived, setIncReceived] = useState<number>(0);
+  const [incReceivedDate, setIncReceivedDate] = useState<string>('');
+  const [incScrollNo, setIncScrollNo] = useState<string>('');
+  const [incRemarks, setIncRemarks] = useState<string>('');
+
+  const openEditBrc = () => {
+    setBrcNumber(shipment?.brcRecord?.brcNumber || '');
+    setBrcStatus((shipment?.brcRecord?.status as any) || 'PENDING');
+    setBrcIssueDate(shipment?.brcRecord?.issueDate || '');
+    setBrcRealisationDate(shipment?.brcRecord?.realisationDate || '');
+    setBrcUploadMode(shipment?.brcRecord?.uploadMode || 'SINGLE');
+    setBrcRemarks(shipment?.brcRecord?.remarks || '');
+    setIsEditingBrc(true);
+  };
+
+  const handleSaveBrc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shipment) return;
+    try {
+      await api.updateBrc(shipment.brcRecord?.id || shipment.id, {
+        brcNumber,
+        status: brcStatus,
+        issueDate: brcIssueDate || undefined,
+        realisationDate: brcRealisationDate || undefined,
+        uploadMode: brcUploadMode,
+        remarks: brcRemarks || undefined,
+      });
+      setIsEditingBrc(false);
+      await loadData();
+      if (onDeleted) onDeleted();
+    } catch (err: any) {
+      alert(err.message || 'Failed to save BRC');
+    }
+  };
+
+  const handleResetBrc = async () => {
+    if (!shipment) return;
+    if (!window.confirm(`Reset BRC status to PENDING and clear BRC issuance details for invoice ${shipment.invoiceNumber}?`)) return;
+    try {
+      await api.resetBrc(shipment.brcRecord?.id || shipment.id);
+      setIsEditingBrc(false);
+      await loadData();
+      if (onDeleted) onDeleted();
+    } catch (err: any) {
+      alert(err.message || 'Failed to reset BRC');
+    }
+  };
+
+  const openEditIncentive = (inc: any) => {
+    setEditingIncentive(inc);
+    setIncType(inc.type);
+    setIncClaimed(inc.claimedAmount || 0);
+    setIncStatus(inc.status || 'CLAIMED');
+    setIncReceived(inc.receivedAmount || 0);
+    setIncReceivedDate(inc.receivedDate || '');
+    setIncScrollNo(inc.scrollNumber || '');
+    setIncRemarks(inc.remarks || '');
+  };
+
+  const handleSaveIncentive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingIncentive) return;
+    try {
+      await api.updateIncentive(editingIncentive.id, {
+        status: incStatus as any,
+        claimedAmount: Number(incClaimed),
+        receivedAmount: Number(incReceived),
+        receivedDate: incReceivedDate || undefined,
+        scrollNumber: incScrollNo || undefined,
+        remarks: incRemarks || undefined,
+      });
+      setEditingIncentive(null);
+      await loadData();
+      if (onDeleted) onDeleted();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update incentive');
+    }
+  };
+
+  const handleDeleteIncentive = async (incId: string, incTypeName: string) => {
+    if (!window.confirm(`Are you sure you want to delete ${incTypeName} incentive claim?`)) return;
+    try {
+      await api.deleteIncentive(incId);
+      await loadData();
+      if (onDeleted) onDeleted();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete incentive');
+    }
+  };
+
+  const openCreateIncentive = () => {
+    setIsAddingIncentive(true);
+    setIncType('DRAWBACK');
+    setIncClaimed(0);
+    setIncStatus('CLAIMED');
+    setIncReceived(0);
+    setIncReceivedDate('');
+    setIncScrollNo('');
+    setIncRemarks('');
+  };
+
+  const handleCreateIncentive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shipment) return;
+    try {
+      await api.createIncentive({
+        shipmentId: shipment.id,
+        type: incType,
+        claimedAmount: Number(incClaimed),
+        receivedAmount: Number(incReceived),
+        status: incStatus as any,
+        receivedDate: incReceivedDate || undefined,
+        scrollNumber: incScrollNo || undefined,
+        remarks: incRemarks || undefined,
+      });
+      setIsAddingIncentive(false);
+      await loadData();
+      if (onDeleted) onDeleted();
+    } catch (err: any) {
+      alert(err.message || 'Failed to create incentive');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-5xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
@@ -549,56 +687,167 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                         <h3 className="text-sm font-bold text-slate-900">Bank Realisation Certificate (BRC) Status</h3>
                         <p className="text-xs text-slate-500">DGFT Statement of Bank Realisation / eBRC</p>
                       </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          shipment.brcRecord?.status === 'REALISED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : shipment.brcRecord?.status === 'ISSUED'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {shipment.brcRecord?.status || 'PENDING'}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            shipment.brcRecord?.status === 'REALISED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : shipment.brcRecord?.status === 'ISSUED'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {shipment.brcRecord?.status || 'PENDING'}
+                        </span>
+                        {!isViewer && !isEditingBrc && (
+                          <div className="flex items-center space-x-1.5 ml-2">
+                            <button
+                              onClick={openEditBrc}
+                              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded transition-colors"
+                            >
+                              Edit BRC Details
+                            </button>
+                            {(shipment.brcRecord?.status === 'ISSUED' || shipment.brcRecord?.status === 'REALISED') && (
+                              <button
+                                onClick={handleResetBrc}
+                                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded transition-colors"
+                              >
+                                Reset BRC
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div>
-                        <span className="text-slate-500 block">BRC Reference Number:</span>
-                        <span className="font-mono font-semibold text-slate-900 text-sm">
-                          {shipment.brcRecord?.brcNumber || 'Awaiting issuance'}
-                        </span>
-                      </div>
+                    {isEditingBrc ? (
+                      <form onSubmit={handleSaveBrc} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4 text-xs">
+                        <div className="font-bold text-slate-800 text-sm">Update Bank Realisation Certificate</div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">BRC Reference Number</label>
+                            <input
+                              type="text"
+                              value={brcNumber}
+                              onChange={(e) => setBrcNumber(e.target.value)}
+                              placeholder="e.g. BRC-2026-08892"
+                              className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">BRC Realisation Status</label>
+                            <select
+                              value={brcStatus}
+                              onChange={(e) => setBrcStatus(e.target.value as any)}
+                              className="w-full border border-slate-300 rounded-lg p-2 bg-white font-semibold"
+                            >
+                              <option value="PENDING">PENDING</option>
+                              <option value="ISSUED">ISSUED</option>
+                              <option value="REALISED">REALISED</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Certificate Issue Date</label>
+                            <input
+                              type="date"
+                              value={brcIssueDate}
+                              onChange={(e) => setBrcIssueDate(e.target.value)}
+                              className="w-full border border-slate-300 rounded-lg p-2"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Bank Realisation Date</label>
+                            <input
+                              type="date"
+                              value={brcRealisationDate}
+                              onChange={(e) => setBrcRealisationDate(e.target.value)}
+                              className="w-full border border-slate-300 rounded-lg p-2"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Upload Mode</label>
+                            <select
+                              value={brcUploadMode}
+                              onChange={(e) => setBrcUploadMode(e.target.value as any)}
+                              className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                            >
+                              <option value="SINGLE">SINGLE (1 File Mode)</option>
+                              <option value="MULTIPLE">MULTIPLE (2 Files Mode)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="font-semibold text-slate-700 block mb-1">Remarks / Bank EDPMS Notes</label>
+                            <input
+                              type="text"
+                              value={brcRemarks}
+                              onChange={(e) => setBrcRemarks(e.target.value)}
+                              placeholder="Optional remarks"
+                              className="w-full border border-slate-300 rounded-lg p-2"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end space-x-2 pt-2 border-t border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingBrc(false)}
+                            className="px-3 py-1.5 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-200"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm"
+                          >
+                            Save BRC Details
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <span className="text-slate-500 block">BRC Reference Number:</span>
+                          <span className="font-mono font-semibold text-slate-900 text-sm">
+                            {shipment.brcRecord?.brcNumber || 'Awaiting issuance'}
+                          </span>
+                        </div>
 
-                      <div>
-                        <span className="text-slate-500 block">Upload Mode:</span>
-                        <span className="font-semibold text-slate-800">
-                          {shipment.brcRecord?.uploadMode === 'SINGLE' ? 'Single BRC Mode (1 File)' : 'Multiple Mode (2 Files)'}
-                        </span>
-                      </div>
+                        <div>
+                          <span className="text-slate-500 block">Upload Mode:</span>
+                          <span className="font-semibold text-slate-800">
+                            {shipment.brcRecord?.uploadMode === 'SINGLE' ? 'Single BRC Mode (1 File)' : 'Multiple Mode (2 Files)'}
+                          </span>
+                        </div>
 
-                      <div>
-                        <span className="text-slate-500 block">Issue Date:</span>
-                        <span className="font-medium text-slate-800">{shipment.brcRecord?.issueDate || '—'}</span>
-                      </div>
+                        <div>
+                          <span className="text-slate-500 block">Issue Date:</span>
+                          <span className="font-medium text-slate-800">{shipment.brcRecord?.issueDate || '—'}</span>
+                        </div>
 
-                      <div>
-                        <span className="text-slate-500 block">Bank Realisation Date:</span>
-                        <span className="font-medium text-slate-800">{shipment.brcRecord?.realisationDate || '—'}</span>
-                      </div>
+                        <div>
+                          <span className="text-slate-500 block">Bank Realisation Date:</span>
+                          <span className="font-medium text-slate-800">{shipment.brcRecord?.realisationDate || '—'}</span>
+                        </div>
 
-                      <div>
-                        <span className="text-slate-500 block">Statutory Realisation Deadline:</span>
-                        <span className="font-semibold text-amber-700">{shipment.brcRecord?.statutoryDeadline || '—'}</span>
-                      </div>
+                        <div>
+                          <span className="text-slate-500 block">Statutory Realisation Deadline:</span>
+                          <span className="font-semibold text-amber-700">{shipment.brcRecord?.statutoryDeadline || '—'}</span>
+                        </div>
 
-                      <div>
-                        <span className="text-slate-500 block">Net Realised USD:</span>
-                        <span className="font-bold text-slate-900">
-                          ${(shipment.brcRecord?.realisedAmount || shipment.totalPaidUsd || 0).toLocaleString()}
-                        </span>
+                        <div>
+                          <span className="text-slate-500 block">Net Realised USD:</span>
+                          <span className="font-bold text-slate-900">
+                            ${(shipment.brcRecord?.realisedAmount || shipment.totalPaidUsd || 0).toLocaleString()}
+                          </span>
+                        </div>
+
+                        {shipment.brcRecord?.remarks && (
+                          <div className="col-span-2 pt-2 border-t border-slate-100">
+                            <span className="text-slate-500 block">BRC Notes:</span>
+                            <span className="text-slate-800">{shipment.brcRecord.remarks}</span>
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -606,7 +855,201 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               {/* TAB 5: INCENTIVES */}
               {activeTab === 'incentives' && (
                 <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-slate-900">Export Incentives & Subsidies</h3>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Export Incentives & Subsidies</h3>
+                      <p className="text-xs text-slate-500">
+                        Government incentive claims (Duty Drawback DBK, RoDTEP, RoSCTL) for Invoice {shipment.invoiceNumber}
+                      </p>
+                    </div>
+                    {!isViewer && (
+                      <button
+                        onClick={openCreateIncentive}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center space-x-1.5"
+                      >
+                        <Plus size={14} />
+                        <span>Add Incentive</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Add Incentive Form Drawer */}
+                  {isAddingIncentive && (
+                    <form onSubmit={handleCreateIncentive} className="p-4 bg-blue-50/50 rounded-xl border border-blue-200 space-y-3 text-xs">
+                      <div className="font-bold text-slate-900 text-sm">Add New Incentive Claim</div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Scheme Type *</label>
+                          <select
+                            value={incType}
+                            onChange={(e) => setIncType(e.target.value as any)}
+                            className="w-full border border-slate-300 rounded-lg p-2 bg-white font-semibold"
+                          >
+                            <option value="DRAWBACK">Duty Drawback (DBK)</option>
+                            <option value="RODTEP">RoDTEP</option>
+                            <option value="ROSCTL">RoSCTL</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Claimed Amount (INR) *</label>
+                          <input
+                            type="number"
+                            required
+                            min={0}
+                            value={incClaimed || ''}
+                            onChange={(e) => setIncClaimed(Number(e.target.value))}
+                            className="w-full border border-slate-300 rounded-lg p-2 font-mono font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Status</label>
+                          <select
+                            value={incStatus}
+                            onChange={(e) => setIncStatus(e.target.value)}
+                            className="w-full border border-slate-300 rounded-lg p-2 bg-white"
+                          >
+                            <option value="CLAIMED">CLAIMED</option>
+                            <option value="PART_RECEIVED">PART_RECEIVED</option>
+                            <option value="RECEIVED">RECEIVED</option>
+                            <option value="REJECTED">REJECTED</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Received (INR)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={incReceived || ''}
+                            onChange={(e) => setIncReceived(Number(e.target.value))}
+                            className="w-full border border-slate-300 rounded-lg p-2 font-mono text-emerald-700 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Scroll Number / Ref</label>
+                          <input
+                            type="text"
+                            value={incScrollNo}
+                            onChange={(e) => setIncScrollNo(e.target.value)}
+                            placeholder="e.g. SCROLL/2026/0991"
+                            className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Receipt Date</label>
+                          <input
+                            type="date"
+                            value={incReceivedDate}
+                            onChange={(e) => setIncReceivedDate(e.target.value)}
+                            className="w-full border border-slate-300 rounded-lg p-2"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end space-x-2 pt-2 border-t border-blue-200">
+                        <button
+                          type="button"
+                          onClick={() => setIsAddingIncentive(false)}
+                          className="px-3 py-1.5 border border-slate-300 rounded-lg font-semibold text-slate-600 bg-white hover:bg-slate-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm"
+                        >
+                          Save Incentive
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* Edit Incentive Form Drawer */}
+                  {editingIncentive && (
+                    <form onSubmit={handleSaveIncentive} className="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-3 text-xs">
+                      <div className="font-bold text-slate-900 text-sm">
+                        Edit Incentive: {editingIncentive.type === 'DRAWBACK' ? 'Duty Drawback (DBK)' : editingIncentive.type}
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Claimed Amount (INR)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={incClaimed}
+                            onChange={(e) => setIncClaimed(Number(e.target.value))}
+                            className="w-full border border-slate-300 rounded-lg p-2 font-mono font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Claim Status</label>
+                          <select
+                            value={incStatus}
+                            onChange={(e) => setIncStatus(e.target.value)}
+                            className="w-full border border-slate-300 rounded-lg p-2 bg-white font-semibold"
+                          >
+                            <option value="CLAIMED">CLAIMED</option>
+                            <option value="PART_RECEIVED">PART_RECEIVED</option>
+                            <option value="RECEIVED">RECEIVED</option>
+                            <option value="REJECTED">REJECTED</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Received Amount (INR)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={incReceived}
+                            onChange={(e) => setIncReceived(Number(e.target.value))}
+                            className="w-full border border-slate-300 rounded-lg p-2 font-mono text-emerald-700 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Credit / Receipt Date</label>
+                          <input
+                            type="date"
+                            value={incReceivedDate}
+                            onChange={(e) => setIncReceivedDate(e.target.value)}
+                            className="w-full border border-slate-300 rounded-lg p-2"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Scroll Number</label>
+                          <input
+                            type="text"
+                            value={incScrollNo}
+                            onChange={(e) => setIncScrollNo(e.target.value)}
+                            placeholder="e.g. SCR-2026-443"
+                            className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="font-semibold text-slate-700 block mb-1">Remarks</label>
+                          <input
+                            type="text"
+                            value={incRemarks}
+                            onChange={(e) => setIncRemarks(e.target.value)}
+                            placeholder="Optional notes"
+                            className="w-full border border-slate-300 rounded-lg p-2"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end space-x-2 pt-2 border-t border-amber-200">
+                        <button
+                          type="button"
+                          onClick={() => setEditingIncentive(null)}
+                          className="px-3 py-1.5 border border-slate-300 rounded-lg font-semibold text-slate-600 bg-white hover:bg-slate-100"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
                   <div className="border border-slate-200 rounded-xl overflow-hidden">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
@@ -618,6 +1061,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                           <th className="p-3">Received Date</th>
                           <th className="p-3">Pending Balance</th>
                           <th className="p-3">Scroll No</th>
+                          {!isViewer && <th className="p-3 text-right">Actions</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -644,8 +1088,34 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                             <td className="p-3 text-slate-600">{inc.receivedDate || '—'}</td>
                             <td className="p-3 font-semibold text-amber-700">₹{(inc.outstandingBalance || 0).toLocaleString()}</td>
                             <td className="p-3 font-mono text-slate-600">{inc.scrollNumber || '—'}</td>
+                            {!isViewer && (
+                              <td className="p-3 text-right">
+                                <div className="inline-flex items-center space-x-1.5">
+                                  <button
+                                    onClick={() => openEditIncentive(inc)}
+                                    className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-semibold transition-colors"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteIncentive(inc.id, inc.type)}
+                                    className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="Delete incentive claim"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         ))}
+                        {(!shipment.incentives || shipment.incentives.length === 0) && (
+                          <tr>
+                            <td colSpan={isViewer ? 7 : 8} className="p-8 text-center text-slate-400">
+                              No export incentives recorded for this shipment.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>

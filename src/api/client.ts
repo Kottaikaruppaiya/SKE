@@ -217,6 +217,13 @@ export const api = {
   },
 
   // Incentives & BRC
+  async createIncentive(data: any): Promise<IncentiveRecord> {
+    return this.request<IncentiveRecord>('/incentives', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   async updateIncentive(id: string, data: any): Promise<IncentiveRecord> {
     return this.request<IncentiveRecord>(`/incentives/${id}`, {
       method: 'PUT',
@@ -234,6 +241,12 @@ export const api = {
     return this.request<BrcRecord>(`/brc/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+
+  async resetBrc(id: string): Promise<BrcRecord> {
+    return this.request<BrcRecord>(`/brc/${id}/reset`, {
+      method: 'POST',
     });
   },
 
@@ -349,6 +362,12 @@ export const api = {
     return this.request<User>(`/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+
+  async deleteUser(id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/users/${id}`, {
+      method: 'DELETE',
     });
   },
 

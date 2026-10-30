@@ -12,12 +12,14 @@ interface BankMasterViewProps {
   banks: BankMaster[];
   onRefresh: () => void;
   userRole: Role;
+  refreshKey?: number;
 }
 
 export const BankMasterView: React.FC<BankMasterViewProps> = ({
   banks,
   onRefresh,
   userRole,
+  refreshKey,
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
   const [ifscCode, setIfscCode] = useState('');
   const [swiftCode, setSwiftCode] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const isViewer = userRole === 'VIEWER';
@@ -39,6 +42,7 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
     setIfscCode('');
     setSwiftCode('');
     setAccountNumber('');
+    setIsActive(true);
     setError(null);
     setShowModal(true);
   };
@@ -51,6 +55,7 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
     setIfscCode(b.ifscCode || '');
     setSwiftCode(b.swiftCode || '');
     setAccountNumber(b.accountNumber || '');
+    setIsActive(b.isActive !== false);
     setError(null);
     setShowModal(true);
   };
@@ -67,6 +72,7 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
           ifscCode,
           swiftCode,
           accountNumber,
+          isActive,
         });
       } else {
         await api.createBank({
@@ -76,7 +82,7 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
           ifscCode,
           swiftCode,
           accountNumber,
-          isActive: true,
+          isActive,
         });
       }
       setShowModal(false);
@@ -182,8 +188,14 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
                     <td className="p-3 font-mono text-slate-600">{b.swiftCode || '—'}</td>
                     <td className="p-3 font-mono text-slate-700">{b.accountNumber || '—'}</td>
                     <td className="p-3 text-center">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        Active
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          b.isActive !== false
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {b.isActive !== false ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     {!isViewer && (
@@ -298,6 +310,19 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
                     className="w-full border border-slate-300 rounded-lg p-2 font-mono"
                   />
                 </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="bankActive"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <label htmlFor="bankActive" className="font-semibold text-slate-700 cursor-pointer select-none">
+                  Active Status (Allow selection in shipments and foreign remittances)
+                </label>
               </div>
 
               <div className="pt-2 flex justify-end space-x-2">

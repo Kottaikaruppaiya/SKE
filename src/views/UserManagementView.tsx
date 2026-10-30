@@ -1,10 +1,5 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect } from 'react';
-import { Users, PlusCircle, ShieldAlert, ShieldCheck, UserCheck, Edit, Lock } from 'lucide-react';
+import { Users, PlusCircle, ShieldAlert, ShieldCheck, UserCheck, Edit, Lock, Trash2 } from 'lucide-react';
 import { User, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
 
@@ -13,6 +8,7 @@ export const UserManagementView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -20,6 +16,7 @@ export const UserManagementView: React.FC = () => {
   const [role, setRole] = useState<Role>('ADMIN');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -68,6 +65,7 @@ export const UserManagementView: React.FC = () => {
           role,
           ...(password ? { password } : {}),
         });
+        setActionSuccess(`User account "${name}" updated successfully.`);
       } else {
         await api.createUser({
           name,
@@ -75,8 +73,10 @@ export const UserManagementView: React.FC = () => {
           role,
           password,
         });
+        setActionSuccess(`User account "${name}" created successfully.`);
       }
       setShowModal(false);
+      setTimeout(() => setActionSuccess(null), 4000);
       loadUsers();
     } catch (err: any) {
       setError(err.message || 'Error saving user.');
@@ -89,6 +89,23 @@ export const UserManagementView: React.FC = () => {
       loadUsers();
     } catch (err: any) {
       alert(err.message);
+    }
+  };
+
+  const handleDeleteUser = async (u: User) => {
+    const ok = window.confirm(`Permanently delete user account "${u.name}" (${u.email})? This action cannot be undone.`);
+    if (!ok) return;
+
+    setDeletingId(u.id);
+    try {
+      await api.deleteUser(u.id);
+      setActionSuccess(`User "${u.name}" deleted successfully.`);
+      setTimeout(() => setActionSuccess(null), 4000);
+      loadUsers();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete user.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -113,6 +130,13 @@ export const UserManagementView: React.FC = () => {
           <span>Create User</span>
         </button>
       </div>
+
+      {actionSuccess && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{actionSuccess}</span>
+          <button onClick={() => setActionSuccess(null)} className="font-bold text-slate-500 hover:text-slate-800">×</button>
+        </div>
+      )}
 
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
         <table className="w-full text-left text-xs whitespace-nowrap">
@@ -167,12 +191,22 @@ export const UserManagementView: React.FC = () => {
                     </button>
                   </td>
                   <td className="p-3 text-right">
-                    <button
-                      onClick={() => openEdit(u)}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-semibold"
-                    >
-                      Edit
-                    </button>
+                    <div className="flex items-center justify-end space-x-1.5">
+                      <button
+                        onClick={() => openEdit(u)}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-semibold transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(u)}
+                        disabled={deletingId === u.id}
+                        className="p-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-semibold transition-colors disabled:opacity-50"
+                        title="Delete User Account"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

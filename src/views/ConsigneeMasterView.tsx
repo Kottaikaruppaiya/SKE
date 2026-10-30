@@ -12,12 +12,14 @@ interface ConsigneeMasterViewProps {
   consignees: ConsigneeMaster[];
   onRefresh: () => void;
   userRole: Role;
+  refreshKey?: number;
 }
 
 export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
   consignees: initialConsignees,
   onRefresh,
   userRole,
+  refreshKey,
 }) => {
   const [consigneesList, setConsigneesList] = useState<ConsigneeMaster[]>(initialConsignees || []);
   const [loading, setLoading] = useState(false);
@@ -29,6 +31,7 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
   const [paymentTerms, setPaymentTerms] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [contactEmail, setContactEmail] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,12 +56,12 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
   };
 
   useEffect(() => {
-    if (initialConsignees && initialConsignees.length > 0) {
+    if (initialConsignees && initialConsignees.length > 0 && !refreshKey) {
       setConsigneesList(initialConsignees);
     } else {
       loadData();
     }
-  }, [initialConsignees]);
+  }, [initialConsignees, refreshKey]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -68,6 +71,7 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
     setPaymentTerms('100% Advance TT');
     setCurrency('USD');
     setContactEmail('');
+    setIsActive(true);
     setError(null);
     setShowModal(true);
   };
@@ -80,6 +84,7 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
     setPaymentTerms(c.paymentTerms || '');
     setCurrency(c.currency || 'USD');
     setContactEmail(c.contactEmail || '');
+    setIsActive(c.isActive !== false);
     setError(null);
     setShowModal(true);
   };
@@ -96,6 +101,7 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
           paymentTerms,
           currency,
           contactEmail,
+          isActive,
         });
       } else {
         await api.createConsignee({
@@ -105,7 +111,7 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
           paymentTerms,
           currency,
           contactEmail,
-          isActive: true,
+          isActive,
         });
       }
       setShowModal(false);
@@ -438,6 +444,19 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
                     className="w-full border border-slate-300 rounded-lg p-2"
                   />
                 </div>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="consigneeActive"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <label htmlFor="consigneeActive" className="font-semibold text-slate-700 cursor-pointer select-none">
+                  Active Status (Allow selection in export shipments and invoices)
+                </label>
               </div>
 
               <div className="pt-3 flex justify-end space-x-2 border-t border-slate-100">

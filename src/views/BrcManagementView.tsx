@@ -13,6 +13,7 @@ interface BrcManagementViewProps {
   onSelectShipment: (id: string) => void;
   onOpenUpload: (shipment: Shipment) => void;
   userRole: Role;
+  refreshKey?: number;
 }
 
 export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
@@ -20,6 +21,7 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
   onSelectShipment,
   onOpenUpload,
   userRole,
+  refreshKey,
 }) => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +50,7 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [selectedFyId]);
+  }, [selectedFyId, refreshKey]);
 
   const openEditBrc = (s: Shipment) => {
     setEditingBrcShipment(s);
@@ -63,10 +65,11 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
 
   const handleSaveBrc = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingBrcShipment || !editingBrcShipment.brcRecord) return;
+    if (!editingBrcShipment) return;
 
     try {
-      await api.updateBrc(editingBrcShipment.brcRecord.id, {
+      const targetId = editingBrcShipment.brcRecord?.id || editingBrcShipment.id;
+      await api.updateBrc(targetId, {
         brcNumber,
         issueDate: issueDate || undefined,
         realisationDate: realisationDate || undefined,
@@ -79,6 +82,21 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
       loadData();
     } catch (err: any) {
       alert(err.message || 'Failed to update BRC');
+    }
+  };
+
+  const handleResetBrc = async (s: Shipment) => {
+    const ok = window.confirm(
+      `Reset BRC details for Invoice "${s.invoiceNumber}"?\n\nThis will clear the BRC certificate reference number, issue/realisation dates, and return status to PENDING.`
+    );
+    if (!ok) return;
+
+    try {
+      const targetId = s.brcRecord?.id || s.id;
+      await api.resetBrc(targetId);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to reset BRC');
     }
   };
 
@@ -176,7 +194,7 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                                 onClick={() => openEditBrc(s)}
                                 className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-medium text-[11px] transition-colors"
                               >
-                                Update BRC
+                                Edit BRC
                               </button>
                               <button
                                 onClick={() => onOpenUpload(s)}
@@ -186,6 +204,15 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                                 <Upload size={12} />
                                 <span>Attach</span>
                               </button>
+                              {(brc?.brcNumber || brc?.status !== 'PENDING') && (
+                                <button
+                                  onClick={() => handleResetBrc(s)}
+                                  title="Reset / Clear BRC Data"
+                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded font-medium text-[11px] transition-colors"
+                                >
+                                  Reset
+                                </button>
+                              )}
                             </>
                           )}
                           <button

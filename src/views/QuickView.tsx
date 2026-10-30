@@ -10,9 +10,10 @@ import { api } from '../api/client.ts';
 
 interface QuickViewProps {
   selectedFyId: string;
+  refreshKey?: number;
 }
 
-export const QuickView: React.FC<QuickViewProps> = ({ selectedFyId }) => {
+export const QuickView: React.FC<QuickViewProps> = ({ selectedFyId, refreshKey }) => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +29,7 @@ export const QuickView: React.FC<QuickViewProps> = ({ selectedFyId }) => {
         setShipments(s);
       })
       .finally(() => setLoading(false));
-  }, [selectedFyId]);
+  }, [selectedFyId, refreshKey]);
 
   if (loading || !metrics) {
     return (

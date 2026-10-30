@@ -191,6 +191,35 @@ class DatabaseService {
     return user;
   }
 
+  public deleteUser(id: string, actorUserId: string): { success: boolean } {
+    const idx = this.state.users.findIndex((u) => u.id === id);
+    if (idx === -1) throw new Error('User not found');
+
+    const user = this.state.users[idx];
+    if (user.id === actorUserId) {
+      throw new Error('You cannot delete your own account while logged in.');
+    }
+
+    const superAdmins = this.state.users.filter((u) => u.role === 'SUPER_ADMIN' && u.isActive);
+    if (user.role === 'SUPER_ADMIN' && superAdmins.length <= 1) {
+      throw new Error('Cannot delete the last remaining active Super Admin.');
+    }
+
+    const old = { ...user };
+    this.state.users.splice(idx, 1);
+
+    this.logAudit({
+      userId: actorUserId,
+      action: 'DELETE',
+      entityType: 'USER',
+      entityId: id,
+      oldValues: old,
+    });
+
+    this.save();
+    return { success: true };
+  }
+
   // --- Financial Years ---
   public getFinancialYears(): FinancialYear[] {
     return this.state.financialYears;
@@ -642,6 +671,8 @@ class DatabaseService {
     }
 
     if (updates.consigneeId) shipment.consigneeId = updates.consigneeId;
+    if (updates.financialYearId) shipment.financialYearId = updates.financialYearId;
+    if (updates.invoiceDate) shipment.invoiceDate = updates.invoiceDate;
     if (updates.portCode) shipment.portCode = updates.portCode.trim().toUpperCase();
     if (updates.packageCount !== undefined) shipment.packageCount = updates.packageCount;
     if (updates.invoiceValueUsd !== undefined) shipment.invoiceValueUsd = Number(updates.invoiceValueUsd);
@@ -1027,6 +1058,54 @@ class DatabaseService {
   }
 
   // --- Incentives ---
+  public createIncentive(
+    data: {
+      shipmentId: string;
+      type: IncentiveRecord['type'];
+      claimedAmount: number;
+      receivedAmount?: number;
+      receivedDate?: string;
+      scrollNumber?: string;
+      remarks?: string;
+    },
+    actorUserId: string
+  ): IncentiveRecord {
+    const shipment = this.state.shipments.find((s) => s.id === data.shipmentId);
+    if (!shipment) throw new Error('Shipment not found');
+
+    const claimed = Number(data.claimedAmount || 0);
+    const received = Number(data.receivedAmount || 0);
+    const status = received >= claimed && claimed > 0 ? 'RECEIVED' : received > 0 ? 'PART_RECEIVED' : 'PENDING';
+
+    const record: IncentiveRecord = {
+      id: crypto.randomUUID(),
+      shipmentId: data.shipmentId,
+      type: data.type,
+      claimedAmount: claimed,
+      receivedAmount: received,
+      receivedDate: data.receivedDate,
+      scrollNumber: data.scrollNumber?.trim(),
+      remarks: data.remarks?.trim(),
+      status,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.state.incentives.push(record);
+    this.logAudit({
+      userId: actorUserId,
+      action: 'CREATE',
+      entityType: 'INCENTIVE',
+      entityId: record.id,
+      newValues: record,
+    });
+    this.save();
+    return {
+      ...record,
+      outstandingBalance: Math.max(0, record.claimedAmount - record.receivedAmount),
+    };
+  }
+
   public updateIncentive(
     id: string,
     updates: {
@@ -1099,7 +1178,7 @@ class DatabaseService {
 
   // --- BRC Management ---
   public updateBrcRecord(
-    id: string,
+    idOrShipmentId: string,
     updates: {
       brcNumber?: string;
       issueDate?: string;
@@ -1113,8 +1192,18 @@ class DatabaseService {
     },
     actorUserId: string
   ): BrcRecord {
-    const item = this.state.brcRecords.find((b) => b.id === id);
-    if (!item) throw new Error('BRC record not found');
+    let item = this.state.brcRecords.find((b) => b.id === idOrShipmentId || b.shipmentId === idOrShipmentId);
+    if (!item) {
+      item = {
+        id: crypto.randomUUID(),
+        shipmentId: idOrShipmentId,
+        uploadMode: updates.uploadMode || 'SINGLE',
+        status: updates.status || 'PENDING',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      this.state.brcRecords.push(item);
+    }
 
     const old = { ...item };
     if (updates.brcNumber !== undefined) item.brcNumber = updates.brcNumber?.trim();
@@ -1140,11 +1229,35 @@ class DatabaseService {
       userId: actorUserId,
       action: 'UPDATE',
       entityType: 'BRC_RECORD',
-      entityId: id,
+      entityId: item.id,
       oldValues: old,
       newValues: item,
     });
 
+    this.save();
+    return item;
+  }
+
+  public resetBrcRecord(idOrShipmentId: string, actorUserId: string): BrcRecord {
+    const item = this.state.brcRecords.find((b) => b.id === idOrShipmentId || b.shipmentId === idOrShipmentId);
+    if (!item) throw new Error('BRC record not found');
+    const old = { ...item };
+    item.brcNumber = undefined;
+    item.issueDate = undefined;
+    item.realisationDate = undefined;
+    item.realisedAmount = undefined;
+    item.status = 'PENDING';
+    item.remarks = undefined;
+    item.updatedAt = new Date().toISOString();
+
+    this.logAudit({
+      userId: actorUserId,
+      action: 'RESET_BRC',
+      entityType: 'BRC_RECORD',
+      entityId: item.id,
+      oldValues: old,
+      newValues: item,
+    });
     this.save();
     return item;
   }

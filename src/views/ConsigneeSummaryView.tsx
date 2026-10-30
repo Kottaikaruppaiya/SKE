@@ -11,11 +11,13 @@ import { api } from '../api/client.ts';
 interface ConsigneeSummaryViewProps {
   selectedFyId: string;
   onSelectShipment: (id: string) => void;
+  refreshKey?: number;
 }
 
 export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
   selectedFyId,
   onSelectShipment,
+  refreshKey,
 }) => {
   const [consignees, setConsignees] = useState<ConsigneeMaster[]>([]);
   const [fyShipments, setFyShipments] = useState<Shipment[]>([]);
@@ -53,7 +55,7 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [selectedFyId]);
+  }, [selectedFyId, refreshKey]);
 
   // Use the appropriate shipment set based on the scope toggle
   const activeShipmentSet = scopeFilter === 'CURRENT_FY' && selectedFyId !== 'ALL' ? fyShipments : allShipments;

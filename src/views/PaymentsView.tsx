@@ -18,12 +18,14 @@ interface PaymentsViewProps {
   banks: BankMaster[];
   userRole: Role;
   onSelectShipment: (id: string) => void;
+  refreshKey?: number;
 }
 
 export const PaymentsView: React.FC<PaymentsViewProps> = ({
   banks,
   userRole,
   onSelectShipment,
+  refreshKey,
 }) => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +75,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
 
   useEffect(() => {
     loadPayments();
-  }, []);
+  }, [refreshKey]);
 
   const handleCreatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -381,6 +383,33 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                       </div>
                       <div className="flex items-center space-x-2">
                         <span className="font-bold text-emerald-700">${a.allocatedAmountUsd.toLocaleString()}</span>
+                        {!isViewer && (
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const ok = window.confirm(
+                                `Reverse payment allocation of $${a.allocatedAmountUsd.toLocaleString()} for Invoice "${a.shipmentInvoiceNo || 'Shipment'}"?`
+                              );
+                              if (!ok) return;
+                              try {
+                                await api.deallocatePayment(a.id);
+                                setActionMessage({
+                                  text: `Allocation of $${a.allocatedAmountUsd.toLocaleString()} reversed successfully.`,
+                                  type: 'success',
+                                });
+                                setTimeout(() => setActionMessage(null), 4000);
+                                loadPayments();
+                              } catch (err: any) {
+                                alert(err.message || 'Failed to reverse allocation.');
+                              }
+                            }}
+                            title="Reverse / Deallocate Payment"
+                            className="p-1 rounded text-red-400 hover:text-red-700 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                         <ArrowRight size={13} className="text-slate-400 group-hover:text-blue-600" />
                       </div>
                     </div>

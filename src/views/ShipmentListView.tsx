@@ -25,6 +25,7 @@ interface ShipmentListViewProps {
   onOpenAllocate: (shipment: Shipment) => void;
   onOpenEdit?: (shipment: Shipment) => void;
   userRole: Role;
+  refreshKey?: number;
 }
 
 export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
@@ -35,6 +36,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
   onOpenAllocate,
   onOpenEdit,
   userRole,
+  refreshKey,
 }) => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
 
   useEffect(() => {
     loadShipments();
-  }, [selectedFyId, consigneeFilter, paymentStatusFilter, reviewStatusFilter, search]);
+  }, [selectedFyId, consigneeFilter, paymentStatusFilter, reviewStatusFilter, search, refreshKey]);
 
   const handleDeleteShipment = async (s: Shipment) => {
     const ok = window.confirm(

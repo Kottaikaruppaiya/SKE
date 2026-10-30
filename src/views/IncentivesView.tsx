@@ -12,12 +12,14 @@ interface IncentivesViewProps {
   selectedFyId: string;
   userRole: Role;
   onSelectShipment: (id: string) => void;
+  refreshKey?: number;
 }
 
 export const IncentivesView: React.FC<IncentivesViewProps> = ({
   selectedFyId,
   userRole,
   onSelectShipment,
+  refreshKey,
 }) => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,16 +27,31 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
   const [editingInc, setEditingInc] = useState<{ inc: IncentiveRecord; invoiceNo: string } | null>(null);
 
   // Edit form state
+  const [claimedAmount, setClaimedAmount] = useState<number>(0);
   const [receivedAmount, setReceivedAmount] = useState<number>(0);
   const [receivedDate, setReceivedDate] = useState('');
   const [scrollNumber, setScrollNumber] = useState('');
   const [status, setStatus] = useState<any>('RECEIVED');
+  const [remarks, setRemarks] = useState('');
+
+  // Add Incentive Modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addShipmentId, setAddShipmentId] = useState('');
+  const [addType, setAddType] = useState<IncentiveRecord['type']>('DRAWBACK');
+  const [addClaimedAmount, setAddClaimedAmount] = useState<number>(10000);
+  const [addReceivedAmount, setAddReceivedAmount] = useState<number>(0);
+  const [addScrollNumber, setAddScrollNumber] = useState('');
+  const [addReceivedDate, setAddReceivedDate] = useState('');
+  const [addRemarks, setAddRemarks] = useState('');
 
   const loadData = async () => {
     setLoading(true);
     try {
       const list = await api.getShipments({ financialYearId: selectedFyId });
       setShipments(list);
+      if (list.length > 0 && !addShipmentId) {
+        setAddShipmentId(list[0].id);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -44,7 +61,7 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [selectedFyId]);
+  }, [selectedFyId, refreshKey]);
 
   const allIncentives: Array<{ inc: IncentiveRecord; shipment: Shipment }> = [];
   for (const s of shipments) {
@@ -63,10 +80,12 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
 
   const openEdit = (inc: IncentiveRecord, invoiceNo: string) => {
     setEditingInc({ inc, invoiceNo });
-    setReceivedAmount(inc.receivedAmount || inc.claimedAmount);
+    setClaimedAmount(inc.claimedAmount || 0);
+    setReceivedAmount(inc.receivedAmount || 0);
     setReceivedDate(inc.receivedDate || new Date().toISOString().split('T')[0]);
     setScrollNumber(inc.scrollNumber || '');
     setStatus(inc.status || 'RECEIVED');
+    setRemarks(inc.remarks || '');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -75,15 +94,37 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
 
     try {
       await api.updateIncentive(editingInc.inc.id, {
-        receivedAmount,
+        claimedAmount: Number(claimedAmount),
+        receivedAmount: Number(receivedAmount),
         receivedDate: receivedDate || undefined,
         scrollNumber: scrollNumber || undefined,
         status,
+        remarks: remarks || undefined,
       });
       setEditingInc(null);
       loadData();
     } catch (err: any) {
       alert(err.message || 'Failed to update incentive');
+    }
+  };
+
+  const handleCreateIncentive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (!addShipmentId) throw new Error('Please select an export shipment.');
+      await api.createIncentive({
+        shipmentId: addShipmentId,
+        type: addType,
+        claimedAmount: Number(addClaimedAmount),
+        receivedAmount: Number(addReceivedAmount),
+        receivedDate: addReceivedDate || undefined,
+        scrollNumber: addScrollNumber || undefined,
+        remarks: addRemarks || undefined,
+      });
+      setShowAddModal(false);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to create incentive record.');
     }
   };
 
@@ -130,13 +171,24 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
           </p>
         </div>
 
-        <input
-          type="text"
-          placeholder="Search by invoice, buyer, scroll..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-52 sm:w-64"
-        />
+        <div className="flex items-center space-x-2">
+          {!isViewer && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center space-x-1.5"
+            >
+              <PlusCircle size={15} />
+              <span>Add Incentive Record</span>
+            </button>
+          )}
+          <input
+            type="text"
+            placeholder="Search by invoice, buyer, scroll..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-52 sm:w-64"
+          />
+        </div>
       </div>
 
       {/* Summary KPI Cards */}
@@ -313,7 +365,7 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
           <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
               <h3 className="font-bold text-sm">
-                Log Incentive Receipt — {editingInc.invoiceNo}
+                Edit Incentive Record — {editingInc.invoiceNo}
               </h3>
               <button onClick={() => setEditingInc(null)} className="p-1 text-slate-400 hover:text-white">
                 ✕
@@ -325,7 +377,19 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                 <span className="font-bold block">
                   {editingInc.inc.type === 'DRAWBACK' ? 'Duty Drawback' : editingInc.inc.type}
                 </span>
-                <span>Original Claimed: <strong>₹{editingInc.inc.claimedAmount.toLocaleString()}</strong></span>
+                <span>Invoice: <strong>{editingInc.invoiceNo}</strong></span>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Claimed Amount (INR) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={claimedAmount}
+                  onChange={(e) => setClaimedAmount(parseFloat(e.target.value) || 0)}
+                  className="w-full border border-slate-300 rounded-lg p-2 font-bold text-slate-900"
+                />
               </div>
 
               <div>
@@ -344,7 +408,6 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                 <label className="font-semibold text-slate-700 block mb-1">Receipt Date</label>
                 <input
                   type="date"
-                  required
                   value={receivedDate}
                   onChange={(e) => setReceivedDate(e.target.value)}
                   className="w-full border border-slate-300 rounded-lg p-2"
@@ -375,6 +438,17 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                 </select>
               </div>
 
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Remarks / Reference</label>
+                <input
+                  type="text"
+                  placeholder="Notes, customs query reference..."
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                />
+              </div>
+
               <div className="pt-2 flex justify-end space-x-2">
                 <button
                   type="button"
@@ -387,7 +461,123 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                   type="submit"
                   className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-sm"
                 >
-                  Save Receipt
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Incentive Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
+              <h3 className="font-bold text-sm">Add Government Export Incentive</h3>
+              <button onClick={() => setShowAddModal(false)} className="p-1 text-slate-400 hover:text-white">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateIncentive} className="p-6 space-y-4 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Export Shipment / Invoice *</label>
+                <select
+                  value={addShipmentId}
+                  onChange={(e) => setAddShipmentId(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2 bg-white font-semibold"
+                  required
+                >
+                  {shipments.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.invoiceNumber} — {s.consigneeName} (${s.invoiceValueUsd.toLocaleString()})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Incentive Scheme Type *</label>
+                <select
+                  value={addType}
+                  onChange={(e) => setAddType(e.target.value as any)}
+                  className="w-full border border-slate-300 rounded-lg p-2 bg-white font-medium"
+                >
+                  <option value="DRAWBACK">Duty Drawback (DBK)</option>
+                  <option value="RODTEP">RoDTEP (Remission of Duties and Taxes)</option>
+                  <option value="ROSCTL">RoSCTL (Rebate of State and Central Taxes)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Claimed Amount (INR) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={addClaimedAmount}
+                  onChange={(e) => setAddClaimedAmount(parseFloat(e.target.value) || 0)}
+                  className="w-full border border-slate-300 rounded-lg p-2 font-bold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Received Amount (INR)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={addReceivedAmount}
+                  onChange={(e) => setAddReceivedAmount(parseFloat(e.target.value) || 0)}
+                  className="w-full border border-slate-300 rounded-lg p-2 font-semibold text-emerald-700"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Receipt Date</label>
+                <input
+                  type="date"
+                  value={addReceivedDate}
+                  onChange={(e) => setAddReceivedDate(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Scroll Number</label>
+                <input
+                  type="text"
+                  placeholder="e.g. SCR-DBK-2026-001"
+                  value={addScrollNumber}
+                  onChange={(e) => setAddScrollNumber(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2 font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Remarks</label>
+                <input
+                  type="text"
+                  placeholder="Optional remarks..."
+                  value={addRemarks}
+                  onChange={(e) => setAddRemarks(e.target.value)}
+                  className="w-full border border-slate-300 rounded-lg p-2"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-sm"
+                >
+                  Create Incentive Record
                 </button>
               </div>
             </form>

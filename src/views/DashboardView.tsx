@@ -26,6 +26,7 @@ interface DashboardViewProps {
   onNavigate: (tab: any) => void;
   onSelectShipment: (id: string) => void;
   userRole: Role;
+  refreshKey?: number;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -33,6 +34,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
   onSelectShipment,
   userRole,
+  refreshKey,
 }) => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +45,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .then((data) => setMetrics(data))
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [selectedFyId]);
+  }, [selectedFyId, refreshKey]);
 
   if (loading || !metrics) {
     return (

@@ -10,9 +10,10 @@ import { api } from '../api/client.ts';
 
 interface SummaryReportsViewProps {
   selectedFyId: string;
+  refreshKey?: number;
 }
 
-export const SummaryReportsView: React.FC<SummaryReportsViewProps> = ({ selectedFyId }) => {
+export const SummaryReportsView: React.FC<SummaryReportsViewProps> = ({ selectedFyId, refreshKey }) => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,7 +22,7 @@ export const SummaryReportsView: React.FC<SummaryReportsViewProps> = ({ selected
     api.getShipments({ financialYearId: selectedFyId })
       .then((data) => setShipments(data))
       .finally(() => setLoading(false));
-  }, [selectedFyId]);
+  }, [selectedFyId, refreshKey]);
 
   // Group by Month
   const monthlyData: Record<

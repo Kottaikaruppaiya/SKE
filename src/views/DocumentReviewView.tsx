@@ -4,29 +4,38 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { FileText, Download, CheckCircle2, AlertTriangle, Eye, ShieldCheck } from 'lucide-react';
+import { FileText, Download, CheckCircle2, AlertTriangle, Eye, ShieldCheck, Trash2 } from 'lucide-react';
 import { DocumentRecord, Role, ReviewStatus } from '../types/index.ts';
 import { api } from '../api/client.ts';
 
 interface DocumentReviewViewProps {
   userRole: Role;
   onSelectShipment: (id: string) => void;
+  refreshKey?: number;
 }
 
 export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
   userRole,
   onSelectShipment,
+  refreshKey,
 }) => {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDoc, setSelectedDoc] = useState<DocumentRecord | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadDocs = async () => {
     setLoading(true);
     try {
       const data = await api.request<DocumentRecord[]>('/documents');
       setDocuments(data);
-      if (data.length > 0 && !selectedDoc) setSelectedDoc(data[0]);
+      if (data.length > 0) {
+        if (!selectedDoc || !data.some((d) => d.id === selectedDoc.id)) {
+          setSelectedDoc(data[0]);
+        }
+      } else {
+        setSelectedDoc(null);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -36,7 +45,7 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
 
   useEffect(() => {
     loadDocs();
-  }, []);
+  }, [refreshKey]);
 
   const handleUpdateReviewStatus = async (id: string, status: ReviewStatus) => {
     try {
@@ -45,6 +54,21 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
       if (selectedDoc?.id === id) setSelectedDoc(updated);
     } catch (err: any) {
       alert(err.message || 'Failed to update review status');
+    }
+  };
+
+  const handleDeleteDocument = async (id: string, filename: string) => {
+    const ok = window.confirm(`Are you sure you want to permanently delete document "${filename}"?`);
+    if (!ok) return;
+
+    setDeletingId(id);
+    try {
+      await api.deleteDocument(id);
+      await loadDocs();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete document');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -147,6 +171,18 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold"
                     >
                       View Shipment
+                    </button>
+                  )}
+
+                  {!isViewer && (
+                    <button
+                      onClick={() => handleDeleteDocument(selectedDoc.id, selectedDoc.originalFilename)}
+                      disabled={deletingId === selectedDoc.id}
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-colors disabled:opacity-50"
+                      title="Permanently delete document"
+                    >
+                      <Trash2 size={13} />
+                      <span>{deletingId === selectedDoc.id ? 'Deleting...' : 'Delete'}</span>
                     </button>
                   )}
                 </div>

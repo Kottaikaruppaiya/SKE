@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, CheckCircle2, ArrowRight, Sparkles, AlertCircle, FileText } from 'lucide-react';
 import { api } from '../api/client.ts';
 import { Shipment } from '../types/index.ts';
@@ -12,11 +12,13 @@ import { normalizeInvoiceKey } from '../../server/normalizer.ts';
 interface InvoiceLookupViewProps {
   selectedFyId: string;
   onSelectShipment: (id: string) => void;
+  refreshKey?: number;
 }
 
 export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
   selectedFyId,
   onSelectShipment,
+  refreshKey,
 }) => {
   const [inputVal, setInputVal] = useState('SKE/26-27/020');
   const [results, setResults] = useState<Shipment[]>([]);
@@ -40,6 +42,12 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (hasSearched) {
+      handleSearch();
+    }
+  }, [refreshKey]);
 
   const testVariants = [
     { label: 'Standard Slash Format', value: 'SKE/26-27/020' },

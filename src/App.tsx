@@ -51,6 +51,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNewShipmentOpen, setIsNewShipmentOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Initial load
   const loadInitialData = async () => {
@@ -74,6 +75,11 @@ export default function App() {
       console.error('Initial load error:', e);
       setIsLoginModalOpen(true);
     }
+  };
+
+  const triggerRefresh = () => {
+    setRefreshKey((k) => k + 1);
+    loadInitialData();
   };
 
   useEffect(() => {
@@ -161,6 +167,7 @@ export default function App() {
               onNavigate={setCurrentTab}
               onSelectShipment={setSelectedShipmentId}
               userRole={currentUser.role}
+              refreshKey={refreshKey}
             />
           )}
 
@@ -173,17 +180,19 @@ export default function App() {
               onOpenAllocate={setAllocatingShipment}
               onOpenEdit={setEditingShipment}
               userRole={currentUser.role}
+              refreshKey={refreshKey}
             />
           )}
 
-          {currentTab === 'quick-view' && <QuickView selectedFyId={selectedFyId} />}
+          {currentTab === 'quick-view' && <QuickView selectedFyId={selectedFyId} refreshKey={refreshKey} />}
 
-          {currentTab === 'summary-reports' && <SummaryReportsView selectedFyId={selectedFyId} />}
+          {currentTab === 'summary-reports' && <SummaryReportsView selectedFyId={selectedFyId} refreshKey={refreshKey} />}
 
           {currentTab === 'lookup' && (
             <InvoiceLookupView
               selectedFyId={selectedFyId}
               onSelectShipment={setSelectedShipmentId}
+              refreshKey={refreshKey}
             />
           )}
 
@@ -192,6 +201,7 @@ export default function App() {
               banks={banks}
               userRole={currentUser.role}
               onSelectShipment={setSelectedShipmentId}
+              refreshKey={refreshKey}
             />
           )}
 
@@ -201,6 +211,7 @@ export default function App() {
               onSelectShipment={setSelectedShipmentId}
               onOpenUpload={setUploadingShipment}
               userRole={currentUser.role}
+              refreshKey={refreshKey}
             />
           )}
 
@@ -209,6 +220,7 @@ export default function App() {
               selectedFyId={selectedFyId}
               userRole={currentUser.role}
               onSelectShipment={setSelectedShipmentId}
+              refreshKey={refreshKey}
             />
           )}
 
@@ -216,29 +228,32 @@ export default function App() {
             <ConsigneeSummaryView
               selectedFyId={selectedFyId}
               onSelectShipment={setSelectedShipmentId}
+              refreshKey={refreshKey}
             />
           )}
 
           {currentTab === 'consignee-master' && (
             <ConsigneeMasterView
               consignees={consignees}
-              onRefresh={loadInitialData}
+              onRefresh={triggerRefresh}
               userRole={currentUser.role}
+              refreshKey={refreshKey}
             />
           )}
 
           {currentTab === 'bank-master' && (
             <BankMasterView
               banks={banks}
-              onRefresh={loadInitialData}
+              onRefresh={triggerRefresh}
               userRole={currentUser.role}
+              refreshKey={refreshKey}
             />
           )}
 
           {currentTab === 'excel' && (
             <ExcelImportExportView
               selectedFyId={selectedFyId}
-              onRefresh={loadInitialData}
+              onRefresh={triggerRefresh}
               userRole={currentUser.role}
             />
           )}
@@ -247,6 +262,7 @@ export default function App() {
             <DocumentReviewView
               userRole={currentUser.role}
               onSelectShipment={setSelectedShipmentId}
+              refreshKey={refreshKey}
             />
           )}
 
@@ -272,14 +288,14 @@ export default function App() {
         onOpenEdit={setEditingShipment}
         onOpenAllocate={setAllocatingShipment}
         onOpenUpload={setUploadingShipment}
-        onDeleted={loadInitialData}
+        onDeleted={triggerRefresh}
         userRole={currentUser.role}
       />
 
       <NewShipmentModal
         isOpen={isNewShipmentOpen}
         onClose={() => setIsNewShipmentOpen(false)}
-        onSuccess={loadInitialData}
+        onSuccess={triggerRefresh}
         selectedFyId={selectedFyId}
         financialYears={financialYears}
         consignees={consignees}
@@ -290,19 +306,19 @@ export default function App() {
         shipment={editingShipment}
         consignees={consignees}
         onClose={() => setEditingShipment(null)}
-        onSuccess={loadInitialData}
+        onSuccess={triggerRefresh}
       />
 
       <AllocatePaymentModal
         shipment={allocatingShipment}
         onClose={() => setAllocatingShipment(null)}
-        onSuccess={loadInitialData}
+        onSuccess={triggerRefresh}
       />
 
       <DocumentUploadModal
         shipment={uploadingShipment}
         onClose={() => setUploadingShipment(null)}
-        onSuccess={loadInitialData}
+        onSuccess={triggerRefresh}
       />
 
       <LoginModal
@@ -310,7 +326,7 @@ export default function App() {
         onSuccess={(u) => {
           setCurrentUser(u);
           setIsLoginModalOpen(false);
-          loadInitialData();
+          triggerRefresh();
         }}
       />
     </div>

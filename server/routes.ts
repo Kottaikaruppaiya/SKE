@@ -446,6 +446,20 @@ apiRouter.delete(
 );
 
 // --- Incentives & BRC ---
+apiRouter.post(
+  '/incentives',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const created = db.createIncentive(req.body, req.user!.id);
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to create incentive.' });
+    }
+  }
+);
+
 apiRouter.put(
   '/incentives/:id',
   authenticate,
@@ -484,6 +498,20 @@ apiRouter.put(
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ error: err.message || 'Failed to update BRC record.' });
+    }
+  }
+);
+
+apiRouter.post(
+  '/brc/:id/reset',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const reset = db.resetBrcRecord(req.params.id, req.user!.id);
+      res.json(reset);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to reset BRC record.' });
     }
   }
 );
@@ -783,6 +811,20 @@ apiRouter.put(
     try {
       const updated = db.updateUser(req.params.id, req.body, req.user!.id);
       res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+apiRouter.delete(
+  '/users/:id',
+  authenticate,
+  requireRole(['SUPER_ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = db.deleteUser(req.params.id, req.user!.id);
+      res.json(result);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
