@@ -178,7 +178,7 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative">
+          <div className="relative w-full sm:w-64">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
@@ -188,7 +188,7 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-56 sm:w-64"
+              className="pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
             />
           </div>
 
@@ -358,18 +358,18 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
 
       {/* Add / Edit Consignee Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <h3 className="font-bold text-sm">
                 {editingId ? 'Edit Consignee Master' : 'Add New Consignee'}
               </h3>
-              <button onClick={() => setShowModal(false)} className="p-1 text-slate-400 hover:text-white">
+              <button onClick={() => setShowModal(false)} className="p-1 text-slate-400 hover:text-white min-h-[36px] min-w-[36px] flex items-center justify-center">
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleSave} className="p-5 sm:p-6 space-y-4 text-xs overflow-y-auto">
               {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg">{error}</div>}
 
               <div>

@@ -3,16 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import express, { Response } from 'express';
+import express, { type Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
 import { db } from './db.ts';
-import { authenticate, requireRole, generateToken, AuthenticatedRequest } from './auth.ts';
+import { authenticate, requireRole, generateToken, type AuthenticatedRequest } from './auth.ts';
 import { extractDocumentData } from './extractor.ts';
 import { generateExportWorkbook, parseHistoricalExcelMigration } from './excel.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
-import { DocumentCategory } from '../src/types/index.ts';
+import type { DocumentCategory } from '../src/types/index.ts';
 
 export const apiRouter = express.Router();
 

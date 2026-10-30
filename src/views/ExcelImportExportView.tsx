@@ -69,9 +69,9 @@ export const ExcelImportExportView: React.FC<ExcelImportExportViewProps> = ({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* EXPORT CARD */}
-        <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
+        <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
           <div className="space-y-2">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
               <Download size={22} />
@@ -99,7 +99,7 @@ export const ExcelImportExportView: React.FC<ExcelImportExportViewProps> = ({
         </div>
 
         {/* IMPORT / HISTORICAL MIGRATION CARD */}
-        <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
+        <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-4 flex flex-col justify-between">
           <div className="space-y-2">
             <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
               <Upload size={22} />

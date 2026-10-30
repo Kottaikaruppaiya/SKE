@@ -171,11 +171,11 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           {!isViewer && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center space-x-1.5"
+              className="px-3.5 py-2 sm:py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center justify-center space-x-1.5 min-h-[40px] sm:min-h-0"
             >
               <PlusCircle size={15} />
               <span>Add Incentive Record</span>
@@ -186,7 +186,7 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
             placeholder="Search by invoice, buyer, scroll..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-52 sm:w-64"
+            className="px-3 py-2 sm:py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-full sm:w-64"
           />
         </div>
       </div>

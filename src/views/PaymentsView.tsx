@@ -183,10 +183,10 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <CreditCard size={20} className="text-blue-600" />
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <CreditCard size={20} className="text-blue-600 flex-shrink-0" />
             <span>Foreign Inward Remittance Certificates (FIRC / IRM)</span>
           </h2>
           <p className="text-xs text-slate-500">
@@ -197,7 +197,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         {!isViewer && (
           <button
             onClick={() => setShowNewModal(true)}
-            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center space-x-1.5"
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto"
           >
             <PlusCircle size={15} />
             <span>Record Inward FIRC</span>
@@ -214,14 +214,14 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           }`}
         >
           <span>{actionMessage.text}</span>
-          <button onClick={() => setActionMessage(null)} className="text-slate-500 hover:text-slate-800 font-bold">
+          <button onClick={() => setActionMessage(null)} className="text-slate-500 hover:text-slate-800 font-bold p-1">
             ×
           </button>
         </div>
       )}
 
       {/* Summary Stats Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
             Total Inward Remittance
@@ -248,7 +248,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs flex items-center justify-between gap-3 text-xs">
+      <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
         <div className="relative flex-1 max-w-md">
           <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
           <input

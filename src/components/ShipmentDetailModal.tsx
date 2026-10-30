@@ -253,21 +253,21 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-5xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+        <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-200 bg-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center space-x-3 min-w-0">
+            <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
               EXP
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-bold text-white tracking-tight">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
                   {shipment?.invoiceNumber || 'Shipment Details'}
                 </h2>
-                <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                <span className="font-mono text-[11px] sm:text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">
                   {shipment?.normalizedInvoiceKey}
                 </span>
                 <span
-                  className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                  className={`text-[10px] sm:text-xs font-semibold px-2.5 py-0.5 rounded-full ${
                     shipment?.paymentStatus === 'FULLY_PAID'
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                       : shipment?.paymentStatus === 'PART_PAID'
@@ -278,33 +278,33 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   {shipment?.paymentStatus}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 truncate mt-0.5">
                 Buyer: <strong>{shipment?.consigneeName}</strong> | Shipping Bill: <strong>{shipment?.shippingBillNumber}</strong>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
             {!isViewer && shipment && (
               <>
                 <button
                   onClick={() => onOpenEdit(shipment)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition-colors"
+                  className="flex items-center space-x-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition-colors min-h-[36px]"
                 >
                   <Edit size={14} />
-                  <span>Edit Record</span>
+                  <span>Edit</span>
                 </button>
                 <button
                   onClick={() => onOpenAllocate(shipment)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium shadow-sm transition-colors"
+                  className="flex items-center space-x-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium shadow-sm transition-colors min-h-[36px]"
                 >
                   <Plus size={14} />
-                  <span>Allocate Payment</span>
+                  <span>Allocate</span>
                 </button>
                 <button
                   onClick={handleDeleteShipment}
                   title="Delete this shipment"
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 rounded-lg text-xs font-medium border border-red-800/60 transition-colors"
+                  className="flex items-center space-x-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 rounded-lg text-xs font-medium border border-red-800/60 transition-colors min-h-[36px]"
                 >
                   <Trash2 size={14} />
                   <span>Delete</span>
@@ -313,7 +313,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
             )}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center ml-auto sm:ml-0"
             >
               <X size={18} />
             </button>
@@ -321,61 +321,61 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 bg-slate-50 px-6 text-xs font-medium">
+        <div className="flex border-b border-slate-200 bg-slate-50 px-3 sm:px-6 text-xs font-medium overflow-x-auto whitespace-nowrap scrollbar-none shrink-0">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`py-3 px-4 border-b-2 font-semibold transition-colors ${
+            className={`py-3 px-3 sm:px-4 border-b-2 font-semibold transition-colors shrink-0 ${
               activeTab === 'overview'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            1. Invoice & Shipping Overview
+            1. Invoice & Shipping
           </button>
           <button
             onClick={() => setActiveTab('documents')}
-            className={`py-3 px-4 border-b-2 font-semibold transition-colors ${
+            className={`py-3 px-3 sm:px-4 border-b-2 font-semibold transition-colors shrink-0 ${
               activeTab === 'documents'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            2. Original Documents ({shipment?.documents?.length || 0})
+            2. Documents ({shipment?.documents?.length || 0})
           </button>
           <button
             onClick={() => setActiveTab('payments')}
-            className={`py-3 px-4 border-b-2 font-semibold transition-colors ${
+            className={`py-3 px-3 sm:px-4 border-b-2 font-semibold transition-colors shrink-0 ${
               activeTab === 'payments'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            3. FIRC & Allocations
+            3. FIRC & Payments
           </button>
           <button
             onClick={() => setActiveTab('brc')}
-            className={`py-3 px-4 border-b-2 font-semibold transition-colors ${
+            className={`py-3 px-3 sm:px-4 border-b-2 font-semibold transition-colors shrink-0 ${
               activeTab === 'brc'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            4. BRC / eBRC Tracking
+            4. BRC Tracking
           </button>
           <button
             onClick={() => setActiveTab('incentives')}
-            className={`py-3 px-4 border-b-2 font-semibold transition-colors ${
+            className={`py-3 px-3 sm:px-4 border-b-2 font-semibold transition-colors shrink-0 ${
               activeTab === 'incentives'
                 ? 'border-blue-600 text-blue-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            5. Incentives (DBK/RoDTEP)
+            5. Incentives
           </button>
         </div>
 
         {/* Body Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {loading && (
             <div className="py-20 text-center text-xs text-slate-400 animate-pulse">
               Loading shipment records...

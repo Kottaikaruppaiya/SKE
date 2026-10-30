@@ -80,7 +80,8 @@ export const QuickView: React.FC<QuickViewProps> = ({ selectedFyId, refreshKey }
 
       {/* Structured Ledger Table */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-        <table className="w-full text-left text-xs">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[500px] text-left text-xs">
           <thead className="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider font-semibold">
             <tr>
               <th className="p-3.5">Executive Financial Metric</th>
@@ -102,6 +103,7 @@ export const QuickView: React.FC<QuickViewProps> = ({ selectedFyId, refreshKey }
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

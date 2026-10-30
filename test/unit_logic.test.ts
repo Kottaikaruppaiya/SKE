@@ -39,3 +39,30 @@ test('Payment allocation subtraction maintains accuracy', () => {
   const remainingOutstanding = Math.max(0, invoiceTotal - remainingPaid);
   assert.equal(remainingOutstanding, 2000);
 });
+
+test('Over-allocation detection prevents exceeding available balance', () => {
+  const verifiedAmount = 25000;
+  const allocatedAmount = 20000;
+  const availableBalance = verifiedAmount - allocatedAmount;
+  assert.equal(availableBalance, 5000);
+
+  const requestedAllocation = 6000;
+  const isOverAllocated = requestedAllocation > availableBalance;
+  assert.equal(isOverAllocated, true);
+});
+
+test('Incentive status derivation works accurately', () => {
+  const claimed = 1200;
+  let received = 0;
+  let status = received >= claimed && claimed > 0 ? 'RECEIVED' : received > 0 ? 'PART_RECEIVED' : 'PENDING';
+  assert.equal(status, 'PENDING');
+
+  received = 500;
+  status = received >= claimed && claimed > 0 ? 'RECEIVED' : received > 0 ? 'PART_RECEIVED' : 'PENDING';
+  assert.equal(status, 'PART_RECEIVED');
+
+  received = 1200;
+  status = received >= claimed && claimed > 0 ? 'RECEIVED' : received > 0 ? 'PART_RECEIVED' : 'PENDING';
+  assert.equal(status, 'RECEIVED');
+});
+

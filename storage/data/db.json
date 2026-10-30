@@ -510,6 +510,26 @@
   ],
   "auditLogs": [
     {
+      "id": "eaa21762-9b28-41b3-ab5a-c8e9ede09239",
+      "userId": "8f8cb92d-fca0-406f-b61e-e09b523d9452",
+      "userName": "Suresh Kumar (Owner)",
+      "action": "LOGIN",
+      "entityType": "SECURITY",
+      "ipAddress": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "timestamp": "2026-10-30T21:18:30.115Z"
+    },
+    {
+      "id": "dcc00d66-9ed2-4f60-acc5-53a0287d3337",
+      "userId": "8f8cb92d-fca0-406f-b61e-e09b523d9452",
+      "userName": "Suresh Kumar (Owner)",
+      "action": "LOGIN",
+      "entityType": "SECURITY",
+      "ipAddress": "127.0.0.1",
+      "userAgent": "curl/7.88.1",
+      "timestamp": "2026-10-30T21:18:25.951Z"
+    },
+    {
       "id": "77a0d024-b034-41bd-992f-681dd82fa14e",
       "userId": "8f8cb92d-fca0-406f-b61e-e09b523d9452",
       "userName": "Suresh Kumar (Owner)",

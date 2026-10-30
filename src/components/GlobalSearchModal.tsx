@@ -52,10 +52,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-start justify-center pt-20 p-4">
-      <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[80vh]">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-start justify-center pt-8 sm:pt-20 p-3 sm:p-4">
+      <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
         {/* Search Input Bar */}
-        <div className="p-4 border-b border-slate-200 flex items-center space-x-3 bg-slate-50">
+        <div className="p-3.5 sm:p-4 border-b border-slate-200 flex items-center space-x-3 bg-slate-50">
           <Search size={20} className="text-slate-400" />
           <input
             type="text"
@@ -163,11 +163,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                     {shipment.paymentStatus}
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 flex items-center space-x-3">
+                <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span>Buyer: <strong>{shipment.consigneeName}</strong></span>
-                  <span>•</span>
+                  <span className="hidden sm:inline">•</span>
                   <span>SB: <strong>{shipment.shippingBillNumber}</strong></span>
-                  <span>•</span>
+                  <span className="hidden sm:inline">•</span>
                   <span>Value: <strong>${shipment.invoiceValueUsd.toLocaleString()}</strong></span>
                 </div>
               </div>

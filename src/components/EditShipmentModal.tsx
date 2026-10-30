@@ -109,19 +109,19 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
       <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Edit2 size={18} className="text-blue-400" />
-            <h3 className="font-bold text-sm">Edit Export Shipment — {shipment.invoiceNumber}</h3>
+        <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between shrink-0">
+          <div className="flex items-center space-x-2 min-w-0">
+            <Edit2 size={18} className="text-blue-400 shrink-0" />
+            <h3 className="font-bold text-sm truncate">Edit Export Shipment — {shipment.invoiceNumber}</h3>
           </div>
-          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-white transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleUpdate} className="p-6 space-y-4 text-xs overflow-y-auto flex-1">
+        <form onSubmit={handleUpdate} className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-start space-x-2">
               <AlertCircle size={15} className="mt-0.5 flex-shrink-0 text-red-600" />
@@ -129,7 +129,7 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="font-semibold text-slate-700 block mb-1">Invoice Number *</label>
               <input

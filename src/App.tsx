@@ -12,7 +12,9 @@ import { NewShipmentModal } from './components/NewShipmentModal.tsx';
 import { EditShipmentModal } from './components/EditShipmentModal.tsx';
 import { AllocatePaymentModal } from './components/AllocatePaymentModal.tsx';
 import { DocumentUploadModal } from './components/DocumentUploadModal.tsx';
-import { LoginModal } from './components/LoginModal.tsx';
+import { MobileBottomNav } from './components/MobileBottomNav.tsx';
+
+import { LoginPage } from './views/LoginPage.tsx';
 
 // Views
 import { DashboardView } from './views/DashboardView.tsx';
@@ -42,6 +44,7 @@ export default function App() {
   const [selectedFyId, setSelectedFyId] = useState<string>('fy-2026-27');
   const [consignees, setConsignees] = useState<ConsigneeMaster[]>([]);
   const [banks, setBanks] = useState<BankMaster[]>([]);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Modals
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
@@ -50,11 +53,18 @@ export default function App() {
   const [uploadingShipment, setUploadingShipment] = useState<Shipment | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNewShipmentOpen, setIsNewShipmentOpen] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Initial load
   const loadInitialData = async () => {
+    const token = api.getToken();
+    if (!token) {
+      setCurrentUser(null);
+      setIsInitializing(false);
+      return;
+    }
+
     try {
       const user = await api.getCurrentUser();
       setCurrentUser(user);
@@ -72,8 +82,11 @@ export default function App() {
       setConsignees(cList);
       setBanks(bList);
     } catch (e) {
-      console.error('Initial load error:', e);
-      setIsLoginModalOpen(true);
+      console.warn('Authentication check failed or token expired:', e);
+      api.clearToken();
+      setCurrentUser(null);
+    } finally {
+      setIsInitializing(false);
     }
   };
 
@@ -96,6 +109,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const handleLoginSuccess = async (user: User) => {
+    setCurrentUser(user);
+    // Explicit requirement: "they login then they came in dashboard"
+    setCurrentTab('dashboard');
+    await loadInitialData();
+  };
+
   const handleSwitchRole = async (role: Role) => {
     try {
       const res = await api.switchRole(role);
@@ -112,22 +132,25 @@ export default function App() {
   const handleLogout = () => {
     api.clearToken();
     setCurrentUser(null);
-    setIsLoginModalOpen(true);
+    setCurrentTab('dashboard');
   };
 
-  if (!currentUser) {
+  if (isInitializing) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <LoginModal
-          isOpen={true}
-          onSuccess={(u) => {
-            setCurrentUser(u);
-            setIsLoginModalOpen(false);
-            loadInitialData();
-          }}
-        />
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4 text-white">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-700 to-indigo-500 flex items-center justify-center font-black text-2xl shadow-xl shadow-blue-500/25 animate-pulse">
+          SKE
+        </div>
+        <div className="flex items-center space-x-2 text-xs text-slate-400">
+          <span className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+          <span>Loading S K Enterprises Export Vault...</span>
+        </div>
       </div>
     );
+  }
+
+  if (!currentUser) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
   return (
@@ -143,6 +166,8 @@ export default function App() {
           }
         }}
         userRole={currentUser.role}
+        isOpenMobile={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -157,10 +182,11 @@ export default function App() {
           onOpenSearch={() => setIsSearchOpen(true)}
           onQuickExport={handleQuickExport}
           onLogout={handleLogout}
+          onToggleMobileMenu={() => setIsMobileMenuOpen((prev) => !prev)}
         />
 
         {/* Dynamic Page Views */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3.5 sm:p-6 pb-24 lg:pb-6">
           {currentTab === 'dashboard' && (
             <DashboardView
               selectedFyId={selectedFyId}
@@ -272,6 +298,21 @@ export default function App() {
 
           {currentTab === 'settings' && <SettingsView userRole={currentUser.role} />}
         </main>
+
+        {/* Mobile Fixed Bottom Navigation */}
+        <MobileBottomNav
+          currentTab={currentTab}
+          onSelectTab={(tab) => {
+            if (tab === 'new-shipment') {
+              setIsNewShipmentOpen(true);
+            } else {
+              setCurrentTab(tab);
+            }
+          }}
+          onOpenNewShipment={() => setIsNewShipmentOpen(true)}
+          onToggleMenu={() => setIsMobileMenuOpen(true)}
+          userRole={currentUser.role}
+        />
       </div>
 
       {/* Global Modals */}
@@ -319,15 +360,6 @@ export default function App() {
         shipment={uploadingShipment}
         onClose={() => setUploadingShipment(null)}
         onSuccess={triggerRefresh}
-      />
-
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onSuccess={(u) => {
-          setCurrentUser(u);
-          setIsLoginModalOpen(false);
-          triggerRefresh();
-        }}
       />
     </div>
   );

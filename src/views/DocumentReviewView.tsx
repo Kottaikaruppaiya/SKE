@@ -86,9 +86,9 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
         </p>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        {/* Document List (Left 5 Cols) */}
-        <div className="col-span-5 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs flex flex-col h-[700px]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Document List (Left 5 Cols on desktop, top stacked on mobile) */}
+        <div className="col-span-1 lg:col-span-5 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs flex flex-col h-[320px] lg:h-[700px]">
           <div className="p-3 bg-slate-900 text-white text-xs font-bold flex items-center justify-between">
             <span>Uploaded Export Documents ({documents.length})</span>
             <span className="text-[10px] text-slate-400">Private Server Storage</span>
@@ -140,26 +140,26 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
           </div>
         </div>
 
-        {/* Side-by-Side Review & Extracted Metadata Pane (Right 7 Cols) */}
-        <div className="col-span-7 bg-white border border-slate-200 rounded-xl p-5 shadow-2xs flex flex-col h-[700px] overflow-y-auto space-y-4">
+        {/* Side-by-Side Review & Extracted Metadata Pane (Right 7 Cols on desktop) */}
+        <div className="col-span-1 lg:col-span-7 bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-2xs flex flex-col min-h-[500px] lg:h-[700px] overflow-y-auto space-y-4">
           {selectedDoc ? (
             <>
               {/* Document Header & Actions */}
-              <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between border-b border-slate-100 pb-3 gap-3">
+                <div className="min-w-0">
                   <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded uppercase">
                     {selectedDoc.category.replace(/_/g, ' ')}
                   </span>
-                  <h3 className="font-bold text-sm text-slate-900 mt-1">{selectedDoc.originalFilename}</h3>
-                  <p className="text-[11px] font-mono text-slate-400">Path: {selectedDoc.storedPath}</p>
+                  <h3 className="font-bold text-sm text-slate-900 mt-1 truncate">{selectedDoc.originalFilename}</h3>
+                  <p className="text-[11px] font-mono text-slate-400 truncate">Path: {selectedDoc.storedPath}</p>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <a
                     href={api.getDocumentDownloadUrl(selectedDoc.id)}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center space-x-1"
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center space-x-1 min-h-[36px]"
                   >
                     <Download size={13} />
                     <span>Download</span>

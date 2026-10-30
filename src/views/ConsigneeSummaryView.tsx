@@ -178,14 +178,14 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
 
         {/* Action Controls & Scope Switcher */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative">
+          <div className="relative w-full sm:w-64">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
               placeholder="Search buyer, country, port..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-52 sm:w-64"
+              className="pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
             />
           </div>
 
@@ -388,7 +388,7 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
                 </button>
               </div>
 
-              <div className="flex items-center space-x-3 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+              <div className="flex flex-wrap items-center gap-3 bg-slate-50 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-slate-200">
                 <span className="text-slate-600">
                   Total Invoiced:{' '}
                   <strong className="text-slate-900">

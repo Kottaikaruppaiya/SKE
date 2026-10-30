@@ -79,19 +79,19 @@ export const AllocatePaymentModal: React.FC<AllocatePaymentModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white w-full max-w-lg max-h-[92vh] flex flex-col rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="px-5 py-3.5 sm:px-6 sm:py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2">
             <DollarSign className="text-emerald-400" size={20} />
             <h3 className="font-bold text-sm">Allocate FIRC Payment</h3>
           </div>
-          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-white">
+          <button onClick={onClose} className="p-1 rounded text-slate-400 hover:text-white min-h-[36px] min-w-[36px] flex items-center justify-center">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleAllocate} className="p-6 space-y-4 text-xs">
+        <form onSubmit={handleAllocate} className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-start space-x-2">
               <AlertCircle size={15} className="mt-0.5 flex-shrink-0 text-red-600" />

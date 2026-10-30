@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import {
+import type {
   User,
   FinancialYear,
   ConsigneeMaster,
@@ -127,11 +127,14 @@ class DatabaseService {
 
   // --- Users & Auth ---
   public getUsers(): User[] {
-    return this.state.users.map(({ ...u }) => u);
+    return this.state.users.map(({ passwordHash, ...u }: any) => u);
   }
 
   public getUserById(id: string): User | undefined {
-    return this.state.users.find((u) => u.id === id);
+    const user = this.state.users.find((u) => u.id === id);
+    if (!user) return undefined;
+    const { passwordHash, ...clean }: any = user;
+    return clean;
   }
 
   public getUserByEmail(email: string): (User & { passwordHash?: string }) | undefined {

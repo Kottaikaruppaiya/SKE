@@ -76,7 +76,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onSuccess }) => 
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2 font-medium"
+                className="w-full border border-slate-300 rounded-lg p-2.5 font-medium min-h-[44px]"
               />
             </div>
 
@@ -87,14 +87,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onSuccess }) => 
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg p-2"
+                className="w-full border border-slate-300 rounded-lg p-2.5 min-h-[44px]"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm transition-all disabled:opacity-50"
+              className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm transition-all disabled:opacity-50 min-h-[44px]"
             >
               {loading ? 'Authenticating...' : 'Sign In to Tracker'}
             </button>
@@ -105,11 +105,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onSuccess }) => 
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block text-center">
               Quick Role Testing Profiles (3 Required Roles):
             </span>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={() => quickSwitch('owner@skenterprises.com')}
-                className="p-2 border border-purple-200 bg-purple-50 hover:bg-purple-100 rounded-lg text-center transition-colors group"
+                className="p-2 border border-purple-200 bg-purple-50 hover:bg-purple-100 rounded-lg text-center transition-colors group min-h-[60px]"
               >
                 <ShieldAlert size={16} className="text-purple-600 mx-auto mb-1" />
                 <span className="font-bold text-purple-900 block text-[11px]">Super Admin</span>
@@ -119,7 +119,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onSuccess }) => 
               <button
                 type="button"
                 onClick={() => quickSwitch('accountant@skenterprises.com')}
-                className="p-2 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-lg text-center transition-colors group"
+                className="p-2 border border-blue-200 bg-blue-50 hover:bg-blue-100 rounded-lg text-center transition-colors group min-h-[60px]"
               >
                 <ShieldCheck size={16} className="text-blue-600 mx-auto mb-1" />
                 <span className="font-bold text-blue-900 block text-[11px]">Admin</span>
@@ -129,7 +129,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onSuccess }) => 
               <button
                 type="button"
                 onClick={() => quickSwitch('auditor@skenterprises.com')}
-                className="p-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 rounded-lg text-center transition-colors group"
+                className="p-2 border border-amber-200 bg-amber-50 hover:bg-amber-100 rounded-lg text-center transition-colors group min-h-[60px]"
               >
                 <UserCheck size={16} className="text-amber-600 mx-auto mb-1" />
                 <span className="font-bold text-amber-900 block text-[11px]">Viewer</span>

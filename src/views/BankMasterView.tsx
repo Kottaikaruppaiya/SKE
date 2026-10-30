@@ -135,19 +135,19 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <input
             type="text"
             placeholder="Search banks, AD code, IFSC..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-52 sm:w-64"
+            className="px-3 py-2 sm:py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
           />
 
           {!isViewer && (
             <button
               onClick={openCreate}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center space-x-1.5 whitespace-nowrap"
+              className="px-3.5 py-2 sm:py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center justify-center space-x-1.5 whitespace-nowrap min-h-[40px] sm:min-h-0"
             >
               <PlusCircle size={15} />
               <span>Add Bank</span>
@@ -234,18 +234,18 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between shrink-0">
               <h3 className="font-bold text-sm">
                 {editingId ? 'Edit Bank Master' : 'Add Authorised Dealer Bank'}
               </h3>
-              <button onClick={() => setShowModal(false)} className="p-1 text-slate-400 hover:text-white">
+              <button onClick={() => setShowModal(false)} className="p-1 text-slate-400 hover:text-white min-h-[36px] min-w-[36px] flex items-center justify-center">
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleSave} className="p-5 sm:p-6 space-y-4 text-xs overflow-y-auto">
               {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg">{error}</div>}
 
               <div>

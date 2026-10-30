@@ -71,11 +71,11 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
       </div>
 
       {/* Interactive Normalizer Test Card */}
-      <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4">
+      <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-4">
         <label className="text-xs font-bold text-slate-700 block">
           Enter Invoice String or Shipping Bill Number:
         </label>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
             value={inputVal}
@@ -86,7 +86,7 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
           />
           <button
             onClick={() => handleSearch()}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center space-x-2"
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center space-x-2 min-h-[40px]"
           >
             <Search size={16} />
             <span>Search Database</span>
@@ -150,10 +150,10 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
           <div
             key={shipment.id}
             onClick={() => onSelectShipment(shipment.id)}
-            className="p-5 bg-white border border-slate-200 hover:border-blue-300 rounded-2xl shadow-2xs hover:shadow-sm transition-all cursor-pointer flex items-center justify-between group"
+            className="p-4 sm:p-5 bg-white border border-slate-200 hover:border-blue-300 rounded-2xl shadow-2xs hover:shadow-sm transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
           >
             <div className="space-y-2">
-              <div className="flex items-center space-x-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-base font-bold text-slate-900 group-hover:text-blue-600">
                   {shipment.invoiceNumber}
                 </span>
@@ -171,7 +171,7 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
                 </span>
               </div>
 
-              <div className="text-xs text-slate-500 grid grid-cols-3 gap-x-6 gap-y-1">
+              <div className="text-xs text-slate-500 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
                 <span>Buyer: <strong className="text-slate-700">{shipment.consigneeName}</strong></span>
                 <span>Date: <strong className="text-slate-700">{shipment.invoiceDate}</strong></span>
                 <span>Invoice USD: <strong className="text-slate-900">${shipment.invoiceValueUsd.toLocaleString()}</strong></span>
@@ -181,7 +181,7 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 text-blue-600 font-semibold text-xs group-hover:translate-x-1 transition-transform">
+            <div className="flex items-center space-x-2 text-blue-600 font-semibold text-xs group-hover:translate-x-1 transition-transform self-end sm:self-center">
               <span>Open Dossier</span>
               <ArrowRight size={16} />
             </div>

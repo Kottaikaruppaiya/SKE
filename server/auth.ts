@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { db } from './db.ts';
-import { Role, User } from '../src/types/index.ts';
+import type { Role, User } from '../src/types/index.ts';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ske_export_documents_tracker_secret_key_2026';
 
@@ -38,13 +38,6 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   }
 
   if (!token) {
-    // If no token provided, default to Super Admin for smooth internal preview, or return 401
-    // To allow the app to work seamlessly in AI Studio iframe while enforcing full RBAC:
-    const defaultUser = db.getUserByEmail('owner@skenterprises.com') || db.getUsers()[0];
-    if (defaultUser) {
-      req.user = defaultUser;
-      return next();
-    }
     return res.status(401).json({ error: 'Authentication required. Please sign in.' });
   }
 

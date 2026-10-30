@@ -100,10 +100,10 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
   return (
     <div className="space-y-4">
       {/* View Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <FileSpreadsheet size={20} className="text-blue-600" />
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <FileSpreadsheet size={20} className="text-blue-600 flex-shrink-0" />
             <span>Master Export Tracker (System of Record)</span>
           </h2>
           <p className="text-xs text-slate-500">
@@ -111,11 +111,11 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto">
           {!isViewer && (
             <button
               onClick={onOpenNewShipment}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center space-x-1.5"
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center space-x-1.5 cursor-pointer flex-1 sm:flex-none justify-center"
             >
               <PlusCircle size={15} />
               <span>New Shipment</span>
@@ -123,7 +123,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
           )}
           <a
             href={api.getExportUrl(selectedFyId)}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-300 transition-all flex items-center space-x-1.5"
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-300 transition-all flex items-center space-x-1.5 flex-1 sm:flex-none justify-center"
           >
             <Download size={14} />
             <span>Export Tracker (.xlsx)</span>
@@ -140,15 +140,15 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
           }`}
         >
           <span>{actionMessage.text}</span>
-          <button onClick={() => setActionMessage(null)} className="text-slate-500 hover:text-slate-800 font-bold">
+          <button onClick={() => setActionMessage(null)} className="text-slate-500 hover:text-slate-800 font-bold p-1">
             ×
           </button>
         </div>
       )}
 
       {/* Filter Toolbar */}
-      <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center space-x-3 flex-1 min-w-[280px]">
+      <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col md:flex-row flex-wrap items-stretch md:items-center justify-between gap-2.5 text-xs">
+        <div className="flex items-center space-x-2 flex-1 w-full md:min-w-[240px]">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
             <input

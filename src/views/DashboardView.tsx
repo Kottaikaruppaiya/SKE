@@ -65,7 +65,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Welcome & Quick Actions */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 rounded-2xl p-6 text-white shadow-md flex items-center justify-between">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 rounded-2xl p-4 sm:p-6 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30">
@@ -73,17 +73,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
             <span className="text-xs text-slate-400 font-medium">Export Realisation Console</span>
           </div>
-          <h2 className="text-xl font-bold tracking-tight">S K Enterprises — Export Document Vault</h2>
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight">S K Enterprises — Export Document Vault</h2>
           <p className="text-xs text-slate-300 max-w-xl">
             Real-time tracking of export invoices, customs Shipping Bills, bank FIRC foreign inward remittances, and DGFT eBRC certificates.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center flex-wrap gap-2">
           {!isViewer && (
             <button
               onClick={() => onNavigate('new-shipment')}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md transition-all flex items-center space-x-1.5"
+              className="px-3.5 sm:px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-md transition-all flex items-center space-x-1.5 cursor-pointer"
             >
               <PlusCircle size={15} />
               <span>New Shipment</span>
@@ -91,7 +91,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
           <button
             onClick={() => onNavigate('excel')}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5"
+            className="px-3.5 sm:px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition-all flex items-center space-x-1.5 cursor-pointer"
           >
             <Download size={14} />
             <span>Excel Reports</span>
@@ -100,7 +100,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Invoiced */}
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
@@ -199,9 +199,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* Two Column Layout: BRC Watchlist & Recent Activity */}
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* BRC / eBRC Compliance */}
-        <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-4">
+        <div className="p-4 sm:p-5 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
               <FileCheck2 size={18} className="text-blue-600" />
@@ -209,14 +209,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </h3>
             <button
               onClick={() => onNavigate('brc')}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
             >
               <span>View BRC Manager</span>
               <ArrowUpRight size={13} />
             </button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
               <span className="text-xl font-bold text-emerald-800 block">{metrics.brcRealisedCount}</span>
               <span className="text-[10px] text-emerald-700 font-medium uppercase tracking-wider">
