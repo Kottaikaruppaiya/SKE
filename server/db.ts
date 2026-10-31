@@ -92,6 +92,10 @@ class DatabaseService {
     this.persist(this.state);
   }
 
+  public reloadFromDisk() {
+    this.state = this.loadOrInitialize();
+  }
+
   public logAudit(entry: {
     userId?: string;
     userName?: string;
@@ -1419,6 +1423,49 @@ class DatabaseService {
 
     this.save();
     return this.state.settings;
+  }
+
+  // --- Operational Data Management ---
+  public clearAllOperationalData(actorUserId: string): { success: boolean; cleared: Record<string, number> } {
+    const countSummary = {
+      shipments: this.state.shipments.length,
+      invoiceItems: this.state.invoiceItems.length,
+      documents: this.state.documents.length,
+      payments: this.state.payments.length,
+      allocations: this.state.allocations.length,
+      incentives: this.state.incentives.length,
+      brcRecords: this.state.brcRecords.length,
+    };
+
+    // Remove physical files associated with documents
+    for (const doc of this.state.documents) {
+      try {
+        const fullPath = path.isAbsolute(doc.storedPath) ? doc.storedPath : path.resolve(doc.storedPath);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      } catch (e) {
+        console.warn('Could not remove file on disk:', e);
+      }
+    }
+
+    this.state.shipments = [];
+    this.state.invoiceItems = [];
+    this.state.documents = [];
+    this.state.payments = [];
+    this.state.allocations = [];
+    this.state.incentives = [];
+    this.state.brcRecords = [];
+
+    this.logAudit({
+      userId: actorUserId,
+      action: 'CLEAR_ALL_OPERATIONAL_DATA',
+      entityType: 'DATABASE',
+      newValues: countSummary,
+    });
+
+    this.save();
+    return { success: true, cleared: countSummary };
   }
 
   // --- Dashboard Metrics ---

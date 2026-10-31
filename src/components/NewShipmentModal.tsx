@@ -128,7 +128,7 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
         setConsigneeId(consignees[0].id);
       }
     }
-  }, [isOpen, financialYears, selectedFyId]);
+  }, [isOpen, financialYears, selectedFyId, consignees, consigneeId]);
 
   // Real-time debounced uniqueness check for Invoice Number
   useEffect(() => {
@@ -543,14 +543,14 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
                   </div>
 
                   {/* Mode Selector Toggle: Single vs Multiple */}
-                  <div className="bg-slate-100 p-1 rounded-lg flex items-center justify-between text-[11px] font-semibold mb-2.5">
+                  <div className="bg-slate-100 p-1 rounded-lg grid grid-cols-2 gap-1 text-[11px] font-semibold mb-2.5">
                     <button
                       type="button"
                       onClick={() => {
                         setBrcMode('SINGLE');
                         setBrcFile2(null);
                       }}
-                      className={`flex-1 py-1 rounded-md text-center transition-all ${
+                      className={`h-7 px-2 rounded-md text-center transition-all cursor-pointer flex items-center justify-center ${
                         brcMode === 'SINGLE'
                           ? 'bg-white text-blue-700 shadow-xs font-bold'
                           : 'text-slate-600 hover:text-slate-900'
@@ -561,7 +561,7 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setBrcMode('MULTIPLE')}
-                      className={`flex-1 py-1 rounded-md text-center transition-all ${
+                      className={`h-7 px-2 rounded-md text-center transition-all cursor-pointer flex items-center justify-center ${
                         brcMode === 'MULTIPLE'
                           ? 'bg-white text-blue-700 shadow-xs font-bold'
                           : 'text-slate-600 hover:text-slate-900'
@@ -574,9 +574,9 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
                   {/* Slots for BRC upload */}
                   <div className="space-y-2">
                     {/* BRC Slot 1 */}
-                    <div className="p-2 border border-slate-200 rounded-lg bg-slate-50/70 text-xs flex items-center justify-between">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                    <div className="p-2 border border-slate-200 rounded-lg bg-slate-50/70 text-xs flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block truncate">
                           {brcMode === 'MULTIPLE' ? 'BRC Copy 1 (Part 1)' : 'BRC Copy (Single)'}
                         </span>
                         {brcFile1 ? (
@@ -584,14 +584,15 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
                             {brcFile1.name} ({brcFile1.size})
                           </span>
                         ) : (
-                          <span className="text-slate-400 text-[11px]">No file selected</span>
+                          <span className="text-slate-400 text-[11px] block">No file selected</span>
                         )}
                       </div>
                       {brcFile1 ? (
                         <button
                           type="button"
                           onClick={() => setBrcFile1(null)}
-                          className="p-1 text-slate-400 hover:text-red-600 rounded"
+                          className="w-7 h-7 flex items-center justify-center shrink-0 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Remove BRC Copy 1"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -599,7 +600,7 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
                         <button
                           type="button"
                           onClick={() => brc1InputRef.current?.click()}
-                          className="px-2 py-1 bg-white border border-slate-300 rounded text-[11px] font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+                          className="h-7 px-2.5 bg-white border border-slate-300 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-100 active:bg-slate-200 flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
                         >
                           <Upload size={11} /> Browse
                         </button>
@@ -608,9 +609,9 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
 
                     {/* BRC Slot 2 (Only active when Multiple mode is selected) */}
                     {brcMode === 'MULTIPLE' && (
-                      <div className="p-2 border border-slate-200 rounded-lg bg-slate-50/70 text-xs flex items-center justify-between animate-in fade-in duration-150">
-                        <div className="min-w-0 flex-1 pr-2">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                      <div className="p-2 border border-slate-200 rounded-lg bg-slate-50/70 text-xs flex items-center justify-between gap-2 animate-in fade-in duration-150">
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase block truncate">
                             BRC Copy 2 (Part 2)
                           </span>
                           {brcFile2 ? (
@@ -618,14 +619,15 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
                               {brcFile2.name} ({brcFile2.size})
                             </span>
                           ) : (
-                            <span className="text-slate-400 text-[11px]">No file selected</span>
+                            <span className="text-slate-400 text-[11px] block">No file selected</span>
                           )}
                         </div>
                         {brcFile2 ? (
                           <button
                             type="button"
                             onClick={() => setBrcFile2(null)}
-                            className="p-1 text-slate-400 hover:text-red-600 rounded"
+                            className="w-7 h-7 flex items-center justify-center shrink-0 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Remove BRC Copy 2"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -633,7 +635,7 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
                           <button
                             type="button"
                             onClick={() => brc2InputRef.current?.click()}
-                            className="px-2 py-1 bg-white border border-slate-300 rounded text-[11px] font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-1"
+                            className="h-7 px-2.5 bg-white border border-slate-300 rounded-lg text-[11px] font-semibold text-slate-700 hover:bg-slate-100 active:bg-slate-200 flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs"
                           >
                             <Upload size={11} /> Browse
                           </button>
@@ -725,28 +727,43 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
             />
           </div>
 
-          {/* SECTION 4: OPTIONAL COMMERCIAL & CUSTOMS DETAILS ACCORDION */}
-          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+          {/* SECTION 4: COMMERCIAL & CUSTOMS PARAMETERS (OPTIONAL / AUTO-EXTRACTED) */}
+          <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
             <button
               type="button"
               onClick={() => setShowOptionalDetails(!showOptionalDetails)}
-              className="w-full px-4.5 py-3 bg-slate-50 hover:bg-slate-100/80 transition-colors flex items-center justify-between text-xs font-semibold text-slate-700"
+              className="w-full px-4.5 py-3.5 bg-slate-50 hover:bg-slate-100/80 transition-colors flex items-center justify-between text-xs font-semibold text-slate-700 cursor-pointer"
             >
-              <div className="flex items-center gap-2">
-                <Sparkles size={15} className="text-blue-600" />
-                <span>Commercial & Customs Details (Auto-extracted or Manual Override)</span>
-                <span className="text-[10px] text-slate-400 font-normal">
-                  — Consignee, Values, Dates, Shipping Bill details
-                </span>
+              <div className="flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <Sparkles size={14} />
+                </div>
+                <div className="text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-800">4. Commercial & Customs Parameters</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-200/80 text-slate-600">
+                      Optional / Pre-fill from Uploads
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-normal mt-0.5">
+                    Buyer, Invoice USD, Shipping Bill No./Date, Port & Customs Exchange Rate
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 text-slate-500">
-                <span className="text-[11px]">{showOptionalDetails ? 'Hide' : 'Expand'}</span>
+              <div className="flex items-center gap-1.5 text-slate-500 shrink-0">
+                <span className="text-[11px] font-medium">{showOptionalDetails ? 'Hide' : 'Expand Details'}</span>
                 {showOptionalDetails ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
               </div>
             </button>
 
             {showOptionalDetails && (
               <div className="p-4.5 border-t border-slate-200 space-y-4 text-xs animate-in fade-in duration-150">
+                <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-lg flex items-start gap-2.5 text-blue-900 text-[11px] leading-relaxed">
+                  <Info size={15} className="text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="font-semibold">Why this section is here:</strong> If you attach a Commercial Invoice or Shipping Bill PDF in Section 2, the system automatically detects and extracts these statutory trade parameters. If you don't have the PDF files yet, or want to set exact customs values manually right now, you can fill or edit them here.
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
                   {/* Consignee */}
                   <div>
@@ -978,43 +995,46 @@ const DocumentUploadCard: React.FC<DocumentUploadCardProps> = ({
         </div>
 
         {/* Selected file preview or upload button */}
-        {selectedFile ? (
-          <div className="p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-200 text-xs flex items-center justify-between space-x-2 my-2">
-            <div className="min-w-0 flex-1">
-              <span className="font-bold text-slate-800 truncate block text-[11px]">
-                {selectedFile.name}
-              </span>
-              <span className="text-[10px] text-emerald-700 font-medium">
-                {selectedFile.size} • Ready to upload
-              </span>
+        <div className="my-2 min-h-[72px] flex flex-col justify-center">
+          {selectedFile ? (
+            <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-200 text-xs flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <span className="font-bold text-slate-800 truncate block text-[11px]">
+                  {selectedFile.name}
+                </span>
+                <span className="text-[10px] text-emerald-700 font-medium block truncate">
+                  {selectedFile.size} • Ready to upload
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={onRemove}
+                className="w-7 h-7 flex items-center justify-center shrink-0 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                title="Remove file"
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
+          ) : (
             <button
               type="button"
-              onClick={onRemove}
-              className="p-1 text-slate-400 hover:text-red-600 rounded transition-colors"
-              title="Remove file"
+              onClick={onSelectClick}
+              className="w-full h-full border border-dashed border-slate-300 hover:border-blue-500 rounded-lg p-3 text-center cursor-pointer transition-colors bg-slate-50/60 hover:bg-blue-50/50 group flex flex-col items-center justify-center"
             >
-              <Trash2 size={14} />
+              <Upload size={16} className="text-slate-400 group-hover:text-blue-600 mb-1 transition-colors" />
+              <span className="text-[11px] font-semibold text-slate-700 group-hover:text-blue-700 block">
+                Choose or Drop File
+              </span>
+              <span className="text-[10px] text-slate-400">PDF, JPG, PNG (Max 25MB)</span>
             </button>
-          </div>
-        ) : (
-          <div
-            onClick={onSelectClick}
-            className="border border-dashed border-slate-300 hover:border-blue-500 rounded-lg p-3 text-center cursor-pointer transition-colors bg-slate-50/50 hover:bg-blue-50/40 my-2 group"
-          >
-            <Upload size={16} className="mx-auto text-slate-400 group-hover:text-blue-600 mb-1 transition-colors" />
-            <span className="text-[11px] font-semibold text-slate-700 group-hover:text-blue-700 block">
-              Choose or Drop File
-            </span>
-            <span className="text-[10px] text-slate-400">PDF, JPG, PNG (Max 25MB)</span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="text-[10px] text-slate-400 pt-1 border-t border-slate-100 flex items-center justify-between">
         <span className="truncate">{subtitle}</span>
         {selectedFile && (
-          <span className="text-emerald-600 font-bold flex items-center gap-0.5 text-[10px]">
+          <span className="text-emerald-600 font-bold flex items-center gap-0.5 text-[10px] shrink-0 ml-1">
             <Check size={11} /> Attached
           </span>
         )}

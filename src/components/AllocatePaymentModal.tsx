@@ -153,13 +153,13 @@ export const AllocatePaymentModal: React.FC<AllocatePaymentModalProps> = ({
 
           {/* Amount */}
           <div>
-            <div className="flex justify-between items-center mb-1">
+            <div className="flex justify-between items-center mb-1 h-5">
               <label className="font-semibold text-slate-700">Allocation Amount (USD)</label>
               {maxAllocatable > 0 && (
                 <button
                   type="button"
                   onClick={() => setAllocatedAmountUsd(maxAllocatable)}
-                  className="text-blue-600 hover:text-blue-800 font-semibold text-[11px]"
+                  className="text-blue-600 hover:text-blue-800 font-semibold text-[11px] cursor-pointer px-1.5 py-0.5 rounded hover:bg-blue-50 transition-colors shrink-0"
                 >
                   Set Max: ${maxAllocatable.toLocaleString()}
                 </button>
@@ -172,7 +172,7 @@ export const AllocatePaymentModal: React.FC<AllocatePaymentModalProps> = ({
               max={maxAllocatable}
               value={allocatedAmountUsd}
               onChange={(e) => setAllocatedAmountUsd(parseFloat(e.target.value) || 0)}
-              className="w-full border border-slate-300 rounded-lg p-2.5 font-bold text-slate-900 text-sm"
+              className="w-full border border-slate-300 rounded-lg p-2.5 font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -183,22 +183,22 @@ export const AllocatePaymentModal: React.FC<AllocatePaymentModalProps> = ({
               placeholder="e.g. Wire transfer settlement"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg p-2"
+              className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          <div className="pt-2 flex justify-end space-x-2">
+          <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100"
+              className="h-9 px-4 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || maxAllocatable <= 0}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm disabled:opacity-50"
+              className="h-9 px-5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm disabled:opacity-50 transition-colors cursor-pointer flex items-center gap-1.5"
             >
               {loading ? 'Allocating...' : 'Confirm Allocation'}
             </button>

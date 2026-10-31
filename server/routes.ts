@@ -25,15 +25,16 @@ const upload = multer({
 // --- Auth Routes ---
 apiRouter.post('/auth/login', (req, res) => {
   const { email, password } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email is required.' });
+  if (!email || !email.trim()) return res.status(400).json({ error: 'Corporate email is required.' });
+  if (!password) return res.status(400).json({ error: 'Password is required.' });
 
-  const userWithHash = db.getUserByEmail(email);
+  const userWithHash = db.getUserByEmail(email.trim());
   if (!userWithHash || !userWithHash.isActive) {
     return res.status(401).json({ error: 'Invalid credentials or inactive account.' });
   }
 
-  // Check password if provided, or allow demo login if matches standard demo pass
-  if (password && !db.verifyPassword(password, (userWithHash as any).passwordHash)) {
+  // Strict production password verification against PBKDF2 hash
+  if (!db.verifyPassword(password, (userWithHash as any).passwordHash)) {
     return res.status(401).json({ error: 'Invalid email or password.' });
   }
 
@@ -48,19 +49,6 @@ apiRouter.post('/auth/login', (req, res) => {
     userAgent: req.headers['user-agent'],
   });
 
-  res.json({ token, user });
-});
-
-apiRouter.post('/auth/switch-role', (req: AuthenticatedRequest, res) => {
-  const { role } = req.body;
-  if (!['SUPER_ADMIN', 'ADMIN', 'VIEWER'].includes(role)) {
-    return res.status(400).json({ error: 'Invalid role.' });
-  }
-
-  const user = db.getUsers().find((u) => u.role === role);
-  if (!user) return res.status(404).json({ error: 'User for this role not found.' });
-
-  const token = generateToken(user);
   res.json({ token, user });
 });
 
@@ -95,7 +83,7 @@ apiRouter.get('/shipments', authenticate, (req, res) => {
 apiRouter.get('/shipments/lookup', authenticate, (req, res) => {
   const q = String(req.query.q || '').trim();
   const fyId = req.query.financialYearId as string | undefined;
-  if (!q) return res.json([]);
+  if (!q) return res.json({ normalizedQueryKey: '', matches: [] });
 
   const normalized = normalizeInvoiceKey(q);
   const all = db.getShipments(fyId ? { financialYearId: fyId } : undefined);
@@ -846,6 +834,21 @@ apiRouter.put(
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+// --- Danger Zone / System Purge ---
+apiRouter.post(
+  '/system/clear-records',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = db.clearAllOperationalData(req.user!.id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to clear operational records.' });
     }
   }
 );

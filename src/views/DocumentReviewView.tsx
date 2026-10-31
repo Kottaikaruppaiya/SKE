@@ -159,7 +159,7 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
                     href={api.getDocumentDownloadUrl(selectedDoc.id)}
                     target="_blank"
                     rel="noreferrer"
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center space-x-1 min-h-[36px]"
+                    className="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
                   >
                     <Download size={13} />
                     <span>Download</span>
@@ -168,7 +168,7 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
                   {selectedDoc.shipmentId && (
                     <button
                       onClick={() => onSelectShipment(selectedDoc.shipmentId!)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold"
+                      className="h-8 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold inline-flex items-center justify-center transition-colors"
                     >
                       View Shipment
                     </button>
@@ -178,7 +178,7 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
                     <button
                       onClick={() => handleDeleteDocument(selectedDoc.id, selectedDoc.originalFilename)}
                       disabled={deletingId === selectedDoc.id}
-                      className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold flex items-center space-x-1 transition-colors disabled:opacity-50"
+                      className="h-8 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                       title="Permanently delete document"
                     >
                       <Trash2 size={13} />
@@ -190,14 +190,14 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
 
               {/* Review Status Selector */}
               {!isViewer && (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
                   <span className="font-semibold text-slate-700">Admin Review Decision:</span>
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     {(['CONFIRMED', 'NEEDS_REVIEW', 'MANUALLY_ENTERED'] as ReviewStatus[]).map((st) => (
                       <button
                         key={st}
                         onClick={() => handleUpdateReviewStatus(selectedDoc.id, st)}
-                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
+                        className={`h-7 px-2.5 rounded-md text-[11px] font-bold transition-colors inline-flex items-center justify-center ${
                           selectedDoc.reviewStatus === st
                             ? 'bg-blue-600 text-white shadow-2xs'
                             : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-100'

@@ -77,9 +77,20 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
     loadPayments();
   }, [refreshKey]);
 
+  useEffect(() => {
+    if (!bankId && banks.length > 0) {
+      setBankId(banks[0].id);
+    }
+  }, [banks, bankId]);
+
   const handleCreatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    const effectiveBankId = bankId || banks[0]?.id;
+    if (!effectiveBankId) {
+      setFormError('Please configure an Authorised Dealer Bank first.');
+      return;
+    }
     try {
       await api.createPayment({
         irmNumber,
@@ -89,7 +100,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
         exchangeRate,
         valueDate,
         creditDate,
-        bankId,
+        bankId: effectiveBankId,
         purposeCode,
         remarks,
       });
@@ -280,7 +291,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 <th className="p-3 text-right">Exchange Rate</th>
                 <th className="p-3 text-right">Credited INR</th>
                 <th className="p-3 text-center">Allocations</th>
-                <th className="p-3 text-right">Actions</th>
+                <th className="p-3 text-right min-w-[100px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -325,20 +336,20 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                         {p.allocations?.length || 0} Invoices
                       </span>
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right min-w-[100px]">
                       {!isViewer && (
-                        <div className="flex items-center justify-end space-x-1.5">
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => openEditModal(p)}
                             title="Edit Inward Payment"
-                            className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800 transition-colors"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
                           >
                             <Edit size={14} />
                           </button>
                           <button
                             onClick={() => handleDeletePayment(p)}
                             title="Delete Payment"
-                            className="p-1.5 rounded hover:bg-red-50 text-red-600 hover:text-red-800 transition-colors"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-600 hover:text-red-800 transition-colors cursor-pointer"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -548,17 +559,17 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowNewModal(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100"
+                  className="h-9 px-4 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm"
+                  className="h-9 px-5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   Save Inward Payment
                 </button>
@@ -688,17 +699,17 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setEditingPayment(null)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100"
+                  className="h-9 px-4 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm"
+                  className="h-9 px-5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   Update Payment
                 </button>

@@ -235,14 +235,15 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-1 h-5">
                 <label className="font-semibold text-slate-700">FOB Value (INR)</label>
                 <button
                   type="button"
                   onClick={handleRecalculateFob}
-                  className="text-[10px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+                  className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer px-1.5 py-0.5 rounded hover:bg-blue-50 transition-colors shrink-0"
+                  title="Auto-calculate FOB Value in INR (USD × Customs Rate)"
                 >
-                  <Calculator size={11} />
+                  <Calculator size={12} />
                   <span>Auto-Calc</span>
                 </button>
               </div>
@@ -313,18 +314,18 @@ export const EditShipmentModal: React.FC<EditShipmentModalProps> = ({
             />
           </div>
 
-          <div className="pt-3 flex justify-end space-x-2 border-t border-slate-100">
+          <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-slate-200">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              className="h-9 px-4 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm disabled:opacity-50 transition-colors flex items-center space-x-1.5"
+              className="h-9 px-5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm disabled:opacity-50 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               {loading ? (
                 <>

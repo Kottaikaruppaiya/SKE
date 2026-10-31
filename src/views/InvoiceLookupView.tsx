@@ -75,18 +75,18 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
         <label className="text-xs font-bold text-slate-700 block">
           Enter Invoice String or Shipping Bill Number:
         </label>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
           <input
             type="text"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Type e.g. SKE/26-27/020 or SKE-26-27-20..."
-            className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-all font-mono"
+            className="flex-1 h-10 px-4 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 outline-none focus:bg-white focus:border-blue-500 transition-colors font-mono"
           />
           <button
             onClick={() => handleSearch()}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center space-x-2 min-h-[40px]"
+            className="h-10 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0"
           >
             <Search size={16} />
             <span>Search Database</span>

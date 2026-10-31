@@ -68,14 +68,14 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="p-1 rounded-md hover:bg-slate-200 text-slate-400 hover:text-slate-600"
+              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-200 text-slate-400 hover:text-slate-600 shrink-0 transition-colors"
             >
               <X size={16} />
             </button>
           )}
           <button
             onClick={onClose}
-            className="text-xs px-2 py-1 rounded bg-slate-200 text-slate-600 hover:bg-slate-300 font-medium"
+            className="h-7 px-2.5 rounded-md bg-slate-200 text-slate-600 hover:bg-slate-300 text-xs font-semibold shrink-0 transition-colors inline-flex items-center justify-center"
           >
             ESC
           </button>

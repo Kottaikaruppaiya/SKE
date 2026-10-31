@@ -161,13 +161,13 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 flex-wrap gap-y-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Consignee Filter */}
           <select
             aria-label="Filter by Consignee"
             value={consigneeFilter}
             onChange={(e) => setConsigneeFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 font-medium"
+            className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 font-medium h-8 outline-none cursor-pointer"
           >
             <option value="">All Consignees / Buyers</option>
             {consignees.map((c) => (
@@ -182,7 +182,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
             aria-label="Filter by Payment Status"
             value={paymentStatusFilter}
             onChange={(e) => setPaymentStatusFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 font-medium"
+            className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 font-medium h-8 outline-none cursor-pointer"
           >
             <option value="">All Payment Statuses</option>
             <option value="FULLY_PAID">Fully Paid</option>
@@ -196,7 +196,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
             aria-label="Filter by Review Status"
             value={reviewStatusFilter}
             onChange={(e) => setReviewStatusFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 font-medium"
+            className="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-slate-700 font-medium h-8 outline-none cursor-pointer"
           >
             <option value="">All Review States</option>
             <option value="CONFIRMED">Confirmed</option>
@@ -205,7 +205,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
           </select>
 
           {/* Rows per page selector */}
-          <div className="flex items-center space-x-1 text-slate-500 font-medium pl-2 border-l border-slate-200">
+          <div className="flex items-center gap-1.5 text-slate-500 font-medium pl-2 border-l border-slate-200">
             <span>Show:</span>
             <select
               aria-label="Rows per page"
@@ -215,7 +215,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
                 setPageSize(val === 'ALL' ? 'ALL' : Number(val));
                 setCurrentPage(1);
               }}
-              className="border border-slate-300 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium"
+              className="border border-slate-300 rounded-lg px-2 py-1 bg-white text-slate-700 font-medium h-8 outline-none cursor-pointer"
             >
               <option value="ALL">All ({totalCount})</option>
               <option value="10">10</option>
@@ -232,7 +232,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
                 setPaymentStatusFilter('');
                 setReviewStatusFilter('');
               }}
-              className="px-2.5 py-1.5 text-slate-500 hover:text-slate-800 font-semibold"
+              className="px-2.5 h-8 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg font-semibold transition-colors cursor-pointer"
             >
               Reset
             </button>
@@ -262,7 +262,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
                 <th className="p-3 text-right">Balance Due</th>
                 <th className="p-3 text-center">Payment Status</th>
                 <th className="p-3 text-center">BRC Status</th>
-                <th className="p-3 text-right">Actions</th>
+                <th className="p-3 text-right min-w-[140px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -348,12 +348,12 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
                           {s.brcRecord?.status || 'PENDING'}
                         </span>
                       </td>
-                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end space-x-1">
+                      <td className="p-3 text-right min-w-[140px]" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => onSelectShipment(s.id)}
                             title="View Shipment Detail"
-                            className="p-1.5 rounded hover:bg-slate-100 text-slate-600 hover:text-blue-700 transition-colors"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-700 transition-colors cursor-pointer"
                           >
                             <Eye size={15} />
                           </button>
@@ -365,7 +365,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
                                   else onSelectShipment(s.id);
                                 }}
                                 title="Edit Shipment"
-                                className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800 transition-colors"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
                               >
                                 <Edit size={15} />
                               </button>
@@ -373,7 +373,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
                                 <button
                                   onClick={() => onOpenAllocate(s)}
                                   title="Allocate Inward Payment"
-                                  className="p-1.5 rounded hover:bg-emerald-50 text-emerald-700 hover:text-emerald-900 transition-colors"
+                                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-emerald-50 text-emerald-700 hover:text-emerald-900 transition-colors cursor-pointer"
                                 >
                                   <CreditCard size={15} />
                                 </button>
@@ -381,7 +381,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
                               <button
                                 onClick={() => handleDeleteShipment(s)}
                                 title="Delete Shipment"
-                                className="p-1.5 rounded hover:bg-red-50 text-red-600 hover:text-red-800 transition-colors"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-600 hover:text-red-800 transition-colors cursor-pointer"
                               >
                                 <Trash2 size={15} />
                               </button>

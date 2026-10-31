@@ -91,7 +91,7 @@ export const ExcelImportExportView: React.FC<ExcelImportExportViewProps> = ({
 
           <a
             href={api.getExportUrl(selectedFyId)}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center space-x-2"
+            className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors inline-flex items-center justify-center gap-2"
           >
             <Download size={15} />
             <span>Download Live Workbook (.xlsx)</span>
@@ -120,7 +120,7 @@ export const ExcelImportExportView: React.FC<ExcelImportExportViewProps> = ({
           </div>
 
           {!isViewer ? (
-            <label className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all flex items-center justify-center space-x-2 cursor-pointer">
+            <label className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors inline-flex items-center justify-center gap-2 cursor-pointer">
               <Upload size={15} />
               <span>{importing ? 'Processing Migration...' : 'Upload & Migrate Workbook'}</span>
               <input
@@ -132,7 +132,7 @@ export const ExcelImportExportView: React.FC<ExcelImportExportViewProps> = ({
               />
             </label>
           ) : (
-            <div className="p-2.5 bg-slate-100 text-slate-500 text-center text-xs rounded-xl font-medium">
+            <div className="h-10 bg-slate-100 text-slate-500 inline-flex items-center justify-center text-xs rounded-xl font-medium">
               Read-Only Viewer: Migration Upload Disabled
             </div>
           )}

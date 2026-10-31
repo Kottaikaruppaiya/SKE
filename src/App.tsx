@@ -116,15 +116,6 @@ export default function App() {
     await loadInitialData();
   };
 
-  const handleSwitchRole = async (role: Role) => {
-    try {
-      const res = await api.switchRole(role);
-      setCurrentUser(res.user);
-    } catch (e: any) {
-      alert(e.message || 'Failed to switch role');
-    }
-  };
-
   const handleQuickExport = () => {
     window.open(api.getExportUrl(selectedFyId), '_blank');
   };
@@ -153,18 +144,20 @@ export default function App() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const handleNavigate = (tab: NavItemKey) => {
+    if (tab === 'new-shipment') {
+      setIsNewShipmentOpen(true);
+    } else {
+      setCurrentTab(tab);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
-        onSelectTab={(tab) => {
-          if (tab === 'new-shipment') {
-            setIsNewShipmentOpen(true);
-          } else {
-            setCurrentTab(tab);
-          }
-        }}
+        onSelectTab={handleNavigate}
         userRole={currentUser.role}
         isOpenMobile={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
@@ -178,7 +171,6 @@ export default function App() {
           financialYears={financialYears}
           selectedFyId={selectedFyId}
           onSelectFyId={setSelectedFyId}
-          onSwitchRole={handleSwitchRole}
           onOpenSearch={() => setIsSearchOpen(true)}
           onQuickExport={handleQuickExport}
           onLogout={handleLogout}
@@ -190,7 +182,7 @@ export default function App() {
           {currentTab === 'dashboard' && (
             <DashboardView
               selectedFyId={selectedFyId}
-              onNavigate={setCurrentTab}
+              onNavigate={handleNavigate}
               onSelectShipment={setSelectedShipmentId}
               userRole={currentUser.role}
               refreshKey={refreshKey}
@@ -296,19 +288,15 @@ export default function App() {
 
           {currentTab === 'users' && <UserManagementView />}
 
-          {currentTab === 'settings' && <SettingsView userRole={currentUser.role} />}
+          {currentTab === 'settings' && (
+            <SettingsView userRole={currentUser.role} onPurgeComplete={triggerRefresh} />
+          )}
         </main>
 
         {/* Mobile Fixed Bottom Navigation */}
         <MobileBottomNav
           currentTab={currentTab}
-          onSelectTab={(tab) => {
-            if (tab === 'new-shipment') {
-              setIsNewShipmentOpen(true);
-            } else {
-              setCurrentTab(tab);
-            }
-          }}
+          onSelectTab={handleNavigate}
           onOpenNewShipment={() => setIsNewShipmentOpen(true)}
           onToggleMenu={() => setIsMobileMenuOpen(true)}
           userRole={currentUser.role}

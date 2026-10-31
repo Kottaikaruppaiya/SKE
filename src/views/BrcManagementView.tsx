@@ -131,7 +131,7 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                 <th className="p-3">Upload Mode</th>
                 <th className="p-3">Statutory Deadline</th>
                 <th className="p-3 text-center">BRC Status</th>
-                <th className="p-3 text-right">Actions</th>
+                <th className="p-3 text-right min-w-[210px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -186,20 +186,20 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                           {isOverdue ? 'OVERDUE' : brc?.status || 'PENDING'}
                         </span>
                       </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                      <td className="p-3 text-right min-w-[210px]">
+                        <div className="flex items-center justify-end gap-1.5">
                           {!isViewer && (
                             <>
                               <button
                                 onClick={() => openEditBrc(s)}
-                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-medium text-[11px] transition-colors"
+                                className="h-7 px-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer shrink-0"
                               >
                                 Edit BRC
                               </button>
                               <button
                                 onClick={() => onOpenUpload(s)}
                                 title="Upload BRC File"
-                                className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded font-medium text-[11px] flex items-center gap-1 transition-colors"
+                                className="h-7 px-2.5 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-700 rounded-lg font-semibold text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
                               >
                                 <Upload size={12} />
                                 <span>Attach</span>
@@ -208,7 +208,7 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                                 <button
                                   onClick={() => handleResetBrc(s)}
                                   title="Reset / Clear BRC Data"
-                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded font-medium text-[11px] transition-colors"
+                                  className="h-7 px-2 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer shrink-0"
                                 >
                                   Reset
                                 </button>
@@ -217,7 +217,8 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                           )}
                           <button
                             onClick={() => onSelectShipment(s.id)}
-                            className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+                            title="View Shipment Details"
+                            className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
                           >
                             <Eye size={15} />
                           </button>
@@ -327,17 +328,17 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setEditingBrcShipment(null)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100"
+                  className="h-9 px-4 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm"
+                  className="h-9 px-5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   Save BRC Changes
                 </button>

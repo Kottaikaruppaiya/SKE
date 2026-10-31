@@ -175,7 +175,7 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
           {!isViewer && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="px-3.5 py-2 sm:py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center justify-center space-x-1.5 min-h-[40px] sm:min-h-0"
+              className="h-9 px-3.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0"
             >
               <PlusCircle size={15} />
               <span>Add Incentive Record</span>
@@ -186,7 +186,7 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
             placeholder="Search by invoice, buyer, scroll..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="px-3 py-2 sm:py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-full sm:w-64"
+            className="h-9 px-3 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-full sm:w-64"
           />
         </div>
       </div>
@@ -271,7 +271,7 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                 <th className="p-3">Scroll Number</th>
                 <th className="p-3">Received Date</th>
                 <th className="p-3 text-center">Receipt Status</th>
-                {!isViewer && <th className="p-3 text-right">Actions</th>}
+                {!isViewer && <th className="p-3 text-right min-w-[150px]">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -334,10 +334,10 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                     </td>
                     {!isViewer && (
                       <td className="p-3 text-right">
-                        <div className="inline-flex items-center space-x-1.5">
+                        <div className="inline-flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => openEdit(inc, shipment.invoiceNumber)}
-                            className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-medium text-[11px] inline-flex items-center gap-1"
+                            className="h-7 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md font-medium text-[11px] inline-flex items-center gap-1 transition-colors"
                           >
                             <Edit size={12} />
                             <span>Log Receipt</span>
@@ -345,7 +345,7 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                           <button
                             onClick={() => handleDelete(inc.id, shipment.invoiceNumber, inc.type)}
                             disabled={deletingId === inc.id}
-                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded font-medium text-[11px] transition-colors disabled:opacity-50"
+                            className="h-7 px-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-md font-medium text-[11px] transition-colors disabled:opacity-50 inline-flex items-center justify-center"
                           >
                             {deletingId === inc.id ? '...' : 'Delete'}
                           </button>
@@ -449,17 +449,17 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                 />
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setEditingInc(null)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100"
+                  className="h-9 px-4 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-sm"
+                  className="h-9 px-4 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-colors"
                 >
                   Save Changes
                 </button>
@@ -565,17 +565,17 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                 />
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg font-semibold text-slate-600 hover:bg-slate-100"
+                  className="h-9 px-4 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold shadow-sm"
+                  className="h-9 px-4 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-colors"
                 >
                   Create Incentive Record
                 </button>

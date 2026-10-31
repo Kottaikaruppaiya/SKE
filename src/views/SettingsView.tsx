@@ -4,15 +4,16 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Settings, Save, CheckCircle2, ShieldAlert, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { AppSettings, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
 
 interface SettingsViewProps {
   userRole: Role;
+  onPurgeComplete?: () => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ userRole }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeComplete }) => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -21,6 +22,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole }) => {
   const [companyName, setCompanyName] = useState('S K Enterprises');
   const [iecNumber, setIecNumber] = useState('0308019921');
   const [panNumber, setPanNumber] = useState('AAECS9812K');
+
+  // Purge state
+  const [isPurging, setIsPurging] = useState(false);
+  const [purgeSuccess, setPurgeSuccess] = useState<string | null>(null);
+  const [purgeError, setPurgeError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -53,7 +59,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole }) => {
     }
   };
 
+  const handlePurgeAllRecords = async () => {
+    const confirmation = window.confirm(
+      'WARNING: DATA RESET CONFIRMATION\n\n' +
+      'Are you ABSOLUTELY sure you want to permanently delete all export shipments, inward payments, allocations, incentives, BRC records, and documents?\n\n' +
+      '• Core users, financial years, consignee & bank master registries will be preserved.\n' +
+      '• This action is IRREVERSIBLE.\n\n' +
+      'Click OK to proceed with purging all records.'
+    );
+    if (!confirmation) return;
+
+    setIsPurging(true);
+    setPurgeError(null);
+    setPurgeSuccess(null);
+
+    try {
+      const res = await api.clearAllRecords();
+      setPurgeSuccess(
+        `All records successfully purged from system! Cleared: ${res.cleared.shipments} shipments, ${res.cleared.payments} payments, ${res.cleared.allocations} allocations, ${res.cleared.incentives} incentives, ${res.cleared.documents} documents.`
+      );
+      if (onPurgeComplete) onPurgeComplete();
+    } catch (err: any) {
+      setPurgeError(err.message || 'Failed to purge operational records.');
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   const isViewer = userRole === 'VIEWER';
+  const isAdminOrSuper = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN';
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
@@ -80,7 +114,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole }) => {
             Statutory & Compliance Rules
           </h3>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="font-semibold text-slate-700 block mb-1">
                 FEMA Statutory BRC Realisation Deadline (Days)
@@ -122,7 +156,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole }) => {
             Organisation Profile & Identifiers
           </h3>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="font-semibold text-slate-700 block mb-1">Registered Entity Name</label>
               <input
@@ -162,10 +196,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole }) => {
         </div>
 
         {!isViewer && (
-          <div className="pt-2 flex justify-end">
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-end">
             <button
               type="submit"
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold shadow-sm transition-all flex items-center space-x-2"
+              className="h-9 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors inline-flex items-center gap-2 cursor-pointer"
             >
               <Save size={14} />
               <span>Save Configuration</span>
@@ -173,6 +207,52 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole }) => {
           </div>
         )}
       </form>
+
+      {/* Danger Zone: System Purge & Clean Database */}
+      {isAdminOrSuper && (
+        <div className="p-6 bg-red-50/50 border border-red-200 rounded-2xl shadow-2xs space-y-4 text-xs">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-red-100 text-red-700 rounded-xl">
+              <AlertTriangle size={20} />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-sm text-red-950">Danger Zone: Purge All Transaction Records</h3>
+              <p className="text-red-800 mt-1">
+                Permanently purge all export shipments, invoices, payments, allocations, incentives, BRC records, and uploaded documents.
+                This provides a completely clean slate for fresh export record keeping while preserving user logins, financial years, and master lists.
+              </p>
+            </div>
+          </div>
+
+          {purgeSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl font-medium flex items-center space-x-2">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>{purgeSuccess}</span>
+            </div>
+          )}
+
+          {purgeError && (
+            <div className="p-3 bg-red-100 border border-red-300 text-red-800 rounded-xl font-medium">
+              <span>{purgeError}</span>
+            </div>
+          )}
+
+          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-red-200/80">
+            <span className="text-[11px] text-red-700 font-medium">
+              Warning: This operation cannot be reversed once triggered.
+            </span>
+            <button
+              type="button"
+              onClick={handlePurgeAllRecords}
+              disabled={isPurging}
+              className="h-9 px-4 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-lg font-bold text-xs shadow-xs transition-colors inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <Trash2 size={14} />
+              <span>{isPurging ? 'Purging Records...' : 'Delete All Operational Records'}</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

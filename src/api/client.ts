@@ -72,19 +72,10 @@ export const api = {
   },
 
   // Auth
-  async login(email: string, password?: string): Promise<{ token: string; user: User }> {
+  async login(email: string, password: string): Promise<{ token: string; user: User }> {
     const res = await this.request<{ token: string; user: User }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    });
-    this.setToken(res.token);
-    return res;
-  },
-
-  async switchRole(role: Role): Promise<{ token: string; user: User }> {
-    const res = await this.request<{ token: string; user: User }>('/auth/switch-role', {
-      method: 'POST',
-      body: JSON.stringify({ role }),
     });
     this.setToken(res.token);
     return res;
@@ -380,6 +371,13 @@ export const api = {
     return this.request<AppSettings>('/settings', {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+
+  // System Data Purge
+  async clearAllRecords(): Promise<{ success: boolean; cleared: Record<string, number> }> {
+    return this.request<{ success: boolean; cleared: Record<string, number> }>('/system/clear-records', {
+      method: 'POST',
     });
   },
 };

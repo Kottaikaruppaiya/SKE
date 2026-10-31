@@ -289,14 +289,14 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
               <>
                 <button
                   onClick={() => onOpenEdit(shipment)}
-                  className="flex items-center space-x-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition-colors min-h-[36px]"
+                  className="h-8 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold border border-slate-700 transition-colors inline-flex items-center justify-center gap-1.5 shrink-0"
                 >
                   <Edit size={14} />
                   <span>Edit</span>
                 </button>
                 <button
                   onClick={() => onOpenAllocate(shipment)}
-                  className="flex items-center space-x-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium shadow-sm transition-colors min-h-[36px]"
+                  className="h-8 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors inline-flex items-center justify-center gap-1.5 shrink-0"
                 >
                   <Plus size={14} />
                   <span>Allocate</span>
@@ -304,7 +304,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                 <button
                   onClick={handleDeleteShipment}
                   title="Delete this shipment"
-                  className="flex items-center space-x-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 rounded-lg text-xs font-medium border border-red-800/60 transition-colors min-h-[36px]"
+                  className="h-8 px-3 bg-red-950/80 hover:bg-red-900 text-red-300 rounded-lg text-xs font-semibold border border-red-800/60 transition-colors inline-flex items-center justify-center gap-1.5 shrink-0"
                 >
                   <Trash2 size={14} />
                   <span>Delete</span>
@@ -313,7 +313,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
             )}
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center ml-auto sm:ml-0"
+              className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors inline-flex items-center justify-center shrink-0 ml-auto sm:ml-0"
             >
               <X size={18} />
             </button>
@@ -532,7 +532,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                     {!isViewer && (
                       <button
                         onClick={() => onOpenUpload(shipment)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium shadow-sm transition-colors flex items-center space-x-1.5"
+                        className="h-8 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors inline-flex items-center gap-1.5 shrink-0"
                       >
                         <Plus size={14} />
                         <span>Upload Document</span>
@@ -620,7 +620,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                     {!isViewer && (
                       <button
                         onClick={() => onOpenAllocate(shipment)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium shadow-sm transition-colors flex items-center space-x-1.5"
+                        className="h-8 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors inline-flex items-center gap-1.5 shrink-0"
                       >
                         <Plus size={14} />
                         <span>Allocate Another Payment</span>
@@ -865,7 +865,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                     {!isViewer && (
                       <button
                         onClick={openCreateIncentive}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center space-x-1.5"
+                        className="h-8 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors inline-flex items-center gap-1.5 shrink-0"
                       >
                         <Plus size={14} />
                         <span>Add Incentive</span>
