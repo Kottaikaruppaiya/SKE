@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Building2, PlusCircle, Edit, CheckCircle, XCircle, Search, Trash2, Globe, Filter } from 'lucide-react';
+import { Building2, PlusCircle, Edit, CheckCircle, XCircle, Search, Trash2, Globe, Filter, Download } from 'lucide-react';
 import { ConsigneeMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
 
@@ -210,6 +210,15 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
               Active
             </button>
           </div>
+
+          <a
+            href={api.getExportCsvUrl('Consignee Master')}
+            download="Consignee_Master.csv"
+            className="h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-colors"
+          >
+            <Download size={13} className="text-blue-600" />
+            <span>Export CSV</span>
+          </a>
 
           {!isViewer && (
             <button

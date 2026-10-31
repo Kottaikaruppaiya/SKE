@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Eye, TrendingUp, DollarSign, Award, FileCheck2, AlertCircle } from 'lucide-react';
+import { Eye, TrendingUp, DollarSign, Award, FileCheck2, AlertCircle, Download } from 'lucide-react';
 import { DashboardMetrics, Shipment } from '../types/index.ts';
 import { api } from '../api/client.ts';
 
@@ -57,14 +57,24 @@ export const QuickView: React.FC<QuickViewProps> = ({ selectedFyId, refreshKey }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <div>
-        <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-          <Eye size={20} className="text-blue-600" />
-          <span>Quick View Executive Summary</span>
-        </h2>
-        <p className="text-xs text-slate-500">
-          Executive equivalent of workbook Quick View sheet, resolving row range limits (row 604 vs 605) via dynamic database aggregation
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Eye size={20} className="text-blue-600" />
+            <span>Quick View Executive Summary</span>
+          </h2>
+          <p className="text-xs text-slate-500">
+            Executive equivalent of workbook Quick View sheet, resolving row range limits (row 604 vs 605) via dynamic database aggregation
+          </p>
+        </div>
+        <a
+          href={api.getExportCsvUrl('Quick View', selectedFyId)}
+          download="Quick_View_FY26-27.csv"
+          className="h-9 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-colors"
+        >
+          <Download size={14} className="text-blue-600" />
+          <span>Export Quick View CSV</span>
+        </a>
       </div>
 
       {/* Audit Note Regarding Workbook Range Discrepancy */}

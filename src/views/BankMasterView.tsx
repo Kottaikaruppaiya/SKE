@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Landmark, PlusCircle, Edit } from 'lucide-react';
+import { Landmark, PlusCircle, Edit, Download } from 'lucide-react';
 import { BankMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
 
@@ -143,6 +143,15 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
             onChange={(e) => setSearchTerm(e.target.value)}
             className="px-3 py-2 sm:py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
           />
+
+          <a
+            href={api.getExportCsvUrl('Bank Master')}
+            download="Bank_Master.csv"
+            className="h-9 sm:h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-colors whitespace-nowrap"
+          >
+            <Download size={13} className="text-blue-600" />
+            <span>Export Bank Master CSV</span>
+          </a>
 
           {!isViewer && (
             <button

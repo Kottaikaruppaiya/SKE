@@ -316,13 +316,34 @@ export const api = {
     });
   },
 
-  // Excel
+  async extractDocumentsBatch(formData: FormData): Promise<{
+    success: boolean;
+    totalFilesParsed: number;
+    mergedDraft: any;
+    extractions: Record<string, any>;
+  }> {
+    return this.request<any>('/documents/extract-batch', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  // Excel & CSV
   getExportUrl(financialYearId?: string): string {
     const token = this.getToken();
     const q = new URLSearchParams();
     if (financialYearId) q.append('financialYearId', financialYearId);
     if (token) q.append('token', token);
     return `/api/excel/export?${q.toString()}`;
+  },
+
+  getExportCsvUrl(sheetName: string, financialYearId?: string): string {
+    const token = this.getToken();
+    const q = new URLSearchParams();
+    q.append('sheet', sheetName);
+    if (financialYearId) q.append('financialYearId', financialYearId);
+    if (token) q.append('token', token);
+    return `/api/excel/export-csv?${q.toString()}`;
   },
 
   async importExcel(formData: FormData): Promise<any> {

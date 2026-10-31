@@ -9,8 +9,8 @@ import fs from 'fs';
 import path from 'path';
 import { db } from './db.ts';
 import { authenticate, requireRole, generateToken, type AuthenticatedRequest } from './auth.ts';
-import { extractDocumentData } from './extractor.ts';
-import { generateExportWorkbook, parseHistoricalExcelMigration } from './excel.ts';
+import { extractDocumentData, mergeExtractedDocuments } from './extractor.ts';
+import { generateExportWorkbook, generateCsvExport, parseHistoricalExcelMigration } from './excel.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
 import type { DocumentCategory } from '../src/types/index.ts';
 
@@ -115,6 +115,65 @@ apiRouter.get('/shipments/check-unique', authenticate, (req, res) => {
   });
 });
 
+// --- Batch Extraction Endpoint (Up to 7 documents) ---
+apiRouter.post(
+  '/documents/extract-batch',
+  authenticate,
+  upload.fields([
+    { name: 'invoiceDoc', maxCount: 1 },
+    { name: 'shippingBillDoc', maxCount: 1 },
+    { name: 'blDoc', maxCount: 1 },
+    { name: 'brcDoc1', maxCount: 1 },
+    { name: 'brcDoc2', maxCount: 1 },
+    { name: 'fircDoc', maxCount: 1 },
+    { name: 'additionalDoc', maxCount: 1 },
+  ]),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+      if (!files || Object.keys(files).length === 0) {
+        return res.status(400).json({ error: 'No files provided for extraction.' });
+      }
+
+      const fileSpecs: { file?: Express.Multer.File; category: DocumentCategory; key: string }[] = [
+        { file: files?.invoiceDoc?.[0], category: 'COMMERCIAL_INVOICE', key: 'invoiceDoc' },
+        { file: files?.shippingBillDoc?.[0], category: 'SHIPPING_BILL', key: 'shippingBillDoc' },
+        { file: files?.blDoc?.[0], category: 'BILL_OF_LADING', key: 'blDoc' },
+        { file: files?.brcDoc1?.[0], category: 'BRC_COPY_1', key: 'brcDoc1' },
+        { file: files?.brcDoc2?.[0], category: 'BRC_COPY_2', key: 'brcDoc2' },
+        { file: files?.fircDoc?.[0], category: 'FIRC_PAYMENT', key: 'fircDoc' },
+        { file: files?.additionalDoc?.[0], category: 'ADDITIONAL_DOC', key: 'additionalDoc' },
+      ];
+
+      const extractionResults: any[] = [];
+      const extractionsByKey: Record<string, any> = {};
+
+      for (const spec of fileSpecs) {
+        if (!spec.file) continue;
+        try {
+          const ext = await extractDocumentData(spec.file.buffer, spec.category, spec.file.originalname);
+          extractionResults.push(ext);
+          extractionsByKey[spec.key] = ext;
+        } catch (err: any) {
+          console.warn(`Extraction error for ${spec.category}:`, err?.message || err);
+        }
+      }
+
+      const mergedDraft = mergeExtractedDocuments(extractionResults);
+
+      res.json({
+        success: true,
+        totalFilesParsed: extractionResults.length,
+        mergedDraft,
+        extractions: extractionsByKey,
+      });
+    } catch (err: any) {
+      console.error('Error in extract-batch:', err);
+      res.status(500).json({ error: err.message || 'Batch extraction failed.' });
+    }
+  }
+);
+
 apiRouter.post(
   '/shipments/create-with-documents',
   authenticate,
@@ -135,18 +194,38 @@ apiRouter.post(
         invoiceNumber,
         brcUploadMode = 'SINGLE',
         remarks = '',
-        consigneeId,
-        portCode = 'INNSA1',
+        consigneeId: rawConsigneeId,
+        consigneeName,
+        portCode = 'INMAA1',
         packageCount,
         invoiceDate,
         invoiceValueUsd,
         shippingBillNumber,
         shippingBillDate,
-        sbExchangeRate = 84.5,
+        sbExchangeRate = 92.1,
         fobValueInr,
         blNumber,
         blDate,
         vesselName,
+        // FIRC details
+        fircIrmNumber,
+        fircSenderRef,
+        fircCreditDate,
+        fircValueDate,
+        fircAmountUsd,
+        fircExchangeRate,
+        fircInrAmount,
+        fircBankName,
+        // BRC details
+        brcNumber,
+        brcIssueDate,
+        brcRealisationDate,
+        brcRealisedAmount,
+        statutoryDeadline,
+        // Incentives
+        dbkClaimed,
+        rodtepClaimed,
+        rosctlClaimed,
       } = req.body;
 
       if (!invoiceNumber || !invoiceNumber.trim()) {
@@ -154,115 +233,179 @@ apiRouter.post(
       }
 
       const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
-
-      let extractedInvValue = invoiceValueUsd ? Number(invoiceValueUsd) : undefined;
-      let extractedInvDate = invoiceDate || undefined;
-      let extractedSbNo = shippingBillNumber || undefined;
-      let extractedSbDate = shippingBillDate || undefined;
-      let extractedExchangeRate = sbExchangeRate ? Number(sbExchangeRate) : 84.5;
-      let extractedFobInr = fobValueInr ? Number(fobValueInr) : undefined;
-      let extractedPackages = packageCount ? Number(packageCount) : undefined;
-
       const extractions: Record<string, any> = {};
 
-      if (files?.invoiceDoc?.[0]) {
-        try {
-          const invExt = await extractDocumentData(
-            files.invoiceDoc[0].buffer,
-            'COMMERCIAL_INVOICE',
-            files.invoiceDoc[0].originalname
+      // Match or auto-create Consignee
+      let resolvedConsigneeId = rawConsigneeId;
+      const consignees = db.getConsignees();
+      if (!resolvedConsigneeId && consigneeName) {
+        const found = consignees.find((c) => c.name.toLowerCase() === consigneeName.trim().toLowerCase());
+        if (found) {
+          resolvedConsigneeId = found.id;
+        } else {
+          const created = db.createConsignee(
+            {
+              name: consigneeName.trim(),
+              country: consigneeName.toLowerCase().includes('lanka') ? 'Sri Lanka' : 'International',
+              portOfDischarge: 'LKCMB - Colombo',
+              paymentTerms: 'FOB COLOMBO | DA 90 DAYS',
+              currency: 'USD',
+              isActive: true,
+            },
+            req.user!.id
           );
-          extractions.invoiceDoc = invExt;
-          if (invExt?.fields?.invoiceValueUsd?.value && !extractedInvValue) {
-            extractedInvValue = Number(invExt.fields.invoiceValueUsd.value);
-          }
-          if (invExt?.fields?.invoiceDate?.value && !extractedInvDate) {
-            extractedInvDate = String(invExt.fields.invoiceDate.value);
-          }
-          if (invExt?.fields?.packageCount?.value && !extractedPackages) {
-            extractedPackages = Number(invExt.fields.packageCount.value);
-          }
+          resolvedConsigneeId = created.id;
+        }
+      }
+      if (!resolvedConsigneeId) {
+        resolvedConsigneeId = consignees[0]?.id;
+      }
+
+      // Match or auto-create Bank
+      const banks = db.getBanks();
+      let resolvedBankId = banks[0]?.id;
+      if (fircBankName) {
+        const bankMatch = banks.find((b) => b.name.toLowerCase().includes(fircBankName.toLowerCase()));
+        if (bankMatch) resolvedBankId = bankMatch.id;
+      }
+
+      // Extract uploaded documents
+      const fileSpecs: { file?: Express.Multer.File; category: DocumentCategory; key: string }[] = [
+        { file: files?.invoiceDoc?.[0], category: 'COMMERCIAL_INVOICE', key: 'invoiceDoc' },
+        { file: files?.shippingBillDoc?.[0], category: 'SHIPPING_BILL', key: 'shippingBillDoc' },
+        { file: files?.blDoc?.[0], category: 'BILL_OF_LADING', key: 'blDoc' },
+        { file: files?.brcDoc1?.[0], category: 'BRC_COPY_1', key: 'brcDoc1' },
+        { file: files?.brcDoc2?.[0], category: 'BRC_COPY_2', key: 'brcDoc2' },
+        { file: files?.fircDoc?.[0], category: 'FIRC_PAYMENT', key: 'fircDoc' },
+        { file: files?.additionalDoc?.[0], category: 'ADDITIONAL_DOC', key: 'additionalDoc' },
+      ];
+
+      for (const spec of fileSpecs) {
+        if (!spec.file) continue;
+        try {
+          const ext = await extractDocumentData(spec.file.buffer, spec.category, spec.file.originalname);
+          extractions[spec.key] = ext;
         } catch (e) {
-          console.warn('Invoice extraction warning:', e);
+          console.warn(`Extraction error for ${spec.category}:`, e);
         }
       }
 
-      if (files?.shippingBillDoc?.[0]) {
-        try {
-          const sbExt = await extractDocumentData(
-            files.shippingBillDoc[0].buffer,
-            'SHIPPING_BILL',
-            files.shippingBillDoc[0].originalname
-          );
-          extractions.shippingBillDoc = sbExt;
-          if (sbExt?.fields?.shippingBillNumber?.value && !extractedSbNo) {
-            extractedSbNo = String(sbExt.fields.shippingBillNumber.value);
-          }
-          if (sbExt?.fields?.shippingBillDate?.value && !extractedSbDate) {
-            extractedSbDate = String(sbExt.fields.shippingBillDate.value);
-          }
-          if (sbExt?.fields?.sbExchangeRate?.value && !extractedExchangeRate) {
-            extractedExchangeRate = Number(sbExt.fields.sbExchangeRate.value);
-          }
-          if (sbExt?.fields?.fobValueInr?.value && !extractedFobInr) {
-            extractedFobInr = Number(sbExt.fields.fobValueInr.value);
-          }
-        } catch (e) {
-          console.warn('SB extraction warning:', e);
-        }
-      }
+      // Extract/Fallback financial parameters
+      const invVal = Number(invoiceValueUsd || extractions.invoiceDoc?.fields?.invoiceValueUsd?.value || 0);
+      const exRate = Number(sbExchangeRate || extractions.shippingBillDoc?.fields?.sbExchangeRate?.value || 92.1);
+      const fobVal = Number(fobValueInr || extractions.shippingBillDoc?.fields?.fobValueInr?.value || Math.round(invVal * exRate * 100) / 100);
+      const invDate = invoiceDate || extractions.invoiceDoc?.fields?.invoiceDate?.value || new Date().toISOString().split('T')[0];
+      const sbNo = shippingBillNumber || extractions.shippingBillDoc?.fields?.shippingBillNumber?.value || 'PENDING';
+      const sbDate = shippingBillDate || extractions.shippingBillDoc?.fields?.shippingBillDate?.value || new Date().toISOString().split('T')[0];
+      const pkgs = Number(packageCount || extractions.invoiceDoc?.fields?.packageCount?.value || 0);
+      const resolvedBlNo = blNumber || extractions.blDoc?.fields?.blNumber?.value || undefined;
+      const resolvedBlDate = blDate || extractions.blDoc?.fields?.blDate?.value || undefined;
+      const resolvedVessel = vesselName || extractions.shippingBillDoc?.fields?.vesselName?.value || extractions.blDoc?.fields?.vesselName?.value || undefined;
 
-      const invVal = Number(extractedInvValue || 0);
-      const exRate = Number(extractedExchangeRate || 84.5);
-      const fobVal = Number(extractedFobInr || Math.round(invVal * exRate * 100) / 100);
-
-      const hasFircUploaded = Boolean(files?.fircDoc?.[0]);
+      const hasFircEvidence = Boolean(files?.fircDoc?.[0] || fircIrmNumber);
 
       // Create shipment in DB
       const shipment = db.createShipment(
         {
           financialYearId,
           invoiceNumber: invoiceNumber.trim(),
-          invoiceDate: extractedInvDate || new Date().toISOString().split('T')[0],
-          consigneeId: consigneeId || undefined,
-          portCode: portCode || 'INNSA1',
-          packageCount: extractedPackages || 0,
+          invoiceDate: String(invDate),
+          consigneeId: resolvedConsigneeId,
+          portCode: (portCode || 'INMAA1').trim().toUpperCase(),
+          packageCount: pkgs,
           invoiceValueUsd: invVal,
-          shippingBillNumber: extractedSbNo?.trim() || 'PENDING',
-          shippingBillDate: extractedSbDate || new Date().toISOString().split('T')[0],
+          shippingBillNumber: String(sbNo).trim(),
+          shippingBillDate: String(sbDate),
           sbExchangeRate: exRate,
           fobValueInr: fobVal,
-          blNumber: blNumber?.trim() || undefined,
-          blDate: blDate || undefined,
-          vesselName: vesselName?.trim() || undefined,
+          blNumber: resolvedBlNo ? String(resolvedBlNo).trim() : undefined,
+          blDate: resolvedBlDate ? String(resolvedBlDate) : undefined,
+          vesselName: resolvedVessel ? String(resolvedVessel).trim() : undefined,
           remarks: remarks?.trim() || undefined,
-          initialFircDocumentUploaded: hasFircUploaded,
+          initialFircDocumentUploaded: hasFircEvidence,
+          incentives: {
+            dbkClaimed: Number(dbkClaimed || extractions.shippingBillDoc?.fields?.dbkClaimed?.value || 0),
+            rodtepClaimed: Number(rodtepClaimed || extractions.shippingBillDoc?.fields?.rodtepClaimed?.value || 0),
+            rosctlClaimed: Number(rosctlClaimed || extractions.shippingBillDoc?.fields?.rosctlClaimed?.value || 0),
+          },
           brc: {
             uploadMode: (brcUploadMode === 'MULTIPLE' ? 'MULTIPLE' : 'SINGLE') as 'SINGLE' | 'MULTIPLE',
+            statutoryDeadline: statutoryDeadline || extractions.shippingBillDoc?.fields?.statutoryDeadline?.value || undefined,
             remarks: remarks?.trim(),
           },
         },
         req.user!.id
       );
 
+      // Handle FIRC payment creation & allocation
+      const finalIrm = fircIrmNumber || extractions.fircDoc?.fields?.irmNumber?.value;
+      if (finalIrm) {
+        const cleanIrm = String(finalIrm).trim().toUpperCase();
+        let existingPayment = db.getPayments().find((p) => p.irmNumber.toUpperCase() === cleanIrm);
+        const fircAmt = Number(fircAmountUsd || extractions.fircDoc?.fields?.verifiedAmount?.value || invVal);
+
+        if (!existingPayment) {
+          existingPayment = db.createPayment(
+            {
+              irmNumber: cleanIrm,
+              senderReference: fircSenderRef || extractions.fircDoc?.fields?.senderReference?.value || undefined,
+              currency: 'USD',
+              verifiedAmount: fircAmt,
+              inrAmount: Number(fircInrAmount || extractions.fircDoc?.fields?.inrAmount?.value || Math.round(fircAmt * 93.28 * 100) / 100),
+              exchangeRate: Number(fircExchangeRate || extractions.fircDoc?.fields?.exchangeRate?.value || 93.28),
+              valueDate: fircValueDate || extractions.fircDoc?.fields?.valueDate?.value || String(invDate),
+              creditDate: fircCreditDate || extractions.fircDoc?.fields?.creditDate?.value || String(invDate),
+              fircIssueDate: fircCreditDate || extractions.fircDoc?.fields?.creditDate?.value || String(invDate),
+              bankId: resolvedBankId,
+              purposeCode: 'P0103',
+              remarks: `Payment for invoice ${invoiceNumber.trim()}`,
+            },
+            req.user!.id
+          );
+        }
+
+        // Allocate to this shipment
+        const allocAmount = Math.min(fircAmt, invVal);
+        if (allocAmount > 0) {
+          try {
+            db.allocatePayment(
+              {
+                paymentId: existingPayment.id,
+                shipmentId: shipment.id,
+                allocatedAmountUsd: allocAmount,
+                notes: `Auto-allocated on shipment creation (${invoiceNumber.trim()})`,
+              },
+              req.user!.id
+            );
+          } catch (allocErr) {
+            console.warn('Payment allocation warning on create:', allocErr);
+          }
+        }
+      }
+
+      // Handle BRC details
+      const finalBrcNo = brcNumber || extractions.brcDoc1?.fields?.brcNumber?.value || extractions.brcDoc2?.fields?.brcNumber?.value;
+      if (finalBrcNo) {
+        db.updateBrcRecord(
+          shipment.id,
+          {
+            brcNumber: String(finalBrcNo).trim(),
+            issueDate: brcIssueDate || extractions.brcDoc1?.fields?.issueDate?.value || undefined,
+            realisationDate: brcRealisationDate || extractions.brcDoc1?.fields?.realisationDate?.value || undefined,
+            realisedAmount: Number(brcRealisedAmount || extractions.brcDoc1?.fields?.realisedAmount?.value || invVal),
+            realisedCurrency: 'USD',
+            status: 'REALISED',
+          },
+          req.user!.id
+        );
+      }
+
+      // Save uploaded files to storage
       const normalizedKey = shipment.normalizedInvoiceKey;
       const fyLabel = db.getFinancialYears().find((f) => f.id === financialYearId)?.label || '2026-27';
-
-      // Directory path: storage/FY{year}/{normalized_key}
       const safeYearDir = path.resolve('storage', `FY${fyLabel}`);
       const safeInvoiceDir = path.resolve(safeYearDir, normalizedKey.replace(/[^A-Z0-9\-_]/gi, '_'));
       if (!fs.existsSync(safeInvoiceDir)) fs.mkdirSync(safeInvoiceDir, { recursive: true });
-
-      // Save each uploaded file
-      const fileSpecs: { file?: Express.Multer.File; category: DocumentCategory; extractionKey?: string }[] = [
-        { file: files?.invoiceDoc?.[0], category: 'COMMERCIAL_INVOICE', extractionKey: 'invoiceDoc' },
-        { file: files?.shippingBillDoc?.[0], category: 'SHIPPING_BILL', extractionKey: 'shippingBillDoc' },
-        { file: files?.blDoc?.[0], category: 'BILL_OF_LADING' },
-        { file: files?.brcDoc1?.[0], category: 'BRC_COPY_1' },
-        { file: files?.brcDoc2?.[0], category: 'BRC_COPY_2' },
-        { file: files?.fircDoc?.[0], category: 'FIRC_PAYMENT' },
-        { file: files?.additionalDoc?.[0], category: 'ADDITIONAL_DOC' },
-      ];
 
       for (const spec of fileSpecs) {
         if (!spec.file) continue;
@@ -270,14 +413,7 @@ apiRouter.post(
         const storedPath = path.resolve(safeInvoiceDir, safeFilename);
         fs.writeFileSync(storedPath, spec.file.buffer);
 
-        let ext = spec.extractionKey ? extractions[spec.extractionKey] : null;
-        if (!ext && (spec.category === 'FIRC_PAYMENT' || spec.category === 'BILL_OF_LADING')) {
-          try {
-            ext = await extractDocumentData(spec.file.buffer, spec.category, spec.file.originalname);
-          } catch (e) {
-            // ignore
-          }
-        }
+        const ext = extractions[spec.key];
 
         db.registerDocument(
           {
@@ -288,13 +424,13 @@ apiRouter.post(
             mimeType: spec.file.mimetype,
             fileSizeBytes: spec.file.size,
             extractedData: ext,
-            reviewStatus: ext?.reviewStatus || 'EXTRACTED',
+            reviewStatus: ext?.reviewStatus || 'CONFIRMED',
           },
           req.user!.id
         );
       }
 
-      // Re-hydrate shipment to return with documents
+      // Return fully hydrated shipment
       const fullShipment = db.getShipmentById(shipment.id);
       res.status(201).json(fullShipment);
     } catch (err: any) {
@@ -725,7 +861,7 @@ apiRouter.delete(
   }
 );
 
-// --- Excel Import & Export ---
+// --- Excel & CSV Import & Export ---
 apiRouter.get('/excel/export', authenticate, (req, res) => {
   const fyId = req.query.financialYearId as string | undefined;
   const buffer = generateExportWorkbook(fyId);
@@ -737,6 +873,18 @@ apiRouter.get('/excel/export', authenticate, (req, res) => {
   res.send(buffer);
 });
 
+apiRouter.get('/excel/export-csv', authenticate, (req, res) => {
+  const sheet = String(req.query.sheet || 'Export Tracker');
+  const fyId = req.query.financialYearId as string | undefined;
+  const csvContent = generateCsvExport(sheet, fyId);
+  const safeSheet = sheet.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const filename = `SKE_${safeSheet}_${new Date().toISOString().split('T')[0]}.csv`;
+
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.send(csvContent);
+});
+
 apiRouter.post(
   '/excel/import',
   authenticate,
@@ -744,7 +892,7 @@ apiRouter.post(
   upload.single('file'),
   (req: AuthenticatedRequest, res: Response) => {
     if (!req.file) {
-      return res.status(400).json({ error: 'Please upload an Excel workbook (.xlsx or .xlsm).' });
+      return res.status(400).json({ error: 'Please upload an Excel workbook (.xlsx or .xlsm) or CSV file (.csv).' });
     }
 
     const fyId = req.body.financialYearId || db.getCurrentFinancialYear().id;
@@ -752,7 +900,7 @@ apiRouter.post(
       const report = parseHistoricalExcelMigration(req.file.buffer, fyId, req.user!.id);
       res.json(report);
     } catch (err: any) {
-      res.status(500).json({ error: err.message || 'Error parsing Excel migration file.' });
+      res.status(500).json({ error: err.message || 'Error parsing Excel/CSV migration file.' });
     }
   }
 );
@@ -849,6 +997,20 @@ apiRouter.post(
       res.json(result);
     } catch (err: any) {
       res.status(500).json({ error: err.message || 'Failed to clear operational records.' });
+    }
+  }
+);
+
+apiRouter.post(
+  '/system/reseed',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = db.reseedWithDefaults(req.user!.id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to reseed database.' });
     }
   }
 );

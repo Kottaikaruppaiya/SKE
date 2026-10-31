@@ -44,10 +44,8 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
   };
 
   useEffect(() => {
-    if (hasSearched) {
-      handleSearch();
-    }
-  }, [refreshKey]);
+    handleSearch(inputVal);
+  }, [selectedFyId, refreshKey]);
 
   const testVariants = [
     { label: 'Standard Slash Format', value: 'SKE/26-27/020' },

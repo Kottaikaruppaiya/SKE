@@ -30,6 +30,7 @@ import { ConsigneeMasterView } from './views/ConsigneeMasterView.tsx';
 import { BankMasterView } from './views/BankMasterView.tsx';
 import { ExcelImportExportView } from './views/ExcelImportExportView.tsx';
 import { DocumentReviewView } from './views/DocumentReviewView.tsx';
+import { CompanyLedgerView } from './views/CompanyLedgerView.tsx';
 import { AuditHistoryView } from './views/AuditHistoryView.tsx';
 import { UserManagementView } from './views/UserManagementView.tsx';
 import { SettingsView } from './views/SettingsView.tsx';
@@ -238,6 +239,26 @@ export default function App() {
               selectedFyId={selectedFyId}
               userRole={currentUser.role}
               onSelectShipment={setSelectedShipmentId}
+              refreshKey={refreshKey}
+            />
+          )}
+
+          {currentTab === 'sk-global-ledger' && (
+            <CompanyLedgerView
+              selectedFyId={selectedFyId}
+              initialCompanyName="S K Global Ventures Private Limited"
+              onSelectShipment={setSelectedShipmentId}
+              userRole={currentUser.role}
+              refreshKey={refreshKey}
+            />
+          )}
+
+          {currentTab === 'shasvanth-ledger' && (
+            <CompanyLedgerView
+              selectedFyId={selectedFyId}
+              initialCompanyName="Shasvanth Impex"
+              onSelectShipment={setSelectedShipmentId}
+              userRole={currentUser.role}
               refreshKey={refreshKey}
             />
           )}

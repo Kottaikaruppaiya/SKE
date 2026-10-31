@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { UsersRound, ArrowRight, Building2, Globe, Search, Filter, Calendar, DollarSign, CheckCircle2 } from 'lucide-react';
+import { UsersRound, ArrowRight, Building2, Globe, Search, Filter, Calendar, DollarSign, CheckCircle2, Download } from 'lucide-react';
 import { ConsigneeMaster, Shipment } from '../types/index.ts';
 import { api } from '../api/client.ts';
 
@@ -178,6 +178,15 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
 
         {/* Action Controls & Scope Switcher */}
         <div className="flex flex-wrap items-center gap-2.5">
+          <a
+            href={api.getExportCsvUrl('Consignee Summary', selectedFyId)}
+            download="Consignee_Summary_FY26-27.csv"
+            className="h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-colors"
+          >
+            <Download size={13} className="text-blue-600" />
+            <span>Export CSV</span>
+          </a>
+
           <div className="relative w-full sm:w-64">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
             <input

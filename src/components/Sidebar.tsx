@@ -37,6 +37,8 @@ export type NavItemKey =
   | 'brc'
   | 'incentives'
   | 'documents'
+  | 'sk-global-ledger'
+  | 'shasvanth-ledger'
   | 'consignee-summary'
   | 'consignee-master'
   | 'bank-master'
@@ -148,6 +150,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
             label="Document Review & Vault"
             active={currentTab === 'documents'}
             onClick={() => handleItemClick('documents')}
+          />
+        </div>
+      </div>
+
+      {/* Company Ledgers */}
+      <div>
+        <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          Company Ledgers
+        </div>
+        <div className="space-y-1">
+          <NavItem
+            icon={<Building2 size={16} className="text-amber-400" />}
+            label="S K Global Ventures"
+            active={currentTab === 'sk-global-ledger'}
+            onClick={() => handleItemClick('sk-global-ledger')}
+          />
+          <NavItem
+            icon={<Building2 size={16} className="text-cyan-400" />}
+            label="Shasvanth Impex"
+            active={currentTab === 'shasvanth-ledger'}
+            onClick={() => handleItemClick('shasvanth-ledger')}
           />
         </div>
       </div>
