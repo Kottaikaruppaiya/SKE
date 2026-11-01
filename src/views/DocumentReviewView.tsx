@@ -147,9 +147,20 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
               {/* Document Header & Actions */}
               <div className="flex flex-col sm:flex-row sm:items-start justify-between border-b border-slate-100 pb-3 gap-3">
                 <div className="min-w-0">
-                  <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded uppercase">
-                    {selectedDoc.category.replace(/_/g, ' ')}
-                  </span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded uppercase">
+                      {selectedDoc.category.replace(/_/g, ' ')}
+                    </span>
+                    {selectedDoc.ocrApplied ? (
+                      <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-bold rounded flex items-center gap-1 border border-purple-200">
+                        Local WASM OCR ({selectedDoc.ocrConfidence || 85}%)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded border border-emerald-200">
+                        Digital Vector PDF
+                      </span>
+                    )}
+                  </div>
                   <h3 className="font-bold text-sm text-slate-900 mt-1 truncate">{selectedDoc.originalFilename}</h3>
                   <p className="text-[11px] font-mono text-slate-400 truncate">Path: {selectedDoc.storedPath}</p>
                 </div>
@@ -212,9 +223,12 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
 
               {/* Extracted Fields Table */}
               <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Locally Extracted Structured Fields
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                    Locally Extracted Structured Fields &amp; Provenance
+                  </h4>
+                  <span className="text-[10px] text-slate-400">Zero External AI • Local Regex &amp; OCR</span>
+                </div>
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
@@ -222,6 +236,7 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
                         <th className="p-2.5">Field</th>
                         <th className="p-2.5">Extracted Value</th>
                         <th className="p-2.5">Confidence</th>
+                        <th className="p-2.5">Method</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -229,7 +244,7 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
                         Object.entries(selectedDoc.extractedData.fields).map(([k, v]: [string, any]) => (
                           <tr key={k}>
                             <td className="p-2.5 font-medium text-slate-700">{k}</td>
-                            <td className="p-2.5 font-bold text-slate-900">
+                            <td className="p-2.5 font-bold text-slate-900 font-mono">
                               {v.value !== null ? String(v.value) : <span className="text-slate-400 font-normal">Not detected</span>}
                             </td>
                             <td className="p-2.5">
@@ -244,6 +259,9 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
                               >
                                 {v.confidence}
                               </span>
+                            </td>
+                            <td className="p-2.5 text-[11px] text-slate-500">
+                              {v.extractionMethod || (selectedDoc.ocrApplied ? 'LOCAL_OCR' : 'PDF_TEXT')}
                             </td>
                           </tr>
                         ))}

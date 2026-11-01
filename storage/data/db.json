@@ -50,27 +50,27 @@
   "consignees": [
     {
       "id": "c-sk-global-lk",
-      "name": "S K Global Ventures Private Limited",
+      "name": "S K GLOBAL VENTURES PRIVATE LIMITED",
       "country": "Sri Lanka",
       "portOfDischarge": "LKCMB - Colombo",
       "paymentTerms": "FOB COLOMBO | DA 90 DAYS",
       "currency": "USD",
       "contactEmail": "trade@skglobalventures.lk",
       "isActive": true,
-      "createdAt": "2026-10-31T09:53:33.833Z",
-      "updatedAt": "2026-10-31T09:53:33.833Z"
+      "createdAt": "2026-11-01T19:51:16.027Z",
+      "updatedAt": "2026-11-01T19:51:16.027Z"
     },
     {
       "id": "c-shasvanth-impex",
-      "name": "Shasvanth Impex",
+      "name": "SHASVANTH IMPEX PRIVATE LIMITED",
       "country": "Sri Lanka",
       "portOfDischarge": "LKCMB - Colombo",
       "paymentTerms": "DA 90 Days from BL",
       "currency": "USD",
       "contactEmail": "accounts@shasvanthimpex.com",
       "isActive": true,
-      "createdAt": "2026-10-31T09:53:33.833Z",
-      "updatedAt": "2026-10-31T09:53:33.833Z"
+      "createdAt": "2026-11-01T19:51:16.027Z",
+      "updatedAt": "2026-11-01T19:51:16.027Z"
     },
     {
       "id": "c-intl-remit-sg",
@@ -83,6 +83,42 @@
       "isActive": true,
       "createdAt": "2026-10-31T09:53:33.833Z",
       "updatedAt": "2026-10-31T09:53:33.833Z"
+    },
+    {
+      "id": "c-precision-tex-lanka",
+      "name": "PRECISION TEX LANKA PVT LTD",
+      "country": "Sri Lanka",
+      "portOfDischarge": "LKCMB - Colombo",
+      "paymentTerms": "DA 90 Days from BL",
+      "currency": "USD",
+      "contactEmail": "accounts@precisiontex.lk",
+      "isActive": true,
+      "createdAt": "2026-11-01T19:51:16.027Z",
+      "updatedAt": "2026-11-01T19:51:16.027Z"
+    },
+    {
+      "id": "c-tex-fab-lanka",
+      "name": "TEX FAB LANKA PRIVATE LIMITED",
+      "country": "Sri Lanka",
+      "portOfDischarge": "LKCMB - Colombo",
+      "paymentTerms": "DA 60 Days",
+      "currency": "USD",
+      "contactEmail": "finance@texfablanka.com",
+      "isActive": true,
+      "createdAt": "2026-11-01T19:51:16.027Z",
+      "updatedAt": "2026-11-01T19:51:16.027Z"
+    },
+    {
+      "id": "c-winfield-merchant",
+      "name": "WINFIELD MERCHANT AND GENERAL PVT LTD",
+      "country": "Sri Lanka",
+      "portOfDischarge": "LKCMB - Colombo",
+      "paymentTerms": "DA 90 Days",
+      "currency": "USD",
+      "contactEmail": "trade@winfieldmerchant.lk",
+      "isActive": true,
+      "createdAt": "2026-11-01T19:51:16.027Z",
+      "updatedAt": "2026-11-01T19:51:16.027Z"
     }
   ],
   "banks": [

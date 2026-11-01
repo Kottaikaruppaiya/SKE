@@ -166,6 +166,7 @@ apiRouter.post(
         totalFilesParsed: extractionResults.length,
         mergedDraft,
         extractions: extractionsByKey,
+        conflicts: mergedDraft.conflicts || [],
       });
     } catch (err: any) {
       console.error('Error in extract-batch:', err);
@@ -302,7 +303,28 @@ apiRouter.post(
       const resolvedBlDate = blDate || extractions.blDoc?.fields?.blDate?.value || undefined;
       const resolvedVessel = vesselName || extractions.shippingBillDoc?.fields?.vesselName?.value || extractions.blDoc?.fields?.vesselName?.value || undefined;
 
+      // Mandatory Rule: Require FIRC/payment linkage before saving a shipment
       const hasFircEvidence = Boolean(files?.fircDoc?.[0] || fircIrmNumber);
+      if (!hasFircEvidence) {
+        return res.status(400).json({
+          error: 'Mandatory Rule Violation: A valid FIRC/payment document or IRM reference must be linked before saving a shipment.'
+        });
+      }
+
+      // Mandatory Rule: BRC Mode validation
+      if (brcUploadMode === 'SINGLE') {
+        if (files?.brcDoc2?.[0]) {
+          return res.status(400).json({
+            error: 'Single BRC Mode accepts exactly one BRC document. BRC Copy 2 is not permitted in Single mode.'
+          });
+        }
+      } else if (brcUploadMode === 'MULTIPLE') {
+        if (!files?.brcDoc1?.[0] || !files?.brcDoc2?.[0]) {
+          return res.status(400).json({
+            error: 'Multiple BRC Mode requires exactly two BRC documents (both BRC Copy 1 and BRC Copy 2 must be uploaded).'
+          });
+        }
+      }
 
       // Create shipment in DB
       const shipment = db.createShipment(
@@ -336,6 +358,25 @@ apiRouter.post(
         },
         req.user!.id
       );
+
+      // Audit manual corrections vs extracted values
+      const manualEdits: Record<string, { extracted: any; accepted: any }> = {};
+      if (extractions.invoiceDoc?.fields?.invoiceValueUsd?.value !== undefined && Number(extractions.invoiceDoc.fields.invoiceValueUsd.value) !== invVal) {
+        manualEdits['invoiceValueUsd'] = { extracted: extractions.invoiceDoc.fields.invoiceValueUsd.value, accepted: invVal };
+      }
+      if (extractions.shippingBillDoc?.fields?.fobValueInr?.value !== undefined && Number(extractions.shippingBillDoc.fields.fobValueInr.value) !== fobVal) {
+        manualEdits['fobValueInr'] = { extracted: extractions.shippingBillDoc.fields.fobValueInr.value, accepted: fobVal };
+      }
+      if (Object.keys(manualEdits).length > 0) {
+        db.logAudit({
+          userId: req.user!.id,
+          userName: req.user!.name,
+          action: 'MANUAL_EXTRACTION_CORRECTION',
+          entityType: 'SHIPMENT',
+          entityId: shipment.id,
+          newValues: manualEdits,
+        });
+      }
 
       // Handle FIRC payment creation & allocation
       const finalIrm = fircIrmNumber || extractions.fircDoc?.fields?.irmNumber?.value;
@@ -425,6 +466,10 @@ apiRouter.post(
             fileSizeBytes: spec.file.size,
             extractedData: ext,
             reviewStatus: ext?.reviewStatus || 'CONFIRMED',
+            ocrApplied: ext?.ocrApplied || false,
+            ocrConfidence: ext?.ocrConfidence,
+            ocrTextPreview: ext?.ocrTextPreview,
+            extractionMethod: ext?.extractionMethod || 'PDF_TEXT',
           },
           req.user!.id
         );

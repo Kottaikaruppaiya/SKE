@@ -189,6 +189,63 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
     }
   }, [invoiceValueUsd, sbExchangeRate]);
 
+  // Suggest Next Invoice Number based on existing records
+  const handleSuggestNextInvoice = async () => {
+    try {
+      const all = await api.getShipments({ financialYearId: fyId });
+      let maxNum = 0;
+      for (const s of all) {
+        const m = s.invoiceNumber.match(/(\d+)$/);
+        if (m) {
+          const val = parseInt(m[1], 10);
+          if (val > maxNum) maxNum = val;
+        }
+      }
+      const nextNum = maxNum > 0 ? maxNum + 1 : 1;
+      const padded = String(nextNum).padStart(3, '0');
+      setInvoiceNumber(`SKE/26-27/${padded}`);
+    } catch (e) {
+      setInvoiceNumber('SKE/26-27/271');
+    }
+  };
+
+  // Auto-pad single number input (e.g. 269 -> SKE/26-27/269)
+  const handleAutoPadInput = (raw: string) => {
+    const trimmed = raw.trim();
+    if (/^\d+$/.test(trimmed)) {
+      const padded = trimmed.padStart(3, '0');
+      setInvoiceNumber(`SKE/26-27/${padded}`);
+    } else {
+      setInvoiceNumber(raw);
+    }
+  };
+
+  // Reset/Clear Form action
+  const handleClearForm = () => {
+    setInvoiceNumber('');
+    setInvoiceDate(new Date().toISOString().split('T')[0]);
+    setShippingBillNumber('');
+    setShippingBillDate(new Date().toISOString().split('T')[0]);
+    setInvoiceValueUsd('');
+    setSbExchangeRate(92.1);
+    setFobValueInr('');
+    setBlNumber('');
+    setBlDate('');
+    setVesselName('');
+    setRemarks('');
+    setPortCode('INMAA1');
+    setPackageCount('');
+    setInvoiceFile(null);
+    setSbFile(null);
+    setBlFile(null);
+    setBrcFile1(null);
+    setBrcFile2(null);
+    setFircFile(null);
+    setAdditionalFile(null);
+    setError(null);
+    setExtractionResult(null);
+  };
+
   // Clean helper to format file size
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -725,23 +782,33 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
                     <FileText size={14} className="text-blue-600" />
                     Invoice No. (Unique, Primary) <span className="text-red-500">*</span>
                   </span>
-                  {extractedSources.invoiceNumber ? (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      Extracted from Invoice
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
-                      Primary Key
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSuggestNextInvoice}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors cursor-pointer"
+                    >
+                      Suggest Next #
+                    </button>
+                    {extractedSources.invoiceNumber ? (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        Extracted from Invoice
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                        Primary Key
+                      </span>
+                    )}
+                  </div>
                 </label>
                 <div className="relative">
                   <input
                     type="text"
                     required
-                    placeholder="e.g. SKE/26-27/020"
+                    placeholder="e.g. SKE/26-27/020 (or type number e.g. 271)"
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
+                    onBlur={(e) => handleAutoPadInput(e.target.value)}
                     className={`w-full border rounded-lg p-2.5 bg-white text-xs font-bold text-slate-900 tracking-wide focus:outline-hidden focus:ring-2 ${
                       isUnique === false
                         ? 'border-red-400 focus:ring-red-500 bg-red-50/30'
@@ -1380,6 +1447,14 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2.5 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={handleClearForm}
+                disabled={submitting}
+                className="px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Clear Form
+              </button>
               <button
                 type="button"
                 onClick={onClose}

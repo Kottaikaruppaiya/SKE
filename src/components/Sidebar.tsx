@@ -39,6 +39,9 @@ export type NavItemKey =
   | 'documents'
   | 'sk-global-ledger'
   | 'shasvanth-ledger'
+  | 'precision-tex-ledger'
+  | 'tex-fab-ledger'
+  | 'winfield-ledger'
   | 'consignee-summary'
   | 'consignee-master'
   | 'bank-master'
@@ -154,15 +157,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Company Ledgers */}
+      {/* Company Ledgers (Worksheets 7-11) */}
       <div>
         <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-          Company Ledgers
+          Buyer Ledgers (5 Companies)
         </div>
         <div className="space-y-1">
           <NavItem
             icon={<Building2 size={16} className="text-amber-400" />}
-            label="S K Global Ventures"
+            label="SK Global Ventures"
             active={currentTab === 'sk-global-ledger'}
             onClick={() => handleItemClick('sk-global-ledger')}
           />
@@ -171,6 +174,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
             label="Shasvanth Impex"
             active={currentTab === 'shasvanth-ledger'}
             onClick={() => handleItemClick('shasvanth-ledger')}
+          />
+          <NavItem
+            icon={<Building2 size={16} className="text-emerald-400" />}
+            label="Precision Tex Lanka"
+            active={currentTab === 'precision-tex-ledger'}
+            onClick={() => handleItemClick('precision-tex-ledger')}
+          />
+          <NavItem
+            icon={<Building2 size={16} className="text-indigo-400" />}
+            label="Tex Fab Lanka"
+            active={currentTab === 'tex-fab-ledger'}
+            onClick={() => handleItemClick('tex-fab-ledger')}
+          />
+          <NavItem
+            icon={<Building2 size={16} className="text-purple-400" />}
+            label="Winfield Merchant"
+            active={currentTab === 'winfield-ledger'}
+            onClick={() => handleItemClick('winfield-ledger')}
           />
         </div>
       </div>

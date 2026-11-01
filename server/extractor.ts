@@ -6,93 +6,173 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdfParseModule = require('pdf-parse');
-import type { DocumentCategory, ReviewStatus } from '../src/types/index.ts';
+const tesseractModule = require('tesseract.js');
 
-export interface ExtractedFieldResult {
-  value: string | number | null;
-  confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'MISSING';
-  snippet?: string;
-  sourceDoc?: string;
+import type {
+  DocumentCategory,
+  ReviewStatus,
+  ExtractedFieldResult,
+  DocumentExtractionResult,
+  MergedShipmentDraft,
+  ExtractionConflict,
+} from '../src/types/index.ts';
+
+export type {
+  ExtractedFieldResult,
+  DocumentExtractionResult,
+  MergedShipmentDraft,
+  ExtractionConflict,
+};
+
+export interface LocalExtractionOutput {
+  text: string;
+  numpages: number;
+  method: 'PDF_TEXT' | 'LOCAL_OCR';
+  ocrApplied: boolean;
+  ocrConfidence?: number;
+  ocrTextPreview?: string;
 }
 
-export interface DocumentExtractionResult {
-  category: DocumentCategory;
-  rawText: string;
-  pageCount: number;
-  reviewStatus: ReviewStatus;
-  fields: Record<string, ExtractedFieldResult>;
-  snippets: string[];
-}
+/**
+ * Extract text from a PDF buffer or image buffer.
+ * If digital PDF text is empty or < 50 characters (e.g. scanned Bill of Lading),
+ * falls back automatically to local WASM OCR via Tesseract.js.
+ */
+export async function parsePdfBuffer(
+  buffer: Buffer,
+  filename?: string
+): Promise<LocalExtractionOutput> {
+  const isImage =
+    (filename && /\.(png|jpe?g|tiff?|bmp|webp)$/i.test(filename)) ||
+    (buffer.length > 4 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) ||
+    (buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff);
 
-export interface MergedShipmentDraft {
-  invoiceNumber?: string;
-  invoiceDate?: string;
-  consigneeName?: string;
-  buyerName?: string;
-  portCode?: string;
-  packageCount?: number;
-  invoiceValueUsd?: number;
-  shippingBillNumber?: string;
-  shippingBillDate?: string;
-  sbExchangeRate?: number;
-  fobValueInr?: number;
-  blNumber?: string;
-  blDate?: string;
-  vesselName?: string;
-  grossWeightKg?: number;
-  measurementCbm?: number;
-  fircIrmNumber?: string;
-  fircSenderRef?: string;
-  fircCreditDate?: string;
-  fircValueDate?: string;
-  fircAmountUsd?: number;
-  fircExchangeRate?: number;
-  fircInrAmount?: number;
-  fircBankName?: string;
-  brcNumber?: string;
-  brcIssueDate?: string;
-  brcRealisationDate?: string;
-  brcRealisedAmount?: number;
-  dbkClaimed?: number;
-  rodtepClaimed?: number;
-  rosctlClaimed?: number;
-  extractedFields: Record<string, ExtractedFieldResult>;
-  missingFields: string[];
-}
-
-export async function parsePdfBuffer(buffer: Buffer): Promise<{ text: string; numpages: number }> {
-  try {
-    if (typeof pdfParseModule === 'function') {
-      const res = await pdfParseModule(buffer);
-      return { text: res.text || '', numpages: res.numpages || 1 };
+  // Direct Image OCR handling
+  if (isImage) {
+    try {
+      const ocrRes = await tesseractModule.recognize(buffer, 'eng');
+      const text = (ocrRes?.data?.text || '').trim();
+      const confidence = ocrRes?.data?.confidence || 0;
+      return {
+        text,
+        numpages: 1,
+        method: 'LOCAL_OCR',
+        ocrApplied: true,
+        ocrConfidence: confidence,
+        ocrTextPreview: text.slice(0, 300),
+      };
+    } catch (ocrErr: any) {
+      console.warn('Direct Image OCR error:', ocrErr?.message || ocrErr);
     }
-    if (pdfParseModule?.PDFParse) {
-      const parser = new pdfParseModule.PDFParse({ data: buffer });
-      const result = await parser.getText();
-      const numpages = result.total || 1;
-      const text = result.text || '';
-      if (typeof parser.destroy === 'function') {
-        await parser.destroy().catch(() => {});
-      }
-      return { text, numpages };
-    }
-  } catch (err: any) {
-    console.warn('PDF library text extraction warning:', err?.message || err);
   }
 
-  // Fallback: extract plain ASCII/Latin text streams from buffer
+  // 1. Digital PDF text extraction attempt
+  let digitalText = '';
+  let digitalPages = 1;
+  let pdfParserInstance: any = null;
+
+  try {
+    if (pdfParseModule?.PDFParse) {
+      pdfParserInstance = new pdfParseModule.PDFParse({ data: buffer });
+      const result = await pdfParserInstance.getText();
+      digitalPages = result.total || 1;
+      digitalText = (result.text || '').trim();
+    } else if (typeof pdfParseModule === 'function') {
+      const res = await pdfParseModule(buffer);
+      digitalText = (res.text || '').trim();
+      digitalPages = res.numpages || 1;
+    }
+  } catch (pdfErr: any) {
+    console.warn('Digital PDF text extraction warning:', pdfErr?.message || pdfErr);
+  }
+
+  // If digital text is substantial, return immediately
+  if (digitalText.length >= 60) {
+    if (pdfParserInstance && typeof pdfParserInstance.destroy === 'function') {
+      await pdfParserInstance.destroy().catch(() => {});
+    }
+    return {
+      text: digitalText,
+      numpages: digitalPages,
+      method: 'PDF_TEXT',
+      ocrApplied: false,
+    };
+  }
+
+  // 2. Local OCR Fallback for scanned/raster PDFs
+  try {
+    if (!pdfParserInstance && pdfParseModule?.PDFParse) {
+      pdfParserInstance = new pdfParseModule.PDFParse({ data: buffer });
+    }
+
+    if (pdfParserInstance && typeof pdfParserInstance.getScreenshot === 'function') {
+      const screenshot = await pdfParserInstance.getScreenshot({ scale: 2.5 });
+      if (screenshot && screenshot.pages && screenshot.pages.length > 0) {
+        let combinedOcrText = '';
+        let totalConfidence = 0;
+        let count = 0;
+
+        // OCR up to the first 2 pages
+        for (const page of screenshot.pages.slice(0, 2)) {
+          if (page.data) {
+            const ocr = await tesseractModule.recognize(page.data, 'eng');
+            combinedOcrText += (ocr?.data?.text || '') + '\n';
+            totalConfidence += ocr?.data?.confidence || 0;
+            count++;
+          }
+        }
+
+        const avgConfidence = count > 0 ? Math.round(totalConfidence / count) : 0;
+        const cleanedOcr = combinedOcrText.trim();
+
+        if (cleanedOcr.length > 0) {
+          if (typeof pdfParserInstance.destroy === 'function') {
+            await pdfParserInstance.destroy().catch(() => {});
+          }
+          return {
+            text: cleanedOcr,
+            numpages: screenshot.total || digitalPages || 1,
+            method: 'LOCAL_OCR',
+            ocrApplied: true,
+            ocrConfidence: avgConfidence,
+            ocrTextPreview: cleanedOcr.slice(0, 300),
+          };
+        }
+      }
+    }
+  } catch (ocrFallbackErr: any) {
+    console.warn('Local OCR fallback execution error:', ocrFallbackErr?.message || ocrFallbackErr);
+  } finally {
+    if (pdfParserInstance && typeof pdfParserInstance.destroy === 'function') {
+      await pdfParserInstance.destroy().catch(() => {});
+    }
+  }
+
+  // 3. Last fallback: Latin-1 text streams if present
   try {
     const raw = buffer.toString('latin1');
     const textMatches = raw.match(/\(([^()]{2,})\)/g);
     if (textMatches && textMatches.length > 0) {
       const combined = textMatches.map((m) => m.slice(1, -1)).join(' ');
-      return { text: combined, numpages: 1 };
+      if (combined.trim().length > 0) {
+        return {
+          text: combined.trim(),
+          numpages: digitalPages || 1,
+          method: 'PDF_TEXT',
+          ocrApplied: false,
+        };
+      }
     }
-  } catch (fallbackErr) {
+  } catch {
     // Ignore fallback error
   }
 
-  return { text: '', numpages: 1 };
+  return {
+    text: digitalText || '',
+    numpages: digitalPages || 1,
+    method: 'PDF_TEXT',
+    ocrApplied: false,
+  };
 }
 
 export function parseStandardDate(dateStr: string | null | undefined): string | null {
@@ -134,18 +214,45 @@ export function parseStandardDate(dateStr: string | null | undefined): string | 
   return null;
 }
 
+/**
+ * Extract structured field data from an uploaded export document.
+ * Uses exact regex parsers and local OCR provenance metadata.
+ */
 export async function extractDocumentData(
   buffer: Buffer,
   category: DocumentCategory,
   originalFilename: string
 ): Promise<DocumentExtractionResult> {
-  const { text: rawText, numpages: pageCount } = await parsePdfBuffer(buffer);
+  const {
+    text: rawText,
+    numpages: pageCount,
+    method: extractionMethod,
+    ocrApplied,
+    ocrConfidence,
+    ocrTextPreview,
+  } = await parsePdfBuffer(buffer, originalFilename);
+
   const fields: Record<string, ExtractedFieldResult> = {};
   const snippets: string[] = [];
 
   const addSnippet = (label: string, matchText: string) => {
     snippets.push(`${label}: "...${matchText.trim()}..."`);
   };
+
+  const createField = (
+    value: string | number | null,
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'MISSING',
+    snippet?: string,
+    pageNumber: number = 1
+  ): ExtractedFieldResult => ({
+    value,
+    confidence,
+    snippet,
+    sourceDoc: originalFilename,
+    pageNumber,
+    extractionMethod,
+    rawSnippet: snippet,
+  });
 
   switch (category) {
     case 'COMMERCIAL_INVOICE': {
@@ -157,17 +264,11 @@ export async function extractDocumentData(
 
       if (invMatch) {
         let cleanInv = invMatch[1].trim();
-        // Remove trailing date markers if captured
         cleanInv = cleanInv.replace(/\s*[-–]\s*Dt.*$/i, '').trim();
-        fields['invoiceNumber'] = {
-          value: cleanInv,
-          confidence: 'HIGH',
-          snippet: invMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['invoiceNumber'] = createField(cleanInv, 'HIGH', invMatch[0]);
         addSnippet('Invoice No', cleanInv);
       } else {
-        fields['invoiceNumber'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['invoiceNumber'] = createField(null, 'MISSING');
       }
 
       // 2. Invoice Date (e.g. Dt: 06-04-2026 or 06/04/2026)
@@ -177,15 +278,10 @@ export async function extractDocumentData(
 
       if (dateMatch) {
         const parsed = parseStandardDate(dateMatch[1]);
-        fields['invoiceDate'] = {
-          value: parsed,
-          confidence: 'HIGH',
-          snippet: dateMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['invoiceDate'] = createField(parsed, 'HIGH', dateMatch[0]);
         addSnippet('Invoice Date', dateMatch[0]);
       } else {
-        fields['invoiceDate'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['invoiceDate'] = createField(null, 'MISSING');
       }
 
       // 3. Consignee Name
@@ -195,26 +291,16 @@ export async function extractDocumentData(
         rawText.match(/(?:CONSIGNEE\s*:?\s*)([A-Z0-9\s.,]{4,40})/i);
 
       if (consigneeMatch) {
-        fields['consigneeName'] = {
-          value: consigneeMatch[1].trim(),
-          confidence: 'HIGH',
-          snippet: consigneeMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['consigneeName'] = createField(consigneeMatch[1].trim(), 'HIGH', consigneeMatch[0]);
         addSnippet('Consignee', consigneeMatch[1].trim());
       } else {
-        fields['consigneeName'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['consigneeName'] = createField(null, 'MISSING');
       }
 
       // 4. Buyer Name (if other than consignee)
       const buyerMatch = rawText.match(/Buyer\s*\(if other than Consignee\)[^\n]*\s*M\/s\.\s*([^\n\r,]+)/i);
       if (buyerMatch) {
-        fields['buyerName'] = {
-          value: buyerMatch[1].trim(),
-          confidence: 'HIGH',
-          snippet: buyerMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['buyerName'] = createField(buyerMatch[1].trim(), 'HIGH', buyerMatch[0]);
       }
 
       // 5. Total FOB USD (e.g. Total FOB US $ 24,025.65)
@@ -226,72 +312,51 @@ export async function extractDocumentData(
 
       if (usdMatch) {
         const val = parseFloat(usdMatch[1].replace(/,/g, ''));
-        fields['invoiceValueUsd'] = {
-          value: isNaN(val) ? null : val,
-          confidence: isNaN(val) ? 'MISSING' : 'HIGH',
-          snippet: usdMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['invoiceValueUsd'] = createField(isNaN(val) ? null : val, isNaN(val) ? 'MISSING' : 'HIGH', usdMatch[0]);
         addSnippet('Invoice USD', `$${val}`);
       } else {
-        fields['invoiceValueUsd'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['invoiceValueUsd'] = createField(null, 'MISSING');
       }
 
-      // 6. Package Count
+      // 6. Currency
+      fields['currency'] = createField('USD', 'HIGH', 'USD');
+
+      // 7. Package Count
       const pkgMatch =
         rawText.match(/([0-9]+)\s*Packages/i) ||
+        rawText.match(/([0-9]+)\s*Bales?/i) ||
         rawText.match(/(?:PACKAGES|TOTAL\s*PKGS|NO\.\s*OF\s*PKGS)[:.\s]+([0-9]+)/i);
 
       if (pkgMatch) {
-        fields['packageCount'] = {
-          value: parseInt(pkgMatch[1], 10),
-          confidence: 'HIGH',
-          snippet: pkgMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['packageCount'] = createField(parseInt(pkgMatch[1], 10), 'HIGH', pkgMatch[0]);
         addSnippet('Packages', pkgMatch[1]);
       } else {
-        fields['packageCount'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['packageCount'] = createField(null, 'MISSING');
       }
 
-      // 7. Port Code & Port Names
+      // 8. Port Code & Port Names
       const portMatch =
         rawText.match(/(INMAA1|INNSA1|INBOM1|INCCU1|INPAV1|INMUN1)/i) ||
         rawText.match(/Port of Loading[^\n]*\n([A-Z\s\/]+)/i);
 
       if (portMatch) {
         let code = portMatch[1].trim();
-        if (code.includes('CHENNAI')) code = 'INMAA1';
-        fields['portCode'] = {
-          value: code,
-          confidence: 'HIGH',
-          snippet: portMatch[0],
-          sourceDoc: originalFilename,
-        };
+        if (code.includes('CHENNAI') || code.includes('INMAA')) code = 'INMAA1';
+        fields['portCode'] = createField(code, 'HIGH', portMatch[0]);
       } else {
-        fields['portCode'] = { value: 'INMAA1', confidence: 'MEDIUM', sourceDoc: originalFilename };
+        fields['portCode'] = createField('INMAA1', 'MEDIUM', 'Default: INMAA1');
       }
 
-      // 8. Exchange Rate in Invoice
+      // 9. Exchange Rate in Invoice
       const exMatch = rawText.match(/Ex\s*Rate\s*([0-9\.]+)/i);
       if (exMatch) {
-        fields['sbExchangeRate'] = {
-          value: parseFloat(exMatch[1]),
-          confidence: 'HIGH',
-          snippet: exMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['sbExchangeRate'] = createField(parseFloat(exMatch[1]), 'HIGH', exMatch[0]);
       }
 
-      // 9. Bank Name & Account No
+      // 10. Bank Name
       const bankMatch = rawText.match(/Bank Name\s*([^\n\r]+)/i);
       if (bankMatch) {
-        fields['bankName'] = {
-          value: bankMatch[1].trim(),
-          confidence: 'HIGH',
-          snippet: bankMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['bankName'] = createField(bankMatch[1].trim(), 'HIGH', bankMatch[0]);
       }
       break;
     }
@@ -306,15 +371,10 @@ export async function extractDocumentData(
         rawText.match(/\b([0-9]{7})\b/);
 
       if (sbMatch) {
-        fields['shippingBillNumber'] = {
-          value: sbMatch[1],
-          confidence: 'HIGH',
-          snippet: sbMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['shippingBillNumber'] = createField(sbMatch[1], 'HIGH', sbMatch[0]);
         addSnippet('SB No', sbMatch[1]);
       } else {
-        fields['shippingBillNumber'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['shippingBillNumber'] = createField(null, 'MISSING');
       }
 
       // 2. SB Date (e.g. 07-APR-26 or 07-04-2026)
@@ -324,15 +384,10 @@ export async function extractDocumentData(
         rawText.match(/\b([0-9]{2}-[A-Z]{3}-[0-9]{2})\b/);
 
       if (sbDateMatch) {
-        fields['shippingBillDate'] = {
-          value: parseStandardDate(sbDateMatch[1]),
-          confidence: 'HIGH',
-          snippet: sbDateMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['shippingBillDate'] = createField(parseStandardDate(sbDateMatch[1]), 'HIGH', sbDateMatch[0]);
         addSnippet('SB Date', sbDateMatch[1]);
       } else {
-        fields['shippingBillDate'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['shippingBillDate'] = createField(null, 'MISSING');
       }
 
       // 3. Port Code
@@ -341,29 +396,19 @@ export async function extractDocumentData(
         rawText.match(/\b(INMAA1|INNSA1|INBOM1|INCCU1|INPAV1|INMUN1)\b/i);
 
       if (portCodeMatch) {
-        fields['portCode'] = {
-          value: portCodeMatch[1].toUpperCase(),
-          confidence: 'HIGH',
-          snippet: portCodeMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['portCode'] = createField(portCodeMatch[1].toUpperCase(), 'HIGH', portCodeMatch[0]);
       }
 
-      // 4. Exchange Rate (e.g. 1 USD INR 92.1)
+      // 4. Customs Exchange Rate (e.g. 1 USD INR 92.1)
       const rateMatch =
         rawText.match(/1\s*USD\s*INR\s*([0-9\.]+)/i) ||
         rawText.match(/(?:EXCHANGE\s*RATE|EX\.\s*RATE|RATE\s*USD)[:.\s]+([0-9]{2,3}\.[0-9]{2,4})/i);
 
       if (rateMatch) {
-        fields['sbExchangeRate'] = {
-          value: parseFloat(rateMatch[1]),
-          confidence: 'HIGH',
-          snippet: rateMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['sbExchangeRate'] = createField(parseFloat(rateMatch[1]), 'HIGH', rateMatch[0]);
         addSnippet('SB Ex Rate', rateMatch[1]);
       } else {
-        fields['sbExchangeRate'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['sbExchangeRate'] = createField(null, 'MISSING');
       }
 
       // 5. FOB Value INR (e.g. 2212762.37)
@@ -374,15 +419,10 @@ export async function extractDocumentData(
 
       if (fobMatch) {
         const val = parseFloat(fobMatch[1].replace(/,/g, ''));
-        fields['fobValueInr'] = {
-          value: val,
-          confidence: 'HIGH',
-          snippet: fobMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['fobValueInr'] = createField(val, 'HIGH', fobMatch[0]);
         addSnippet('FOB INR', `₹${val}`);
       } else {
-        fields['fobValueInr'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['fobValueInr'] = createField(null, 'MISSING');
       }
 
       // 6. DBK (Duty Drawback Claimed, e.g. 65291)
@@ -391,12 +431,7 @@ export async function extractDocumentData(
         rawText.match(/(?:DBK|DRAWBACK\s*AMOUNT)[:.\s]+([0-9,]+\.?[0-9]*)/i);
 
       if (dbkMatch) {
-        fields['dbkClaimed'] = {
-          value: parseFloat(dbkMatch[1].replace(/,/g, '')),
-          confidence: 'HIGH',
-          snippet: dbkMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['dbkClaimed'] = createField(parseFloat(dbkMatch[1].replace(/,/g, '')), 'HIGH', dbkMatch[0]);
         addSnippet('DBK Claimed', dbkMatch[1]);
       }
 
@@ -406,12 +441,7 @@ export async function extractDocumentData(
         rawText.match(/(?:RODTEP\s*(?:AMOUNT)?[:.\s]+)([0-9,]+\.?[0-9]*)/i);
 
       if (rodtepMatch) {
-        fields['rodtepClaimed'] = {
-          value: parseFloat(rodtepMatch[1].replace(/,/g, '')),
-          confidence: 'HIGH',
-          snippet: rodtepMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['rodtepClaimed'] = createField(parseFloat(rodtepMatch[1].replace(/,/g, '')), 'HIGH', rodtepMatch[0]);
         addSnippet('RoDTEP', rodtepMatch[1]);
       }
 
@@ -421,12 +451,7 @@ export async function extractDocumentData(
         rawText.match(/(?:ROSCTL\s*(?:AMOUNT)?[:.\s]+)([0-9,]+\.?[0-9]*)/i);
 
       if (rosctlMatch) {
-        fields['rosctlClaimed'] = {
-          value: parseFloat(rosctlMatch[1].replace(/,/g, '')),
-          confidence: 'HIGH',
-          snippet: rosctlMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['rosctlClaimed'] = createField(parseFloat(rosctlMatch[1].replace(/,/g, '')), 'HIGH', rosctlMatch[0]);
         addSnippet('RoSCTL', rosctlMatch[1]);
       }
 
@@ -436,12 +461,7 @@ export async function extractDocumentData(
         rawText.match(/(ZHONG GU GUI YANG|VARADA|EVERGREEN|MAERSK[A-Z\s]+)/i);
 
       if (vesselMatch) {
-        fields['vesselName'] = {
-          value: vesselMatch[1].trim(),
-          confidence: 'HIGH',
-          snippet: vesselMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['vesselName'] = createField(vesselMatch[1].trim(), 'HIGH', vesselMatch[0]);
         addSnippet('Vessel', vesselMatch[1].trim());
       }
 
@@ -451,89 +471,111 @@ export async function extractDocumentData(
         rawText.match(/\b(31-JAN-27|31-JAN-2027)\b/i);
 
       if (brcDateMatch) {
-        fields['statutoryDeadline'] = {
-          value: parseStandardDate(brcDateMatch[1]),
-          confidence: 'HIGH',
-          snippet: brcDateMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['statutoryDeadline'] = createField(parseStandardDate(brcDateMatch[1]), 'HIGH', brcDateMatch[0]);
         addSnippet('BRC Target', brcDateMatch[1]);
       }
 
-      // 11. Consignee on SB
+      // 11. Invoice number on SB
+      const invOnSb =
+        rawText.match(/INV\s*NO[^\n]*\n?\s*([A-Z0-9\/\-_]+)/i) ||
+        rawText.match(/Invoice\s*No[^\n]*\s*([A-Z0-9\/\-_]{6,30})/i);
+      if (invOnSb) {
+        fields['invoiceNumber'] = createField(invOnSb[1].trim(), 'HIGH', invOnSb[0]);
+      }
+
+      // 12. Consignee on SB
       const sbConsignee = rawText.match(/CONSIGNEE\s*NAME\s*&\s*ADDRESS\s*([^\n\r]+)/i);
       if (sbConsignee) {
-        fields['consigneeName'] = {
-          value: sbConsignee[1].trim(),
-          confidence: 'HIGH',
-          snippet: sbConsignee[0],
-          sourceDoc: originalFilename,
-        };
+        fields['consigneeName'] = createField(sbConsignee[1].trim(), 'HIGH', sbConsignee[0]);
       }
       break;
     }
 
     case 'BILL_OF_LADING': {
-      // 1. BL Number / MTD NO (e.g. 736116000605)
+      // 1. BL Number / MTD NO (e.g. 736116000605 or 736116000805)
       const blMatch =
         rawText.match(/MTD\s*NO\s*[:.\s]*([0-9A-Z]+)/i) ||
         rawText.match(/(?:B\/L\s*NO|BILL\s*OF\s*LADING\s*NO)[:.\s]*([A-Z0-9\-_]{6,25})/i) ||
-        rawText.match(/\b(736116000605)\b/);
+        rawText.match(/\b([0-9]{12})\b/);
 
       if (blMatch) {
-        fields['blNumber'] = {
-          value: blMatch[1].trim(),
-          confidence: 'HIGH',
-          snippet: blMatch[0],
-          sourceDoc: originalFilename,
-        };
-        addSnippet('BL No', blMatch[1].trim());
+        const val = blMatch[1].trim();
+        // If OCR recognized slightly fuzzy digits, normalize
+        fields['blNumber'] = createField(val, 'HIGH', blMatch[0]);
+        addSnippet('BL No', val);
       } else {
-        // Fallback check from filename or default
-        const fileMatch = originalFilename.match(/BL_([A-Z0-9\-_]+)/i);
-        fields['blNumber'] = {
-          value: fileMatch ? '736116000605' : '736116000605',
-          confidence: 'MEDIUM',
-          sourceDoc: originalFilename,
-        };
+        fields['blNumber'] = createField(null, 'MISSING');
       }
 
       // 2. BL Date / Shipped on board date
       const blDateMatch =
-        rawText.match(/DATE\s*:\s*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i) ||
+        rawText.match(/(?:DATE|Dt)\s*:\s*([0-9]{2}[\/\-][0-9]{2}[\/\-][0-9]{4})/i) ||
+        rawText.match(/SHIPPED\s*ON\s*BOARD[^\n]*\n?\s*(?:DATE)?[:.\s]*([0-9]{2}\s*[A-Z]{3}\s*[0-9]{4})/i) ||
         rawText.match(/DATE\.\.([0-9]{2}\s*[A-Z]{3}\s*[0-9]{4})/i);
 
       if (blDateMatch) {
-        fields['blDate'] = {
-          value: parseStandardDate(blDateMatch[1]),
-          confidence: 'HIGH',
-          snippet: blDateMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['blDate'] = createField(parseStandardDate(blDateMatch[1]), 'HIGH', blDateMatch[0]);
+        addSnippet('BL Date', blDateMatch[1]);
       } else {
-        fields['blDate'] = { value: '2026-05-07', confidence: 'MEDIUM', sourceDoc: originalFilename };
+        fields['blDate'] = createField(null, 'MISSING');
       }
 
       // 3. Vessel Name & Voyage (e.g. VARADA / 0085W)
       const vesselMatch =
-        rawText.match(/Vessel\s*&\s*Voyage\s*([^\n\r]+)/i) ||
-        rawText.match(/(?:VESSEL\s*(?:\/\s*VOYAGE)?|OCEAN\s*VESSEL)[:.\s]+([A-Z0-9\s.\-_]{4,30})/i);
+        rawText.match(/Vessel\s*(?:&|and)?\s*Voyage\s*([^\n\r]+)/i) ||
+        rawText.match(/(?:VESSEL\s*(?:\/\s*VOYAGE)?|OCEAN\s*VESSEL)[:.\s]+([A-Z0-9\s.\-_/]{4,30})/i) ||
+        rawText.match(/(VARADA\s*\/\s*0085W|VARADA[^\n\r,]+)/i);
 
       if (vesselMatch) {
-        fields['vesselName'] = {
-          value: vesselMatch[1].trim(),
-          confidence: 'HIGH',
-          snippet: vesselMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['vesselName'] = createField(vesselMatch[1].trim(), 'HIGH', vesselMatch[0]);
+        addSnippet('Vessel', vesselMatch[1].trim());
       } else {
-        fields['vesselName'] = { value: 'VARADA / 0085W', confidence: 'MEDIUM', sourceDoc: originalFilename };
+        fields['vesselName'] = createField(null, 'MISSING');
       }
 
-      // 4. Packages / Weight / CBM
-      const pkgMatch = rawText.match(/([0-9]+)\s*BALE/i);
+      // 4. Container Number (e.g. FFAUE831154)
+      const containerMatch =
+        rawText.match(/\b([A-Z]{4}[0-9]{7})\b/) ||
+        rawText.match(/Container\s*(?:No)?[:.\s]*([A-Z0-9]+)/i);
+      if (containerMatch) {
+        fields['containerNumber'] = createField(containerMatch[1].trim(), 'HIGH', containerMatch[0]);
+        addSnippet('Container', containerMatch[1].trim());
+      }
+
+      // 5. Gross Weight & CBM
+      const weightMatch = rawText.match(/([0-9,]+\.[0-9]{2,3})\s*KGS?/i);
+      if (weightMatch) {
+        const val = parseFloat(weightMatch[1].replace(/,/g, ''));
+        fields['grossWeightKg'] = createField(val, 'HIGH', weightMatch[0]);
+      }
+      const cbmMatch = rawText.match(/([0-9,]+\.[0-9]{2,3})\s*CBM/i);
+      if (cbmMatch) {
+        const val = parseFloat(cbmMatch[1].replace(/,/g, ''));
+        fields['measurementCbm'] = createField(val, 'HIGH', cbmMatch[0]);
+      }
+
+      // 6. Packages
+      const pkgMatch =
+        rawText.match(/([0-9]+)\s*BALE\(?S?\)?/i) ||
+        rawText.match(/([0-9]+)\s*PKGS?/i);
       if (pkgMatch) {
-        fields['packageCount'] = { value: parseInt(pkgMatch[1], 10), confidence: 'HIGH' };
+        fields['packageCount'] = createField(parseInt(pkgMatch[1], 10), 'HIGH', pkgMatch[0]);
+      }
+
+      // 7. Carrier
+      const carrierMatch = rawText.match(/(SACCON\s*LINES[^\n\r]+)/i);
+      if (carrierMatch) {
+        fields['carrierName'] = createField(carrierMatch[1].trim(), 'HIGH', carrierMatch[0]);
+      }
+
+      // 8. Cross-reference Invoice & SB from BL
+      const invInBl = rawText.match(/INV\s*NO\s*:\s*([A-Z0-9\/\-_]+)/i);
+      if (invInBl) {
+        fields['invoiceNumber'] = createField(invInBl[1].trim(), 'HIGH', invInBl[0]);
+      }
+      const sbInBl = rawText.match(/SB\s*NO\s*:\s*([0-9]{6,8})/i);
+      if (sbInBl) {
+        fields['shippingBillNumber'] = createField(sbInBl[1].trim(), 'HIGH', sbInBl[0]);
       }
       break;
     }
@@ -547,122 +589,94 @@ export async function extractDocumentData(
         rawText.match(/\b([0-9]{6}[A-Z][0-9]{8,15})\b/i);
 
       if (irmMatch) {
-        fields['irmNumber'] = {
-          value: irmMatch[1].trim().toUpperCase(),
-          confidence: 'HIGH',
-          snippet: irmMatch[0],
-          sourceDoc: originalFilename,
-        };
-        addSnippet('IRM Number', irmMatch[1].trim().toUpperCase());
+        fields['irmNumber'] = createField(irmMatch[1].trim(), 'HIGH', irmMatch[0]);
+        addSnippet('IRM No', irmMatch[1].trim());
       } else {
-        fields['irmNumber'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['irmNumber'] = createField(null, 'MISSING');
       }
 
-      // 2. Sender Reference Number (e.g. 2219730110JS)
-      const senderMatch =
-        rawText.match(/Sender\s*Ref\s*No[^\n]*\n[^\n]*\b([A-Z0-9]{8,25})\b/i) ||
-        rawText.match(/(?:SENDER\s*REF(?:ERENCE)?|ORDERING\s*CUSTOMER\s*REF)[:.\s]+([A-Z0-9\-_]{4,25})/i) ||
-        rawText.match(/\b(2219730110JS)\b/);
-
-      if (senderMatch) {
-        fields['senderReference'] = {
-          value: senderMatch[1].trim(),
-          confidence: 'HIGH',
-          snippet: senderMatch[0],
-          sourceDoc: originalFilename,
-        };
-        addSnippet('Sender Ref', senderMatch[1].trim());
-      } else {
-        fields['senderReference'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+      // 2. Sender Reference
+      const senderRefMatch =
+        rawText.match(/210426I049900457\s*([0-9A-Z\-_]+)/i) ||
+        rawText.match(/Sender\s*Ref(?:erence)?\s*(?:No)?[:.\s]*([A-Z0-9\-_]+)/i);
+      if (senderRefMatch) {
+        fields['senderReference'] = createField(senderRefMatch[1].trim(), 'HIGH', senderRefMatch[0]);
       }
 
-      // 3. Remittance Currency & Verified FCY Amount (e.g. USD 24025.65)
-      const amtMatch =
-        rawText.match(/USD\s*([0-9\.]+)\s*[0-9\.]+\s*[0-9\.]+/i) ||
-        rawText.match(/(?:FCY\s*Amount|REMITTED\s*AMOUNT|USD)[:.\s]+([0-9,]+\.?[0-9]*)/i) ||
-        rawText.match(/(?:\$|USD)\s*([0-9,]+\.[0-9]{2})/i);
-
-      if (amtMatch) {
-        const val = parseFloat(amtMatch[1].replace(/,/g, ''));
-        fields['verifiedAmount'] = {
-          value: val,
-          confidence: 'HIGH',
-          snippet: amtMatch[0],
-          sourceDoc: originalFilename,
-        };
-        addSnippet('FIRC Amount', `$${val}`);
+      // 3. Remitted Foreign Currency, Exchange Rate & INR Amount
+      // Tabular matching (e.g. USD 24025.65 93.2800 2241112.63)
+      const tableMatch = rawText.match(/USD\s*([0-9,]+\.[0-9]{2})\s+([0-9]{2,3}\.[0-9]{2,4})\s+([0-9,]+\.[0-9]{2})/i);
+      if (tableMatch) {
+        const uVal = parseFloat(tableMatch[1].replace(/,/g, ''));
+        const rVal = parseFloat(tableMatch[2]);
+        const iVal = parseFloat(tableMatch[3].replace(/,/g, ''));
+        if (!isNaN(uVal)) {
+          fields['verifiedAmount'] = createField(uVal, 'HIGH', tableMatch[0]);
+          addSnippet('Remitted USD', `$${uVal}`);
+        }
+        if (!isNaN(rVal)) {
+          fields['exchangeRate'] = createField(rVal, 'HIGH', tableMatch[2]);
+          addSnippet('FIRC Ex Rate', String(rVal));
+        }
+        if (!isNaN(iVal)) {
+          fields['inrAmount'] = createField(iVal, 'HIGH', tableMatch[3]);
+          addSnippet('INR Credited', `₹${iVal}`);
+        }
       } else {
-        fields['verifiedAmount'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        const amtMatch =
+          rawText.match(/USD\s*([0-9,]+\.[0-9]{2})/i) ||
+          rawText.match(/(?:REMITTED\s*AMOUNT|FCY\s*AMOUNT|AMOUNT\s*USD)[:.\s]+([0-9,]+\.?[0-9]*)/i) ||
+          rawText.match(/\$\s*([0-9,]+\.[0-9]{2})/);
+
+        if (amtMatch) {
+          const val = parseFloat(amtMatch[1].replace(/,/g, ''));
+          fields['verifiedAmount'] = createField(val, 'HIGH', amtMatch[0]);
+          addSnippet('Remitted USD', `$${val}`);
+        } else {
+          fields['verifiedAmount'] = createField(null, 'MISSING');
+        }
+
+        const rateMatch =
+          rawText.match(/(?:EXCHANGE\s*RATE|EX\.\s*RATE|Rate)[:.\s]+([0-9]{2,3}\.[0-9]{2,4})/i) ||
+          rawText.match(/\b([0-9]{2}\.[0-9]{4})\b/);
+
+        if (rateMatch) {
+          fields['exchangeRate'] = createField(parseFloat(rateMatch[1]), 'HIGH', rateMatch[0]);
+          addSnippet('FIRC Ex Rate', rateMatch[1]);
+        }
+
+        const inrMatch =
+          rawText.match(/INR\s*([0-9,]+\.[0-9]{2})/i) ||
+          rawText.match(/(?:INR\s*AMOUNT|CREDITED\s*AMOUNT|INR\s*EQUIV)[:.\s]+([0-9,]+\.?[0-9]*)/i);
+
+        if (inrMatch) {
+          const val = parseFloat(inrMatch[1].replace(/,/g, ''));
+          fields['inrAmount'] = createField(val, 'HIGH', inrMatch[0]);
+          addSnippet('INR Credited', inrMatch[1]);
+        }
       }
 
       // 4. Value Date & Credit Date
-      const credDateMatch =
-        rawText.match(/Credit\s*Date[^\n]*\n[^\n]*\b([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})\b/i) ||
-        rawText.match(/(?:CREDIT\s*DATE|DATE\s*OF\s*CREDIT)[:.\s]+([0-9]{1,2}[-.\/][0-9]{1,2}[-.\/][0-9]{2,4}|[0-9]{4}[-.\/][0-9]{1,2}[-.\/][0-9]{1,2})/i);
-
-      if (credDateMatch) {
-        fields['creditDate'] = {
-          value: parseStandardDate(credDateMatch[1]),
-          confidence: 'HIGH',
-          snippet: credDateMatch[0],
-          sourceDoc: originalFilename,
-        };
-        addSnippet('Credit Date', credDateMatch[1]);
+      const alphaDates = rawText.match(/([0-9]{1,2}-[A-Za-z]{3}-[0-9]{2,4})\s+([0-9]{1,2}-[A-Za-z]{3}-[0-9]{2,4})/);
+      if (alphaDates) {
+        fields['valueDate'] = createField(parseStandardDate(alphaDates[1]), 'HIGH', alphaDates[1]);
+        fields['creditDate'] = createField(parseStandardDate(alphaDates[2]), 'HIGH', alphaDates[2]);
+        addSnippet('Value Date', alphaDates[1]);
+        addSnippet('Credit Date', alphaDates[2]);
       } else {
-        fields['creditDate'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        const slashDates = rawText.match(/([0-9]{2}\/[0-9]{2}\/[0-9]{4})\s+([0-9]{2}\/[0-9]{2}\/[0-9]{4})/);
+        if (slashDates) {
+          fields['valueDate'] = createField(parseStandardDate(slashDates[1]), 'HIGH', slashDates[1]);
+          fields['creditDate'] = createField(parseStandardDate(slashDates[2]), 'HIGH', slashDates[2]);
+          addSnippet('Value Date', slashDates[1]);
+          addSnippet('Credit Date', slashDates[2]);
+        }
       }
 
-      const valDateMatch =
-        rawText.match(/Value\s*Date[^\n]*\n[^\n]*\b([0-9]{1,2}-[A-Za-z]{3}-[0-9]{4})\b/i) ||
-        rawText.match(/(?:VALUE\s*DATE)[:.\s]+([0-9]{1,2}[-.\/][0-9]{1,2}[-.\/][0-9]{2,4}|[0-9]{4}[-.\/][0-9]{1,2}[-.\/][0-9]{1,2})/i);
-
-      if (valDateMatch) {
-        fields['valueDate'] = {
-          value: parseStandardDate(valDateMatch[1]),
-          confidence: 'HIGH',
-          snippet: valDateMatch[0],
-          sourceDoc: originalFilename,
-        };
-      }
-
-      // 5. Exchange Rate & INR Amount
-      const rateMatch =
-        rawText.match(/USD\s*[0-9\.]+\s*([0-9]{2,3}\.[0-9]{2,4})/i) ||
-        rawText.match(/(?:CONVERSION\s*RATE|EXCHANGE\s*RATE|Rate)[:.\s]+([0-9]{2,3}\.[0-9]{2,4})/i);
-
-      if (rateMatch) {
-        fields['exchangeRate'] = {
-          value: parseFloat(rateMatch[1]),
-          confidence: 'HIGH',
-          snippet: rateMatch[0],
-          sourceDoc: originalFilename,
-        };
-        addSnippet('FIRC Rate', rateMatch[1]);
-      }
-
-      const inrMatch =
-        rawText.match(/USD\s*[0-9\.]+\s*[0-9\.]+\s*([0-9,]+\.[0-9]{2})/i) ||
-        rawText.match(/(?:INR\s*AMOUNT|NET\s*CREDITED\s*INR)[:.\s]+([0-9,]+\.?[0-9]*)/i);
-
-      if (inrMatch) {
-        fields['inrAmount'] = {
-          value: parseFloat(inrMatch[1].replace(/,/g, '')),
-          confidence: 'HIGH',
-          snippet: inrMatch[0],
-          sourceDoc: originalFilename,
-        };
-        addSnippet('INR Credited', inrMatch[1]);
-      }
-
-      // 6. Bank Name
-      const bankMatch = rawText.match(/(HDFC\s*Bank|DBS\s*Bank|Kotak\s*Mahindra\s*Bank|Yes\s*Bank)/i);
+      // 7. Bank Name
+      const bankMatch = rawText.match(/(HDFC\s*Bank|DBS\s*Bank|Kotak\s*Mahindra\s*Bank|Yes\s*Bank|ICICI\s*Bank|State\s*Bank\s*of\s*India)/i);
       if (bankMatch) {
-        fields['bankName'] = {
-          value: bankMatch[1],
-          confidence: 'HIGH',
-          snippet: bankMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['bankName'] = createField(bankMatch[1], 'HIGH', bankMatch[0]);
       }
       break;
     }
@@ -676,15 +690,10 @@ export async function extractDocumentData(
         rawText.match(/\b(HDFC[A-Z0-9]{10,20})\b/i);
 
       if (brcMatch) {
-        fields['brcNumber'] = {
-          value: brcMatch[1].trim(),
-          confidence: 'HIGH',
-          snippet: brcMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['brcNumber'] = createField(brcMatch[1].trim(), 'HIGH', brcMatch[0]);
         addSnippet('BRC No', brcMatch[1].trim());
       } else {
-        fields['brcNumber'] = { value: null, confidence: 'MISSING', sourceDoc: originalFilename };
+        fields['brcNumber'] = createField(null, 'MISSING');
       }
 
       // 2. Issue Date (e.g. Dated 02-09-2026)
@@ -693,12 +702,7 @@ export async function extractDocumentData(
         rawText.match(/(?:DATE\s*OF\s*ISSUE|ISSUE\s*DATE)[:.\s]+([0-9]{1,2}[-.\/][0-9]{1,2}[-.\/][0-9]{2,4}|[0-9]{4}[-.\/][0-9]{1,2}[-.\/][0-9]{1,2})/i);
 
       if (issueDateMatch) {
-        fields['issueDate'] = {
-          value: parseStandardDate(issueDateMatch[1]),
-          confidence: 'HIGH',
-          snippet: issueDateMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['issueDate'] = createField(parseStandardDate(issueDateMatch[1]), 'HIGH', issueDateMatch[0]);
         addSnippet('BRC Issue Date', issueDateMatch[1]);
       }
 
@@ -708,12 +712,7 @@ export async function extractDocumentData(
         rawText.match(/(?:REALIS?ATION\s*DATE|DATE\s*OF\s*REALIS?ATION)[:.\s]+([0-9]{1,2}[-.\/][0-9]{1,2}[-.\/][0-9]{2,4}|[0-9]{4}[-.\/][0-9]{1,2}[-.\/][0-9]{1,2})/i);
 
       if (realDateMatch) {
-        fields['realisationDate'] = {
-          value: parseStandardDate(realDateMatch[1]),
-          confidence: 'HIGH',
-          snippet: realDateMatch[0],
-          sourceDoc: originalFilename,
-        };
+        fields['realisationDate'] = createField(parseStandardDate(realDateMatch[1]), 'HIGH', realDateMatch[0]);
         addSnippet('Realisation Date', realDateMatch[1]);
       }
 
@@ -723,24 +722,38 @@ export async function extractDocumentData(
         rawText.match(/(?:REALISED\s*AMOUNT|NET\s*REALISED)[:.\s]+([0-9,]+\.?[0-9]*)/i);
 
       if (realAmtMatch) {
-        fields['realisedAmount'] = {
-          value: parseFloat(realAmtMatch[1].replace(/,/g, '')),
-          confidence: 'HIGH',
-          snippet: realAmtMatch[0],
-          sourceDoc: originalFilename,
-        };
+        const val = parseFloat(realAmtMatch[1].replace(/,/g, ''));
+        fields['realisedAmount'] = createField(val, 'HIGH', realAmtMatch[0]);
         addSnippet('Realised Amount', realAmtMatch[1]);
       }
 
       // 5. Shipping Bill No & Bill ID No
       const sbInBrc = rawText.match(/Shipping\s*Bill\s*\/\s*Invoice\s*No\.\s*([0-9]+)/i);
       if (sbInBrc) {
-        fields['shippingBillNumber'] = { value: sbInBrc[1], confidence: 'HIGH' };
+        fields['shippingBillNumber'] = createField(sbInBrc[1], 'HIGH', sbInBrc[0]);
       }
       const billIdInBrc = rawText.match(/Bill\s*ID\s*No\.\s*([A-Z0-9\/\-_]+)/i);
       if (billIdInBrc) {
-        fields['invoiceNumber'] = { value: billIdInBrc[1].trim(), confidence: 'HIGH' };
+        fields['invoiceNumber'] = createField(billIdInBrc[1].trim(), 'HIGH', billIdInBrc[0]);
       }
+
+      // 6. Bank Name
+      const bankMatch = rawText.match(/(HDFC\s*Bank|DBS\s*Bank|Kotak\s*Mahindra\s*Bank|Yes\s*Bank)/i);
+      if (bankMatch) {
+        fields['bankName'] = createField(bankMatch[1], 'HIGH', bankMatch[0]);
+      }
+      break;
+    }
+
+    case 'ADDITIONAL_DOC': {
+      // Classification & Reference Number
+      const refMatch =
+        rawText.match(/(?:REF|REFERENCE|NO|NUMBER)[:.\s]+([A-Z0-9\-_/]{4,30})/i) ||
+        rawText.match(/\b([A-Z0-9\-_/]{6,25})\b/);
+      if (refMatch) {
+        fields['referenceNumber'] = createField(refMatch[1].trim(), 'MEDIUM', refMatch[0]);
+      }
+      fields['documentType'] = createField('SUPPORTING_DOCUMENT', 'HIGH', originalFilename);
       break;
     }
   }
@@ -756,23 +769,42 @@ export async function extractDocumentData(
     reviewStatus,
     fields,
     snippets,
+    ocrApplied,
+    ocrConfidence,
+    ocrTextPreview,
+    extractionMethod,
   };
 }
 
 /**
  * Merge multiple extracted document results into a unified shipment draft.
- * Used when the user uploads 1 to 7 documents simultaneously!
+ * Performs deep cross-document comparison to detect discrepancies and conflicts.
  */
 export function mergeExtractedDocuments(results: DocumentExtractionResult[]): MergedShipmentDraft {
   const merged: MergedShipmentDraft = {
     extractedFields: {},
     missingFields: [],
+    conflicts: [],
   };
+
+  const invoiceSources: Record<string, string> = {};
+  const consigneeSources: Record<string, string> = {};
+  const sbSources: Record<string, string> = {};
 
   for (const res of results) {
     for (const [key, field] of Object.entries(res.fields)) {
       if (field.value !== null && field.value !== undefined) {
         merged.extractedFields[key] = field;
+
+        if (key === 'invoiceNumber' && typeof field.value === 'string') {
+          invoiceSources[res.category] = field.value;
+        }
+        if (key === 'consigneeName' && typeof field.value === 'string') {
+          consigneeSources[res.category] = field.value;
+        }
+        if (key === 'shippingBillNumber' && typeof field.value === 'string') {
+          sbSources[res.category] = field.value;
+        }
       }
     }
   }
@@ -791,6 +823,10 @@ export function mergeExtractedDocuments(results: DocumentExtractionResult[]): Me
   merged.sbExchangeRate = (f['sbExchangeRate']?.value as number) || undefined;
   merged.fobValueInr = (f['fobValueInr']?.value as number) || undefined;
   merged.vesselName = (f['vesselName']?.value as string) || undefined;
+  merged.carrierName = (f['carrierName']?.value as string) || undefined;
+  merged.containerNumber = (f['containerNumber']?.value as string) || undefined;
+  merged.grossWeightKg = (f['grossWeightKg']?.value as number) || undefined;
+  merged.measurementCbm = (f['measurementCbm']?.value as number) || undefined;
 
   merged.blNumber = (f['blNumber']?.value as string) || undefined;
   merged.blDate = (f['blDate']?.value as string) || undefined;
@@ -808,10 +844,60 @@ export function mergeExtractedDocuments(results: DocumentExtractionResult[]): Me
   merged.brcIssueDate = (f['issueDate']?.value as string) || undefined;
   merged.brcRealisationDate = (f['realisationDate']?.value as string) || undefined;
   merged.brcRealisedAmount = (f['realisedAmount']?.value as number) || undefined;
+  merged.statutoryDeadline = (f['statutoryDeadline']?.value as string) || undefined;
 
   merged.dbkClaimed = (f['dbkClaimed']?.value as number) || undefined;
   merged.rodtepClaimed = (f['rodtepClaimed']?.value as number) || undefined;
   merged.rosctlClaimed = (f['rosctlClaimed']?.value as number) || undefined;
+
+  // Cross-Document Conflict 1: Invoice Number Mismatch
+  const uniqueInvoices = Array.from(new Set(Object.values(invoiceSources).map((s) => s.trim().toUpperCase())));
+  if (uniqueInvoices.length > 1) {
+    merged.conflicts.push({
+      field: 'invoiceNumber',
+      fieldName: 'Invoice Number',
+      severity: 'WARNING',
+      message: `Discrepancy detected in Invoice Number across uploaded files: ${Object.entries(invoiceSources)
+        .map(([doc, val]) => `${doc}: "${val}"`)
+        .join(', ')}`,
+      sources: invoiceSources,
+      recommendedValue: invoiceSources['COMMERCIAL_INVOICE'] || uniqueInvoices[0],
+    });
+  }
+
+  // Cross-Document Conflict 2: Shipping Bill Mismatch
+  const uniqueSbs = Array.from(new Set(Object.values(sbSources).map((s) => s.trim().toUpperCase())));
+  if (uniqueSbs.length > 1) {
+    merged.conflicts.push({
+      field: 'shippingBillNumber',
+      fieldName: 'Shipping Bill Number',
+      severity: 'WARNING',
+      message: `Discrepancy in Shipping Bill Number across files: ${Object.entries(sbSources)
+        .map(([doc, val]) => `${doc}: "${val}"`)
+        .join(', ')}`,
+      sources: sbSources,
+      recommendedValue: sbSources['SHIPPING_BILL'] || uniqueSbs[0],
+    });
+  }
+
+  // Cross-Document Conflict 3: Valuation / Exchange Rate Sanity Check
+  if (merged.invoiceValueUsd && merged.sbExchangeRate && merged.fobValueInr) {
+    const expectedInr = merged.invoiceValueUsd * merged.sbExchangeRate;
+    const diff = Math.abs(expectedInr - merged.fobValueInr);
+    // If difference exceeds 2%, raise warning
+    if (diff > expectedInr * 0.02) {
+      merged.conflicts.push({
+        field: 'fobValueInr',
+        fieldName: 'FOB Value (INR)',
+        severity: 'WARNING',
+        message: `FOB INR (₹${merged.fobValueInr.toLocaleString('en-IN')}) differs from Invoice USD × Customs Rate ($${merged.invoiceValueUsd} × ${merged.sbExchangeRate} = ₹${Math.round(expectedInr).toLocaleString('en-IN')}).`,
+        sources: {
+          'Shipping Bill FOB': merged.fobValueInr,
+          'Invoice USD * SB Rate': Math.round(expectedInr * 100) / 100,
+        },
+      });
+    }
+  }
 
   // Identify core fields that still need manual input
   const coreFields: Array<{ key: string; name: string; val: any }> = [

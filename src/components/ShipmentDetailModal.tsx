@@ -45,6 +45,26 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'documents' | 'payments' | 'brc' | 'incentives' | 'audit'>('overview');
 
+  // BRC Edit state
+  const [isEditingBrc, setIsEditingBrc] = useState(false);
+  const [brcNumber, setBrcNumber] = useState('');
+  const [brcStatus, setBrcStatus] = useState<'PENDING' | 'ISSUED' | 'REALISED'>('PENDING');
+  const [brcIssueDate, setBrcIssueDate] = useState('');
+  const [brcRealisationDate, setBrcRealisationDate] = useState('');
+  const [brcUploadMode, setBrcUploadMode] = useState<'SINGLE' | 'MULTIPLE'>('SINGLE');
+  const [brcRemarks, setBrcRemarks] = useState('');
+
+  // Incentive Edit / Add state
+  const [editingIncentive, setEditingIncentive] = useState<any | null>(null);
+  const [isAddingIncentive, setIsAddingIncentive] = useState(false);
+  const [incType, setIncType] = useState<'DRAWBACK' | 'RODTEP' | 'ROSCTL'>('DRAWBACK');
+  const [incClaimed, setIncClaimed] = useState<number>(0);
+  const [incStatus, setIncStatus] = useState<string>('CLAIMED');
+  const [incReceived, setIncReceived] = useState<number>(0);
+  const [incReceivedDate, setIncReceivedDate] = useState<string>('');
+  const [incScrollNo, setIncScrollNo] = useState<string>('');
+  const [incRemarks, setIncRemarks] = useState<string>('');
+
   const loadData = async () => {
     if (!shipmentId) return;
     setLoading(true);
@@ -59,7 +79,14 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   };
 
   useEffect(() => {
-    loadData();
+    if (shipmentId) {
+      loadData();
+    } else {
+      setShipment(null);
+      setIsEditingBrc(false);
+      setEditingIncentive(null);
+      setIsAddingIncentive(false);
+    }
   }, [shipmentId]);
 
   if (!shipmentId) return null;
@@ -110,26 +137,6 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
       alert(err.message || 'Failed to delete document.');
     }
   };
-
-  // BRC Edit state
-  const [isEditingBrc, setIsEditingBrc] = useState(false);
-  const [brcNumber, setBrcNumber] = useState('');
-  const [brcStatus, setBrcStatus] = useState<'PENDING' | 'ISSUED' | 'REALISED'>('PENDING');
-  const [brcIssueDate, setBrcIssueDate] = useState('');
-  const [brcRealisationDate, setBrcRealisationDate] = useState('');
-  const [brcUploadMode, setBrcUploadMode] = useState<'SINGLE' | 'MULTIPLE'>('SINGLE');
-  const [brcRemarks, setBrcRemarks] = useState('');
-
-  // Incentive Edit / Add state
-  const [editingIncentive, setEditingIncentive] = useState<any | null>(null);
-  const [isAddingIncentive, setIsAddingIncentive] = useState(false);
-  const [incType, setIncType] = useState<'DRAWBACK' | 'RODTEP' | 'ROSCTL'>('DRAWBACK');
-  const [incClaimed, setIncClaimed] = useState<number>(0);
-  const [incStatus, setIncStatus] = useState<string>('CLAIMED');
-  const [incReceived, setIncReceived] = useState<number>(0);
-  const [incReceivedDate, setIncReceivedDate] = useState<string>('');
-  const [incScrollNo, setIncScrollNo] = useState<string>('');
-  const [incRemarks, setIncRemarks] = useState<string>('');
 
   const openEditBrc = () => {
     setBrcNumber(shipment?.brcRecord?.brcNumber || '');

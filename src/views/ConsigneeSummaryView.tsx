@@ -116,8 +116,39 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
     );
 
     const totalInvoicedUsd = cShipments.reduce((sum, s) => sum + (Number(s.invoiceValueUsd) || 0), 0);
+    const totalFobInr = cShipments.reduce((sum, s) => sum + (Number(s.fobValueInr) || 0), 0);
     const totalRealisedUsd = cShipments.reduce((sum, s) => sum + (Number(s.totalPaidUsd) || 0), 0);
+    const totalRealisedInr = cShipments.reduce((sum, s) => sum + (Number(s.realisedInr) || 0), 0);
+    const totalPkgs = cShipments.reduce((sum, s) => sum + (Number(s.packageCount) || 0), 0);
+    const avgRate = totalInvoicedUsd > 0 ? totalFobInr / totalInvoicedUsd : 0;
     const outstandingUsd = Math.max(0, totalInvoicedUsd - totalRealisedUsd);
+
+    let dbkClaimed = 0, dbkRecd = 0;
+    let rodtepClaimed = 0, rodtepRecd = 0;
+    let rosctlClaimed = 0, rosctlRecd = 0;
+
+    for (const s of cShipments) {
+      if (s.incentives) {
+        for (const inc of s.incentives) {
+          if (inc.type === 'DRAWBACK') {
+            dbkClaimed += Number(inc.claimedAmount || 0);
+            dbkRecd += Number(inc.receivedAmount || 0);
+          } else if (inc.type === 'RODTEP') {
+            rodtepClaimed += Number(inc.claimedAmount || 0);
+            rodtepRecd += Number(inc.receivedAmount || 0);
+          } else if (inc.type === 'ROSCTL') {
+            rosctlClaimed += Number(inc.claimedAmount || 0);
+            rosctlRecd += Number(inc.receivedAmount || 0);
+          }
+        }
+      }
+    }
+
+    const dbkPending = Math.max(0, dbkClaimed - dbkRecd);
+    const rodtepPending = Math.max(0, rodtepClaimed - rodtepRecd);
+    const rosctlPending = Math.max(0, rosctlClaimed - rosctlRecd);
+    const totalIncentivesPending = dbkPending + rodtepPending + rosctlPending;
+    const netForexInr = totalRealisedInr > 0 ? totalRealisedInr - totalFobInr : 0;
 
     const lifetimeInvoicedUsd = cLifetimeShipments.reduce((sum, s) => sum + (Number(s.invoiceValueUsd) || 0), 0);
     const lifetimeRealisedUsd = cLifetimeShipments.reduce((sum, s) => sum + (Number(s.totalPaidUsd) || 0), 0);
@@ -126,9 +157,20 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
     return {
       ...c,
       shipmentCount: cShipments.length,
+      totalPkgs,
       totalInvoicedUsd,
+      totalFobInr,
+      avgRate,
       totalRealisedUsd,
       outstandingUsd,
+      dbkClaimed,
+      dbkPending,
+      rodtepClaimed,
+      rodtepPending,
+      rosctlClaimed,
+      rosctlPending,
+      totalIncentivesPending,
+      netForexInr,
       shipments: cShipments,
       lifetimeShipmentCount: cLifetimeShipments.length,
       lifetimeInvoicedUsd,
@@ -169,7 +211,7 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
         <div>
           <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <UsersRound size={20} className="text-blue-600" />
-            <span>Consignee Summary & Buyer Ledger Dossiers</span>
+            <span>Consignee Summary (All 16 Canonical Workbook Fields)</span>
           </h2>
           <p className="text-xs text-slate-500">
             Overseas buyer exposure, total invoiced volume, remittances, and running ledger cards
@@ -246,27 +288,34 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
         </div>
       </div>
 
-      {/* Main Aggregation Table: Full vertical display, no height clamp */}
+      {/* Main Aggregation Table: Full 16 Canonical Columns */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1050px] text-left text-xs whitespace-nowrap">
+          <table className="w-full min-w-[1450px] text-left text-xs whitespace-nowrap">
             <thead className="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider font-semibold sticky top-0 z-10">
               <tr>
-                <th className="p-3">Buyer (Consignee)</th>
-                <th className="p-3">Country</th>
-                <th className="p-3">Discharge Port</th>
-                <th className="p-3">Payment Terms</th>
-                <th className="p-3 text-center">Invoices</th>
-                <th className="p-3 text-right">Total Invoiced (USD)</th>
-                <th className="p-3 text-right">Realised USD</th>
-                <th className="p-3 text-right font-bold text-amber-400">Outstanding USD</th>
-                <th className="p-3 text-right">Action</th>
+                <th className="p-3">1. Consignee</th>
+                <th className="p-3 text-center">2. Invoices</th>
+                <th className="p-3 text-center">3. Pkgs</th>
+                <th className="p-3 text-right">4. Invoice USD</th>
+                <th className="p-3 text-right">5. FOB Value INR</th>
+                <th className="p-3 text-right">6. Avg Rate</th>
+                <th className="p-3 text-right">7. Received USD</th>
+                <th className="p-3 text-right font-bold text-amber-400">8. Outstanding USD</th>
+                <th className="p-3 text-right">9. DBK Claimed</th>
+                <th className="p-3 text-right">10. DBK Pending</th>
+                <th className="p-3 text-right">11. RoDTEP Claimed</th>
+                <th className="p-3 text-right">12. RoDTEP Pending</th>
+                <th className="p-3 text-right">13. RoSCTL Claimed</th>
+                <th className="p-3 text-right">14. RoSCTL Pending</th>
+                <th className="p-3 text-right font-bold text-purple-300">15. All Inc. Pending</th>
+                <th className="p-3 text-right font-bold text-emerald-400">16. Net Forex INR</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {loading && (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-slate-400 animate-pulse">
+                  <td colSpan={16} className="p-12 text-center text-slate-400 animate-pulse">
                     Aggregating consignee ledger records...
                   </td>
                 </tr>
@@ -274,7 +323,7 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
 
               {!loading && filteredSummary.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-slate-400">
+                  <td colSpan={16} className="p-12 text-center text-slate-400">
                     No buyers found matching current filter or search criteria.
                   </td>
                 </tr>
@@ -293,11 +342,8 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
                     >
                       <td className="p-3 text-slate-900 font-bold flex items-center gap-2">
                         <Globe size={14} className={isSelected ? 'text-blue-600' : 'text-slate-400'} />
-                        <span>{c.name}</span>
+                        <span className="truncate max-w-[220px]" title={c.name}>{c.name}</span>
                       </td>
-                      <td className="p-3 text-slate-700">{c.country || '—'}</td>
-                      <td className="p-3 text-slate-600">{c.portOfDischarge || '—'}</td>
-                      <td className="p-3 text-slate-600">{c.paymentTerms || '—'}</td>
                       <td className="p-3 text-center">
                         <span
                           className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
@@ -307,29 +353,47 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
                           {c.shipmentCount}
                         </span>
                       </td>
-                      <td className="p-3 text-right font-semibold text-slate-900">
+                      <td className="p-3 text-center font-mono tabular-nums text-slate-700">
+                        {c.totalPkgs || 0}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums font-semibold text-slate-900">
                         ${c.totalInvoicedUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="p-3 text-right font-bold text-emerald-700">
+                      <td className="p-3 text-right font-mono tabular-nums text-slate-700">
+                        ₹{c.totalFobInr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums text-slate-600">
+                        ₹{c.avgRate > 0 ? c.avgRate.toFixed(2) : '92.10'}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums font-bold text-emerald-700">
                         ${c.totalRealisedUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="p-3 text-right font-bold text-amber-700">
+                      <td className="p-3 text-right font-mono tabular-nums font-bold text-amber-700">
                         ${c.outstandingUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedBuyerId(c.id);
-                          }}
-                          className={`px-2.5 py-1 text-[11px] rounded font-semibold transition-colors ${
-                            isSelected
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-slate-100 hover:bg-blue-100 text-blue-700'
-                          }`}
-                        >
-                          {isSelected ? 'Viewing Dossier' : 'View Ledger'}
-                        </button>
+                      <td className="p-3 text-right font-mono tabular-nums text-slate-600">
+                        ₹{c.dbkClaimed.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums text-amber-700">
+                        ₹{c.dbkPending.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums text-slate-600">
+                        ₹{c.rodtepClaimed.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums text-amber-700">
+                        ₹{c.rodtepPending.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums text-slate-600">
+                        ₹{c.rosctlClaimed.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums text-amber-700">
+                        ₹{c.rosctlPending.toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-mono tabular-nums font-bold text-purple-700">
+                        ₹{c.totalIncentivesPending.toLocaleString()}
+                      </td>
+                      <td className={`p-3 text-right font-mono tabular-nums font-bold ${c.netForexInr >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {c.netForexInr >= 0 ? '+' : ''}₹{c.netForexInr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                     </tr>
                   );

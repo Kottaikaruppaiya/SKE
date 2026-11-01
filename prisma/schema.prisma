@@ -247,6 +247,11 @@ model Document {
   version          Int              @default(1)
   isCurrent        Boolean          @default(true)
   reviewStatus     ReviewStatus     @default(EXTRACTED)
+  ocrApplied       Boolean          @default(false)
+  ocrConfidence    Int?
+  ocrTextPreview   String?
+  extractionMethod String?          @default("PDF_TEXT")
+  extractedFieldsJson String?
   extractedData    Json?
   uploadedByUserId String
   uploadedByUser   User             @relation(fields: [uploadedByUserId], references: [id])

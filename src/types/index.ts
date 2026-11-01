@@ -102,11 +102,96 @@ export interface DocumentRecord {
   version: number;
   isCurrent: boolean;
   reviewStatus: ReviewStatus;
+  ocrApplied?: boolean;
+  ocrConfidence?: number;
+  ocrTextPreview?: string;
+  extractionMethod?: 'PDF_TEXT' | 'LOCAL_OCR' | 'MANUAL';
+  extractedFieldsJson?: string;
   extractedData?: Record<string, any>;
   uploadedByUserId: string;
   uploadedByName?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ExtractedFieldResult {
+  value: string | number | null;
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW' | 'MISSING';
+  snippet?: string;
+  sourceDoc?: string;
+  pageNumber?: number;
+  extractionMethod?: 'PDF_TEXT' | 'LOCAL_OCR' | 'MANUAL';
+  rawSnippet?: string;
+}
+
+export interface ExtractionConflict {
+  field: string;
+  fieldName: string;
+  severity: 'WARNING' | 'ERROR';
+  message: string;
+  sources: Record<string, any>;
+  recommendedValue?: any;
+}
+
+export interface DocumentExtractionResult {
+  category: DocumentCategory;
+  rawText: string;
+  pageCount: number;
+  reviewStatus: ReviewStatus;
+  fields: Record<string, ExtractedFieldResult>;
+  snippets: string[];
+  ocrApplied?: boolean;
+  ocrConfidence?: number;
+  ocrTextPreview?: string;
+  extractionMethod?: 'PDF_TEXT' | 'LOCAL_OCR';
+}
+
+export interface MergedShipmentDraft {
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  consigneeName?: string;
+  buyerName?: string;
+  portCode?: string;
+  packageCount?: number;
+  invoiceValueUsd?: number;
+  shippingBillNumber?: string;
+  shippingBillDate?: string;
+  sbExchangeRate?: number;
+  fobValueInr?: number;
+  blNumber?: string;
+  blDate?: string;
+  vesselName?: string;
+  carrierName?: string;
+  containerNumber?: string;
+  grossWeightKg?: number;
+  measurementCbm?: number;
+  portOfLoading?: string;
+  portOfDischarge?: string;
+  fircIrmNumber?: string;
+  fircSenderRef?: string;
+  fircCreditDate?: string;
+  fircValueDate?: string;
+  fircAmountUsd?: number;
+  fircExchangeRate?: number;
+  fircInrAmount?: number;
+  fircBankName?: string;
+  brcNumber?: string;
+  brcIssueDate?: string;
+  brcRealisationDate?: string;
+  brcRealisedAmount?: number;
+  statutoryDeadline?: string;
+  dbkClaimed?: number;
+  rodtepClaimed?: number;
+  rosctlClaimed?: number;
+  extractedFields: Record<string, ExtractedFieldResult>;
+  missingFields: string[];
+  conflicts: ExtractionConflict[];
+  lineItems?: Array<{
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    totalUsd: number;
+  }>;
 }
 
 export interface PaymentAllocation {

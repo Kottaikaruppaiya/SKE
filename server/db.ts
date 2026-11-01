@@ -704,11 +704,105 @@ class DatabaseService {
     if (updates.shippingBillDate) shipment.shippingBillDate = updates.shippingBillDate;
     if (updates.sbExchangeRate !== undefined) shipment.sbExchangeRate = Number(updates.sbExchangeRate);
     if (updates.fobValueInr !== undefined) shipment.fobValueInr = Number(updates.fobValueInr);
-    if (updates.blNumber !== undefined) shipment.blNumber = updates.blNumber;
-    if (updates.blDate !== undefined) shipment.blDate = updates.blDate;
-    if (updates.vesselName !== undefined) shipment.vesselName = updates.vesselName;
-    if (updates.remarks !== undefined) shipment.remarks = updates.remarks;
+    if (updates.blNumber !== undefined) shipment.blNumber = updates.blNumber ? updates.blNumber.trim() : undefined;
+    if (updates.blDate !== undefined) shipment.blDate = updates.blDate || undefined;
+    if (updates.vesselName !== undefined) shipment.vesselName = updates.vesselName ? updates.vesselName.trim() : undefined;
+    if (updates.remarks !== undefined) shipment.remarks = updates.remarks ? updates.remarks.trim() : undefined;
     if (updates.reviewStatus) shipment.reviewStatus = updates.reviewStatus;
+
+    const anyUpdates = updates as any;
+    if (anyUpdates.consigneeName) {
+      const match = this.state.consignees.find(
+        (c) => c.name.toLowerCase() === anyUpdates.consigneeName.trim().toLowerCase()
+      );
+      if (match) shipment.consigneeId = match.id;
+    }
+
+    // Incentive fields updates
+    if (anyUpdates.dbkClaimed !== undefined || anyUpdates.dbkReceived !== undefined || anyUpdates.dbkReceivedDate !== undefined) {
+      let inc = this.state.incentives.find((i) => i.shipmentId === id && i.type === 'DRAWBACK');
+      if (!inc) {
+        const newInc = {
+          id: crypto.randomUUID(),
+          shipmentId: id,
+          type: 'DRAWBACK' as const,
+          claimedAmount: 0,
+          receivedAmount: 0,
+          status: 'PENDING' as const,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.state.incentives.push(newInc);
+        inc = newInc;
+      }
+      if (anyUpdates.dbkClaimed !== undefined) inc.claimedAmount = Number(anyUpdates.dbkClaimed);
+      if (anyUpdates.dbkReceived !== undefined) inc.receivedAmount = Number(anyUpdates.dbkReceived);
+      if (anyUpdates.dbkReceivedDate !== undefined) inc.receivedDate = anyUpdates.dbkReceivedDate || undefined;
+      inc.status = inc.receivedAmount >= inc.claimedAmount && inc.claimedAmount > 0 ? 'RECEIVED' : inc.receivedAmount > 0 ? 'PART_RECEIVED' : 'PENDING';
+      inc.updatedAt = new Date().toISOString();
+    }
+
+    if (anyUpdates.rodtepClaimed !== undefined || anyUpdates.rodtepReceived !== undefined) {
+      let inc = this.state.incentives.find((i) => i.shipmentId === id && i.type === 'RODTEP');
+      if (!inc) {
+        inc = {
+          id: crypto.randomUUID(),
+          shipmentId: id,
+          type: 'RODTEP',
+          claimedAmount: 0,
+          receivedAmount: 0,
+          status: 'PENDING',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.state.incentives.push(inc);
+      }
+      if (anyUpdates.rodtepClaimed !== undefined) inc.claimedAmount = Number(anyUpdates.rodtepClaimed);
+      if (anyUpdates.rodtepReceived !== undefined) inc.receivedAmount = Number(anyUpdates.rodtepReceived);
+      inc.status = inc.receivedAmount >= inc.claimedAmount && inc.claimedAmount > 0 ? 'RECEIVED' : inc.receivedAmount > 0 ? 'PART_RECEIVED' : 'PENDING';
+      inc.updatedAt = new Date().toISOString();
+    }
+
+    if (anyUpdates.rosctlClaimed !== undefined || anyUpdates.rosctlReceived !== undefined) {
+      let inc = this.state.incentives.find((i) => i.shipmentId === id && i.type === 'ROSCTL');
+      if (!inc) {
+        inc = {
+          id: crypto.randomUUID(),
+          shipmentId: id,
+          type: 'ROSCTL',
+          claimedAmount: 0,
+          receivedAmount: 0,
+          status: 'PENDING',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.state.incentives.push(inc);
+      }
+      if (anyUpdates.rosctlClaimed !== undefined) inc.claimedAmount = Number(anyUpdates.rosctlClaimed);
+      if (anyUpdates.rosctlReceived !== undefined) inc.receivedAmount = Number(anyUpdates.rosctlReceived);
+      inc.status = inc.receivedAmount >= inc.claimedAmount && inc.claimedAmount > 0 ? 'RECEIVED' : inc.receivedAmount > 0 ? 'PART_RECEIVED' : 'PENDING';
+      inc.updatedAt = new Date().toISOString();
+    }
+
+    // BRC fields update
+    if (anyUpdates.brcNumber !== undefined || anyUpdates.brcDate !== undefined) {
+      let brc = this.state.brcRecords.find((b) => b.shipmentId === id);
+      if (!brc) {
+        brc = {
+          id: crypto.randomUUID(),
+          shipmentId: id,
+          uploadMode: 'SINGLE',
+          status: 'PENDING',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        this.state.brcRecords.push(brc);
+      }
+      if (anyUpdates.brcNumber !== undefined) brc.brcNumber = anyUpdates.brcNumber || undefined;
+      if (anyUpdates.brcDate !== undefined) brc.realisationDate = anyUpdates.brcDate || undefined;
+      if (brc.brcNumber) brc.status = 'REALISED';
+      brc.updatedAt = new Date().toISOString();
+    }
 
     shipment.updatedAt = new Date().toISOString();
 
@@ -1565,7 +1659,10 @@ class DatabaseService {
 
     const consignee1Id = 'c-sk-global-lk';
     const consignee2Id = 'c-shasvanth-impex';
-    const consignee3Id = 'c-intl-remit-sg';
+    const consignee3Id = 'c-precision-tex-lanka';
+    const consignee4Id = 'c-tex-fab-lanka';
+    const consignee5Id = 'c-winfield-merchant';
+    const consignee6Id = 'c-intl-remit-sg';
 
     const bank1Id = 'b-dbs-india';
     const bank2Id = 'b-hdfc-chennai';
@@ -1630,7 +1727,7 @@ class DatabaseService {
       consignees: [
         {
           id: consignee1Id,
-          name: 'S K Global Ventures Private Limited',
+          name: 'S K GLOBAL VENTURES PRIVATE LIMITED',
           country: 'Sri Lanka',
           portOfDischarge: 'LKCMB - Colombo',
           paymentTerms: 'FOB COLOMBO | DA 90 DAYS',
@@ -1642,7 +1739,7 @@ class DatabaseService {
         },
         {
           id: consignee2Id,
-          name: 'Shasvanth Impex',
+          name: 'SHASVANTH IMPEX PRIVATE LIMITED',
           country: 'Sri Lanka',
           portOfDischarge: 'LKCMB - Colombo',
           paymentTerms: 'DA 90 Days from BL',
@@ -1654,6 +1751,42 @@ class DatabaseService {
         },
         {
           id: consignee3Id,
+          name: 'PRECISION TEX LANKA PVT LTD',
+          country: 'Sri Lanka',
+          portOfDischarge: 'LKCMB - Colombo',
+          paymentTerms: 'DA 90 Days from BL',
+          currency: 'USD',
+          contactEmail: 'accounts@precisiontex.lk',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: consignee4Id,
+          name: 'TEX FAB LANKA PRIVATE LIMITED',
+          country: 'Sri Lanka',
+          portOfDischarge: 'LKCMB - Colombo',
+          paymentTerms: 'DA 60 Days',
+          currency: 'USD',
+          contactEmail: 'finance@texfablanka.com',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: consignee5Id,
+          name: 'WINFIELD MERCHANT AND GENERAL PVT LTD',
+          country: 'Sri Lanka',
+          portOfDischarge: 'LKCMB - Colombo',
+          paymentTerms: 'DA 90 Days',
+          currency: 'USD',
+          contactEmail: 'trade@winfieldmerchant.lk',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: consignee6Id,
           name: 'International Remittance Pte Ltd',
           country: 'Singapore',
           portOfDischarge: 'Singapore / Colombo',

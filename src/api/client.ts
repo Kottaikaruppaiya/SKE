@@ -321,6 +321,7 @@ export const api = {
     totalFilesParsed: number;
     mergedDraft: any;
     extractions: Record<string, any>;
+    conflicts?: any[];
   }> {
     return this.request<any>('/documents/extract-batch', {
       method: 'POST',

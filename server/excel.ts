@@ -35,7 +35,7 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
   const payments = db.getPayments();
   const metrics = db.getDashboardMetrics(financialYearId);
 
-  // 1. Export Tracker Sheet (Comprehensive master columns)
+  // 1. Export Tracker Sheet (Exact 31 Columns A through AE matching workbook specification)
   const trackerData = shipments.map((s, idx) => {
     const dbk = s.incentives?.find((i) => i.type === 'DRAWBACK');
     const rodtep = s.incentives?.find((i) => i.type === 'RODTEP');
@@ -44,55 +44,84 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
     const payment = alloc ? payments.find((p) => p.id === alloc.paymentId) : undefined;
     const brc = s.brcRecord;
 
+    const usdReceived = Number(s.totalPaidUsd || 0);
+    const inrReceived = Number(s.realisedInr || 0);
+    const fobInr = Number(s.fobValueInr || 0);
+    const diffUsd = Number(s.invoiceValueUsd || 0) - usdReceived;
+    const forexVarianceInr = inrReceived > 0 ? inrReceived - fobInr : 0;
+    const gainLossTag = inrReceived === 0 ? 'NIL' : forexVarianceInr > 0 ? 'GAIN' : forexVarianceInr < 0 ? 'LOSS' : 'NIL';
+
     return {
-      'Sr. No.': idx + 1,
-      'Financial Year': s.financialYearLabel || '2026-27',
-      'Invoice No.': s.invoiceNumber,
+      'S.No': idx + 1,
+      'Invoice No': s.invoiceNumber,
       'Invoice Date': s.invoiceDate,
-      'Consignee Name': s.consigneeName,
-      'Destination Port': s.portCode,
-      'Package Count': s.packageCount || 0,
-      'Invoice Value (USD)': s.invoiceValueUsd,
-      'Shipping Bill No.': s.shippingBillNumber,
+      'Shipping Bill No': s.shippingBillNumber,
       'Shipping Bill Date': s.shippingBillDate,
-      'SB Exchange Rate': s.sbExchangeRate,
+      'Port Code': s.portCode,
+      'Consignee Name': s.consigneeName,
+      'No. of Pkgs': s.packageCount || 0,
+      'Invoice Value (USD)': s.invoiceValueUsd,
       'FOB Value (INR)': s.fobValueInr,
-      'DBK Claimed (INR)': dbk?.claimedAmount || 0,
-      'DBK Status': dbk?.status || 'PENDING',
-      'DBK Received Amount (INR)': dbk?.receivedAmount || 0,
-      'DBK Received Date': dbk?.receivedDate || '',
-      'RoDTEP Claimed (INR)': rodtep?.claimedAmount || 0,
-      'RoDTEP Status': rodtep?.status || 'PENDING',
-      'RoDTEP Received Amount (INR)': rodtep?.receivedAmount || 0,
-      'RoDTEP Received Date': rodtep?.receivedDate || '',
-      'RoSCTL Claimed (INR)': rosctl?.claimedAmount || 0,
-      'RoSCTL Status': rosctl?.status || 'PENDING',
-      'RoSCTL Received Amount (INR)': rosctl?.receivedAmount || 0,
-      'RoSCTL Received Date': rosctl?.receivedDate || '',
-      'FIRC / IRM No.': payment?.irmNumber || '',
-      'Sender Reference': payment?.senderReference || '',
-      'Payment Value Date': payment?.valueDate || '',
-      'Payment Credit Date': payment?.creditDate || '',
-      'FIRC Issue Date': payment?.fircIssueDate || '',
-      'Bank Name': payment?.bankName || '',
-      'Allocated USD Amount': s.totalPaidUsd || 0,
-      'Realised Exchange Rate': payment?.exchangeRate || 0,
-      'Realised INR Amount': s.realisedInr || 0,
-      'USD Difference / Balance Due': s.balanceDueUsd || 0,
-      'Payment Status': s.paymentStatus,
+      'Exchange Rate': s.sbExchangeRate,
+      'Drawback Amt (INR)': dbk?.claimedAmount || 0,
+      'Drawback Recd': dbk?.status || 'PENDING',
+      'Drawback Received Date': dbk?.receivedDate || '',
+      'RoDTEP Amt (INR)': rodtep?.claimedAmount || 0,
+      'RoDTEP Recd': rodtep?.status || 'PENDING',
+      'RoSCTL Amt (INR)': rosctl?.claimedAmount || 0,
+      'RoSCTL Recd': rosctl?.status || 'PENDING',
+      'Payment Received Date': payment?.creditDate || alloc?.allocatedAt?.split('T')[0] || '',
+      'Amount Received (USD)': usdReceived,
+      'Amount Received (INR)': inrReceived,
+      'Exchange Rate Received': payment?.exchangeRate || s.averageRealisedRate || 0,
+      'Bank': payment?.bankName || '',
+      'Bank Inward Remittance No. (IRM)': payment?.irmNumber || alloc?.paymentIrm || '',
       'BRC Number': brc?.brcNumber || '',
-      'BRC Issue Date': brc?.issueDate || '',
-      'Bank Realisation Date': brc?.realisationDate || '',
-      'BRC Status': brc?.status || 'PENDING',
-      'BRC Deadline': brc?.statutoryDeadline || '',
-      'BL / Transport Doc No.': s.blNumber || '',
-      'Vessel Name': s.vesselName || '',
-      'Review Status': s.reviewStatus,
+      'BRC Date': brc?.issueDate || '',
+      'Difference (USD)': diffUsd,
+      'Forex Gain / Loss (INR)': forexVarianceInr,
+      'Gain / Loss': gainLossTag,
       'Remarks': s.remarks || '',
+      'Key': s.normalizedInvoiceKey,
     };
   });
   const wsTracker = XLSX.utils.json_to_sheet(trackerData);
   XLSX.utils.book_append_sheet(wb, wsTracker, 'Export Tracker');
+
+  // Helper to build a specific consignee ledger sheet
+  const buildConsigneeLedgerRows = (targetConsigneePattern: string) => {
+    const matched = consignees.find((c) =>
+      c.name.toLowerCase().includes(targetConsigneePattern.toLowerCase())
+    );
+    const targetShipments = shipments.filter(
+      (s) =>
+        s.consigneeId === matched?.id ||
+        (matched && s.consigneeName?.toLowerCase() === matched.name.toLowerCase()) ||
+        s.consigneeName?.toLowerCase().includes(targetConsigneePattern.toLowerCase())
+    );
+
+    return targetShipments.map((s, idx) => ({
+      'S.No': idx + 1,
+      'Invoice No': s.invoiceNumber,
+      'Invoice Date': s.invoiceDate,
+      'Shipping Bill No': s.shippingBillNumber,
+      'Shipping Bill Date': s.shippingBillDate,
+      'Port Code': s.portCode,
+      'No. of Pkgs': s.packageCount || 0,
+      'Invoice Value (USD)': s.invoiceValueUsd,
+      'FOB Value (INR)': s.fobValueInr,
+      'FIRC / IRM No.': s.allocations?.[0]?.paymentIrm || '',
+      'Payment Received Date': s.allocations?.[0]?.allocatedAt?.split('T')[0] || '',
+      'Amount Received (USD)': s.totalPaidUsd || 0,
+      'Difference (USD)': s.balanceDueUsd || 0,
+      'Exchange Rate Received': s.averageRealisedRate || 0,
+      'Amount Received (INR)': s.realisedInr || 0,
+      'BRC Number': s.brcRecord?.brcNumber || '',
+      'BRC Status': s.brcRecord?.status || 'PENDING',
+      'Payment Status': s.paymentStatus,
+      'Remarks': s.remarks || '',
+    }));
+  };
 
   // 2. Quick View Sheet
   const quickViewData = [
@@ -102,7 +131,7 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
     { 'Metric': 'Outstanding USD Balance', 'Value': `$${metrics.totalOutstandingUsd.toLocaleString()}` },
     { 'Metric': 'Fully Realised Invoices', 'Value': metrics.fullyPaidCount },
     { 'Metric': 'Partially Realised Invoices', 'Value': metrics.partPaidCount },
-    { 'Metric': 'Unrealised / Unpaid Invoices', 'Value': metrics.unpaidCount },
+    { 'Metric': 'Unrealised / Pending Invoices', 'Value': metrics.unpaidCount },
     { 'Metric': 'Total Incentives Claimed (INR)', 'Value': `₹${metrics.incentivesClaimedInr.toLocaleString()}` },
     { 'Metric': 'Total Incentives Received (INR)', 'Value': `₹${metrics.incentivesReceivedInr.toLocaleString()}` },
     { 'Metric': 'Pending Incentives (INR)', 'Value': `₹${metrics.incentivesPendingInr.toLocaleString()}` },
@@ -112,80 +141,83 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
   const wsQuick = XLSX.utils.json_to_sheet(quickViewData);
   XLSX.utils.book_append_sheet(wb, wsQuick, 'Quick View');
 
-  // 3. Consignee Summary Sheet
+  // 3. Consignee Summary Sheet (All 16 Canonical Fields)
   const consigneeSummary = consignees.map((c) => {
-    const cShipments = shipments.filter((s) => s.consigneeId === c.id);
+    const cShipments = shipments.filter(
+      (s) => s.consigneeId === c.id || s.consigneeName?.toLowerCase() === c.name.toLowerCase()
+    );
     const totalInvoicedUsd = cShipments.reduce((sum, s) => sum + s.invoiceValueUsd, 0);
+    const totalFobInr = cShipments.reduce((sum, s) => sum + s.fobValueInr, 0);
     const totalPaidUsd = cShipments.reduce((sum, s) => sum + (s.totalPaidUsd || 0), 0);
     const totalRealisedInr = cShipments.reduce((sum, s) => sum + (s.realisedInr || 0), 0);
+    const totalPkgs = cShipments.reduce((sum, s) => sum + (s.packageCount || 0), 0);
+    const avgRate = totalInvoicedUsd > 0 ? totalFobInr / totalInvoicedUsd : 0;
+    const outstandingUsd = Math.max(0, totalInvoicedUsd - totalPaidUsd);
+
+    let dbkClaimed = 0, dbkRecd = 0;
+    let rodtepClaimed = 0, rodtepRecd = 0;
+    let rosctlClaimed = 0, rosctlRecd = 0;
+
+    for (const s of cShipments) {
+      if (s.incentives) {
+        for (const inc of s.incentives) {
+          if (inc.type === 'DRAWBACK') {
+            dbkClaimed += inc.claimedAmount;
+            dbkRecd += inc.receivedAmount;
+          } else if (inc.type === 'RODTEP') {
+            rodtepClaimed += inc.claimedAmount;
+            rodtepRecd += inc.receivedAmount;
+          } else if (inc.type === 'ROSCTL') {
+            rosctlClaimed += inc.claimedAmount;
+            rosctlRecd += inc.receivedAmount;
+          }
+        }
+      }
+    }
+
+    const dbkPending = Math.max(0, dbkClaimed - dbkRecd);
+    const rodtepPending = Math.max(0, rodtepClaimed - rodtepRecd);
+    const rosctlPending = Math.max(0, rosctlClaimed - rosctlRecd);
+    const totalIncentivesPending = dbkPending + rodtepPending + rosctlPending;
+    const netForexInr = totalRealisedInr > 0 ? totalRealisedInr - totalFobInr : 0;
+
     return {
-      'Consignee Name': c.name,
-      'Country': c.country,
-      'Port of Discharge': c.portOfDischarge,
-      'Payment Terms': c.paymentTerms,
-      'Total Invoices': cShipments.length,
-      'Total Invoiced (USD)': totalInvoicedUsd,
-      'Total Realised (USD)': totalPaidUsd,
-      'Outstanding Balance (USD)': Math.max(0, totalInvoicedUsd - totalPaidUsd),
-      'Realised INR Amount': totalRealisedInr,
+      'Consignee': c.name,
+      'No. of Invoices': cShipments.length,
+      'No. of Pkgs': totalPkgs,
+      'Invoice Value USD': totalInvoicedUsd,
+      'FOB Value INR': totalFobInr,
+      'Avg Exchange Rate': avgRate > 0 ? Math.round(avgRate * 100) / 100 : 0,
+      'Received USD': totalPaidUsd,
+      'Outstanding USD': outstandingUsd,
+      'Drawback Claimed INR': dbkClaimed,
+      'Drawback Pending INR': dbkPending,
+      'RoDTEP Claimed INR': rodtepClaimed,
+      'RoDTEP Pending INR': rodtepPending,
+      'RoSCTL Claimed INR': rosctlClaimed,
+      'RoSCTL Pending INR': rosctlPending,
+      'Total Incentive Pending INR': totalIncentivesPending,
+      'Net Forex Gain/Loss INR': netForexInr,
     };
   });
   const wsConsignee = XLSX.utils.json_to_sheet(consigneeSummary);
   XLSX.utils.book_append_sheet(wb, wsConsignee, 'Consignee Summary');
 
-  // 4. S K Global Ventures (Specific Company Detailed Ledger Sheet)
-  const skGlobalConsignee = consignees.find((c) => c.name.toLowerCase().includes('sk global') || c.name.toLowerCase().includes('s k global'));
-  const skGlobalShipments = shipments.filter((s) => s.consigneeId === skGlobalConsignee?.id || s.consigneeName?.toLowerCase().includes('sk global') || s.consigneeName?.toLowerCase().includes('s k global'));
-  const wsSKGlobal = XLSX.utils.json_to_sheet(
-    skGlobalShipments.map((s, idx) => ({
-      'Sr. No.': idx + 1,
-      'Invoice No.': s.invoiceNumber,
-      'Invoice Date': s.invoiceDate,
-      'Shipping Bill No.': s.shippingBillNumber,
-      'Shipping Bill Date': s.shippingBillDate,
-      'Port Code': s.portCode,
-      'Packages': s.packageCount || 0,
-      'Invoice USD': s.invoiceValueUsd,
-      'FIRC IRM No.': s.allocations?.[0]?.paymentIrm || '',
-      'Credit Date': s.allocations?.[0]?.allocatedAt?.split('T')[0] || '',
-      'Allocated USD': s.totalPaidUsd || 0,
-      'Balance USD': s.balanceDueUsd || 0,
-      'Realised Rate': s.averageRealisedRate || 0,
-      'Realised INR': s.realisedInr || 0,
-      'BRC No.': s.brcRecord?.brcNumber || '',
-      'BRC Status': s.brcRecord?.status || 'PENDING',
-      'Payment Status': s.paymentStatus,
-      'Remarks': s.remarks || '',
-    }))
-  );
-  XLSX.utils.book_append_sheet(wb, wsSKGlobal, 'S K Global Ventures');
+  // 4. Five Specific Buyer Ledgers (All 5 original workbook consignees)
+  const wsSKGlobal = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('sk global'));
+  XLSX.utils.book_append_sheet(wb, wsSKGlobal, 'SK Global Ventures');
 
-  // 5. Shasvanth Impex (Specific Company Detailed Ledger Sheet)
-  const shasvanthConsignee = consignees.find((c) => c.name.toLowerCase().includes('shasvanth'));
-  const shasvanthShipments = shipments.filter((s) => s.consigneeId === shasvanthConsignee?.id || s.consigneeName?.toLowerCase().includes('shasvanth'));
-  const wsShasvanth = XLSX.utils.json_to_sheet(
-    shasvanthShipments.map((s, idx) => ({
-      'Sr. No.': idx + 1,
-      'Invoice No.': s.invoiceNumber,
-      'Invoice Date': s.invoiceDate,
-      'Shipping Bill No.': s.shippingBillNumber,
-      'Shipping Bill Date': s.shippingBillDate,
-      'Port Code': s.portCode,
-      'Packages': s.packageCount || 0,
-      'Invoice USD': s.invoiceValueUsd,
-      'FIRC IRM No.': s.allocations?.[0]?.paymentIrm || '',
-      'Credit Date': s.allocations?.[0]?.allocatedAt?.split('T')[0] || '',
-      'Allocated USD': s.totalPaidUsd || 0,
-      'Balance USD': s.balanceDueUsd || 0,
-      'Realised Rate': s.averageRealisedRate || 0,
-      'Realised INR': s.realisedInr || 0,
-      'BRC No.': s.brcRecord?.brcNumber || '',
-      'BRC Status': s.brcRecord?.status || 'PENDING',
-      'Payment Status': s.paymentStatus,
-      'Remarks': s.remarks || '',
-    }))
-  );
+  const wsShasvanth = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('shasvanth'));
   XLSX.utils.book_append_sheet(wb, wsShasvanth, 'Shasvanth Impex');
+
+  const wsPrecision = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('precision tex'));
+  XLSX.utils.book_append_sheet(wb, wsPrecision, 'Precision Tex Lanka');
+
+  const wsTexFab = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('tex fab'));
+  XLSX.utils.book_append_sheet(wb, wsTexFab, 'Tex Fab Lanka');
+
+  const wsWinfield = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('winfield'));
+  XLSX.utils.book_append_sheet(wb, wsWinfield, 'Winfield Merchant');
 
   // 6. Consignee Master Sheet
   const wsConsigneeMaster = XLSX.utils.json_to_sheet(

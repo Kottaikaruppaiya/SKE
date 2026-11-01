@@ -203,7 +203,13 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'quick-view' && <QuickView selectedFyId={selectedFyId} refreshKey={refreshKey} />}
+          {currentTab === 'quick-view' && (
+            <QuickView
+              selectedFyId={selectedFyId}
+              onSelectShipment={setSelectedShipmentId}
+              refreshKey={refreshKey}
+            />
+          )}
 
           {currentTab === 'summary-reports' && <SummaryReportsView selectedFyId={selectedFyId} refreshKey={refreshKey} />}
 
@@ -248,6 +254,7 @@ export default function App() {
               selectedFyId={selectedFyId}
               initialCompanyName="S K Global Ventures Private Limited"
               onSelectShipment={setSelectedShipmentId}
+              onOpenNewShipment={() => setIsNewShipmentOpen(true)}
               userRole={currentUser.role}
               refreshKey={refreshKey}
             />
@@ -258,6 +265,40 @@ export default function App() {
               selectedFyId={selectedFyId}
               initialCompanyName="Shasvanth Impex"
               onSelectShipment={setSelectedShipmentId}
+              onOpenNewShipment={() => setIsNewShipmentOpen(true)}
+              userRole={currentUser.role}
+              refreshKey={refreshKey}
+            />
+          )}
+
+          {currentTab === 'precision-tex-ledger' && (
+            <CompanyLedgerView
+              selectedFyId={selectedFyId}
+              initialCompanyName="Precision Tex Lanka"
+              onSelectShipment={setSelectedShipmentId}
+              onOpenNewShipment={() => setIsNewShipmentOpen(true)}
+              userRole={currentUser.role}
+              refreshKey={refreshKey}
+            />
+          )}
+
+          {currentTab === 'tex-fab-ledger' && (
+            <CompanyLedgerView
+              selectedFyId={selectedFyId}
+              initialCompanyName="Tex Fab Lanka"
+              onSelectShipment={setSelectedShipmentId}
+              onOpenNewShipment={() => setIsNewShipmentOpen(true)}
+              userRole={currentUser.role}
+              refreshKey={refreshKey}
+            />
+          )}
+
+          {currentTab === 'winfield-ledger' && (
+            <CompanyLedgerView
+              selectedFyId={selectedFyId}
+              initialCompanyName="Winfield Merchant"
+              onSelectShipment={setSelectedShipmentId}
+              onOpenNewShipment={() => setIsNewShipmentOpen(true)}
               userRole={currentUser.role}
               refreshKey={refreshKey}
             />
