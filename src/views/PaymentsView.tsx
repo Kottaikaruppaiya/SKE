@@ -13,11 +13,13 @@ import {
 } from 'lucide-react';
 import { Payment, BankMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface PaymentsViewProps {
   banks: BankMaster[];
   userRole: Role;
   onSelectShipment: (id: string) => void;
+  onRefresh?: () => void;
   refreshKey?: number;
 }
 
@@ -25,6 +27,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
   banks,
   userRole,
   onSelectShipment,
+  onRefresh,
   refreshKey,
 }) => {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -111,6 +114,7 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       setActionMessage({ text: `Payment ${irmNumber} created successfully.`, type: 'success' });
       setTimeout(() => setActionMessage(null), 4000);
       loadPayments();
+      onRefresh?.();
     } catch (err: any) {
       setFormError(err.message || 'Failed to create payment.');
     }
@@ -152,27 +156,74 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
       setActionMessage({ text: `Payment ${editIrmNumber} updated successfully.`, type: 'success' });
       setTimeout(() => setActionMessage(null), 4000);
       loadPayments();
+      onRefresh?.();
     } catch (err: any) {
       setEditError(err.message || 'Failed to update payment.');
     }
   };
 
-  const handleDeletePayment = async (p: Payment) => {
-    const hasAllocations = (p.allocations && p.allocations.length > 0);
-    const msg = hasAllocations
-      ? `WARNING: Payment "${p.irmNumber}" has active allocations linked to ${p.allocations!.length} export shipment(s).\n\nDeleting this payment will remove all allocations and recalculate shipment payment statuses. Are you sure?`
-      : `Are you sure you want to permanently delete payment "${p.irmNumber}"?`;
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    payment: Payment | null;
+    loading: boolean;
+    error: string | null;
+  }>({
+    isOpen: false,
+    payment: null,
+    loading: false,
+    error: null,
+  });
 
-    const ok = window.confirm(msg);
-    if (!ok) return;
+  const [deallocateModalState, setDeallocateModalState] = useState<{
+    isOpen: boolean;
+    allocation: any | null;
+    loading: boolean;
+    error: string | null;
+  }>({
+    isOpen: false,
+    allocation: null,
+    loading: false,
+    error: null,
+  });
 
+  const handleConfirmDeletePayment = async () => {
+    if (!deleteModalState.payment) return;
+    setDeleteModalState(prev => ({ ...prev, loading: true, error: null }));
     try {
-      await api.deletePayment(p.id);
-      setActionMessage({ text: `Payment ${p.irmNumber} deleted.`, type: 'success' });
+      await api.deletePayment(deleteModalState.payment.id);
+      setActionMessage({ text: `Payment ${deleteModalState.payment.irmNumber} deleted.`, type: 'success' });
+      setDeleteModalState({ isOpen: false, payment: null, loading: false, error: null });
       setTimeout(() => setActionMessage(null), 4000);
       loadPayments();
+      onRefresh?.();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete payment.');
+      setDeleteModalState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to delete payment.',
+      }));
+    }
+  };
+
+  const handleConfirmDeallocate = async () => {
+    if (!deallocateModalState.allocation) return;
+    setDeallocateModalState(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      await api.deallocatePayment(deallocateModalState.allocation.id);
+      setActionMessage({
+        text: `Allocation of $${deallocateModalState.allocation.allocatedAmountUsd.toLocaleString()} reversed successfully.`,
+        type: 'success',
+      });
+      setDeallocateModalState({ isOpen: false, allocation: null, loading: false, error: null });
+      setTimeout(() => setActionMessage(null), 4000);
+      loadPayments();
+      onRefresh?.();
+    } catch (err: any) {
+      setDeallocateModalState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to reverse allocation.',
+      }));
     }
   };
 
@@ -347,7 +398,12 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                             <Edit size={14} />
                           </button>
                           <button
-                            onClick={() => handleDeletePayment(p)}
+                            onClick={() => setDeleteModalState({
+                              isOpen: true,
+                              payment: p,
+                              loading: false,
+                              error: null,
+                            })}
                             title="Delete Payment"
                             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-600 hover:text-red-800 transition-colors cursor-pointer"
                           >
@@ -397,26 +453,17 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
                         {!isViewer && (
                           <button
                             type="button"
-                            onClick={async (e) => {
+                            onClick={(e) => {
                               e.stopPropagation();
-                              const ok = window.confirm(
-                                `Reverse payment allocation of $${a.allocatedAmountUsd.toLocaleString()} for Invoice "${a.shipmentInvoiceNo || 'Shipment'}"?`
-                              );
-                              if (!ok) return;
-                              try {
-                                await api.deallocatePayment(a.id);
-                                setActionMessage({
-                                  text: `Allocation of $${a.allocatedAmountUsd.toLocaleString()} reversed successfully.`,
-                                  type: 'success',
-                                });
-                                setTimeout(() => setActionMessage(null), 4000);
-                                loadPayments();
-                              } catch (err: any) {
-                                alert(err.message || 'Failed to reverse allocation.');
-                              }
+                              setDeallocateModalState({
+                                isOpen: true,
+                                allocation: a,
+                                loading: false,
+                                error: null,
+                              });
                             }}
                             title="Reverse / Deallocate Payment"
-                            className="p-1 rounded text-red-400 hover:text-red-700 hover:bg-red-50 transition-colors"
+                            className="p-1 rounded text-red-400 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -718,6 +765,30 @@ export const PaymentsView: React.FC<PaymentsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Delete Payment Modal */}
+      <ConfirmationModal
+        isOpen={deleteModalState.isOpen}
+        title="Delete Foreign Inward Remittance"
+        itemName={deleteModalState.payment?.irmNumber || ''}
+        itemType="Inward FIRC Payment"
+        isLoading={deleteModalState.loading}
+        errorMessage={deleteModalState.error}
+        onConfirm={handleConfirmDeletePayment}
+        onCancel={() => setDeleteModalState({ isOpen: false, payment: null, loading: false, error: null })}
+      />
+
+      {/* Deallocate Payment Modal */}
+      <ConfirmationModal
+        isOpen={deallocateModalState.isOpen}
+        title="Reverse Payment Allocation"
+        itemName={`$${(deallocateModalState.allocation?.allocatedAmountUsd || 0).toLocaleString()} for ${deallocateModalState.allocation?.shipmentInvoiceNo || 'Shipment'}`}
+        itemType="Payment Allocation"
+        isLoading={deallocateModalState.loading}
+        errorMessage={deallocateModalState.error}
+        onConfirm={handleConfirmDeallocate}
+        onCancel={() => setDeallocateModalState({ isOpen: false, allocation: null, loading: false, error: null })}
+      />
     </div>
   );
 };

@@ -18,20 +18,41 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Layers
+  Layers,
+  Edit,
+  Check,
+  X,
+  Trash2,
+  Archive,
+  Loader2,
 } from 'lucide-react';
-import { DashboardMetrics, Shipment, ConsigneeMaster } from '../types/index.ts';
+import { DashboardMetrics, Shipment, ConsigneeMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface QuickViewProps {
   selectedFyId: string;
   onSelectShipment?: (id: string) => void;
+  onRefresh?: () => void;
+  userRole?: Role;
   refreshKey?: number;
+}
+
+interface InlineRowEditState {
+  consigneeId: string;
+  shippingBillDate: string;
+  invoiceValueUsd: number;
+  dbkClaimed: number;
+  dbkReceivedDate: string;
+  brcDeadline: string;
+  remarks: string;
 }
 
 export const QuickView: React.FC<QuickViewProps> = ({
   selectedFyId,
   onSelectShipment,
+  onRefresh,
+  userRole = 'ADMIN',
   refreshKey,
 }) => {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -46,20 +67,39 @@ export const QuickView: React.FC<QuickViewProps> = ({
   const [brcStatusFilter, setBrcStatusFilter] = useState('ALL');
   const [incentiveStatusFilter, setIncentiveStatusFilter] = useState('ALL');
 
-  useEffect(() => {
+  // Inline Row Editing State
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<InlineRowEditState | null>(null);
+  const [isRowSaving, setIsRowSaving] = useState(false);
+  const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
+  const [rowSuccess, setRowSuccess] = useState<string | null>(null);
+
+  // Delete & Archive Modal State
+  const [targetShipmentForDelete, setTargetShipmentForDelete] = useState<Shipment | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const isViewer = userRole === 'VIEWER';
+
+  const loadData = async () => {
     setLoading(true);
-    Promise.all([
-      api.getDashboardMetrics(selectedFyId !== 'ALL' ? selectedFyId : undefined),
-      api.getShipments({ financialYearId: selectedFyId !== 'ALL' ? selectedFyId : undefined }),
-      api.getConsignees(),
-    ])
-      .then(([m, s, c]) => {
-        setMetrics(m);
-        setShipments(s);
-        setConsignees(c);
-      })
-      .catch((err) => console.error('Error fetching Quick View data:', err))
-      .finally(() => setLoading(false));
+    try {
+      const [m, s, c] = await Promise.all([
+        api.getDashboardMetrics(selectedFyId !== 'ALL' ? selectedFyId : undefined),
+        api.getShipments({ financialYearId: selectedFyId !== 'ALL' ? selectedFyId : undefined }),
+        api.getConsignees(),
+      ]);
+      setMetrics(m);
+      setShipments(s);
+      setConsignees(c);
+    } catch (err) {
+      console.error('Error fetching Quick View data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, [selectedFyId, refreshKey]);
 
   // Financial aggregates for KPI cards across the active dataset
@@ -156,197 +196,348 @@ export const QuickView: React.FC<QuickViewProps> = ({
       // Incentive status
       if (incentiveStatusFilter !== 'ALL') {
         const dbk = s.incentives?.find((i) => i.type === 'DRAWBACK');
-        const rodtep = s.incentives?.find((i) => i.type === 'RODTEP');
-        const rosctl = s.incentives?.find((i) => i.type === 'ROSCTL');
-        const anyPending =
-          Math.max(0, (dbk?.claimedAmount || 0) - (dbk?.receivedAmount || 0)) > 0 ||
-          Math.max(0, (rodtep?.claimedAmount || 0) - (rodtep?.receivedAmount || 0)) > 0 ||
-          Math.max(0, (rosctl?.claimedAmount || 0) - (rosctl?.receivedAmount || 0)) > 0;
-
-        if (incentiveStatusFilter === 'ANY_PENDING' && !anyPending) return false;
-        if (incentiveStatusFilter === 'ALL_RECEIVED' && anyPending) return false;
+        if (incentiveStatusFilter === 'RECEIVED' && dbk?.status !== 'RECEIVED') return false;
+        if (incentiveStatusFilter === 'PENDING' && dbk?.status === 'RECEIVED') return false;
       }
 
       return true;
     });
   }, [shipments, searchTerm, selectedBuyer, paymentStatusFilter, brcStatusFilter, incentiveStatusFilter]);
 
-  if (loading && !metrics) {
-    return (
-      <div className="p-12 text-center text-xs text-slate-400 animate-pulse">
-        Aggregating Worksheet 3: Quick View operational records...
-      </div>
-    );
-  }
+  // Inline Edit Handlers
+  const startRowEdit = (s: Shipment, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (isViewer) return;
+    const dbk = s.incentives?.find((i) => i.type === 'DRAWBACK');
+    setEditingRowId(s.id);
+    setEditFormData({
+      consigneeId: s.consigneeId,
+      shippingBillDate: s.shippingBillDate || '',
+      invoiceValueUsd: s.invoiceValueUsd,
+      dbkClaimed: dbk?.claimedAmount || 0,
+      dbkReceivedDate: dbk?.receivedDate || '',
+      brcDeadline: s.brcRecord?.statutoryDeadline || '',
+      remarks: s.remarks || '',
+    });
+    setRowError(null);
+  };
+
+  const cancelRowEdit = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingRowId(null);
+    setEditFormData(null);
+    setRowError(null);
+  };
+
+  const handleSaveInlineRow = async (s: Shipment, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!editFormData) return;
+
+    if (editFormData.invoiceValueUsd <= 0) {
+      setRowError({ id: s.id, message: 'Invoice Value (USD) must be greater than zero.' });
+      return;
+    }
+
+    setIsRowSaving(true);
+    setRowError(null);
+    try {
+      const updated = await api.updateShipment(s.id, {
+        consigneeId: editFormData.consigneeId,
+        shippingBillDate: editFormData.shippingBillDate || undefined,
+        invoiceValueUsd: Number(editFormData.invoiceValueUsd),
+        remarks: editFormData.remarks || undefined,
+        ...(editFormData.dbkClaimed !== undefined ? { dbkClaimed: Number(editFormData.dbkClaimed) } : {}),
+        ...(editFormData.dbkReceivedDate ? { dbkReceivedDate: editFormData.dbkReceivedDate } : {}),
+      } as any);
+
+      // Persist to local list immediately
+      setShipments((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingRowId(null);
+      setEditFormData(null);
+      setRowSuccess(`Invoice ${updated.invoiceNumber} saved & formulas recalculated.`);
+      setTimeout(() => setRowSuccess(null), 3500);
+
+      // Trigger app-wide synchronization
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setRowError({ id: s.id, message: err.message || 'Failed to save changes.' });
+    } finally {
+      setIsRowSaving(false);
+    }
+  };
+
+  // Keyboard navigation for inline edit
+  const handleKeyDown = (e: React.KeyboardEvent, s: Shipment) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveInlineRow(s);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelRowEdit();
+    }
+  };
+
+  // Delete & Archive Handlers
+  const handleDeleteShipment = async () => {
+    if (!targetShipmentForDelete) return;
+    try {
+      await api.deleteShipment(targetShipmentForDelete.id);
+      setShipments((prev) => prev.filter((s) => s.id !== targetShipmentForDelete.id));
+      setRowSuccess(`Shipment ${targetShipmentForDelete.invoiceNumber} deleted.`);
+      setTimeout(() => setRowSuccess(null), 3500);
+      setTargetShipmentForDelete(null);
+      if (onRefresh) onRefresh();
+      loadData();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to delete shipment.');
+      throw err;
+    }
+  };
+
+  const handleArchiveShipment = async () => {
+    if (!targetShipmentForDelete) return;
+    try {
+      await api.archiveShipment(
+        targetShipmentForDelete.id,
+        'Archived from Quick View to preserve statutory and payment history'
+      );
+      setShipments((prev) => prev.filter((s) => s.id !== targetShipmentForDelete.id));
+      setRowSuccess(`Shipment ${targetShipmentForDelete.invoiceNumber} archived safely.`);
+      setTimeout(() => setRowSuccess(null), 3500);
+      setTargetShipmentForDelete(null);
+      if (onRefresh) onRefresh();
+      loadData();
+    } catch (err: any) {
+      setDeleteError(err.message || 'Failed to archive shipment.');
+      throw err;
+    }
+  };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top Header & Export */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6">
+      {/* View Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Eye size={22} className="text-blue-600" />
-            <span>Quick View — Executive Operational Grid</span>
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Eye size={20} className="text-blue-600 flex-shrink-0" />
+            <span>Operational Quick View &amp; Excel-like Grid Editor</span>
           </h2>
           <p className="text-xs text-slate-500">
-            Worksheet 3: 15-column high-density table &amp; top KPI monitoring, with unlimited row capacity
+            Worksheet 3: 15-column high-density tracking matrix, real-time formula recalculation, and inline editing
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <a
-            href={api.getExportCsvUrl('Quick View', selectedFyId)}
-            download={`SKE_Quick_View_${selectedFyId}_${new Date().toISOString().split('T')[0]}.csv`}
-            className="h-9 px-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 transition-colors"
+            href={api.getExportCsvUrl('Export Tracker', selectedFyId !== 'ALL' ? selectedFyId : undefined)}
+            download="QuickView_Tracker.csv"
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs"
           >
-            <Download size={14} className="text-blue-600" />
-            <span>Export Quick View CSV</span>
+            <Download size={14} />
+            <span>Download CSV</span>
           </a>
         </div>
       </div>
 
-      {/* Audit Note Regarding Workbook Range Discrepancy (Row 604 vs 605) */}
-      <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-start space-x-2.5">
-        <AlertCircle size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
-        <div className="text-[11px] leading-relaxed">
-          <span className="font-bold">Architectural Verification — Row 604 vs Row 605 Resolution:</span>{' '}
-          In the historical Excel workbook, Export Tracker populated rows 5–274 with capacity through row 605, while Quick View formulas truncated at row 604. In this web application, all {shipments.length} records are indexed dynamically through PostgreSQL without manual coordinate clipping or boundary truncation.
+      {/* Notifications */}
+      {rowSuccess && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+          <span>{rowSuccess}</span>
+        </div>
+      )}
+
+      {/* TOP 8 SUMMARY KPI CARDS (Part 8.2) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3">
+        {/* 1. Total Bills */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+            1. Total Bills
+          </span>
+          <div className="text-xl font-bold font-mono text-slate-900 mt-0.5">
+            {kpis.totalBills}
+          </div>
+          <span className="text-[10px] text-slate-500">Invoices Tracked</span>
+        </div>
+
+        {/* 2. Paid Bills */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block">
+            2. Paid
+          </span>
+          <div className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
+            {kpis.paidCount}
+          </div>
+          <span className="text-[10px] text-emerald-600">Fully Realised</span>
+        </div>
+
+        {/* 3. Part Paid Bills */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 block">
+            3. Part Paid
+          </span>
+          <div className="text-xl font-bold font-mono text-amber-700 mt-0.5">
+            {kpis.partPaidCount}
+          </div>
+          <span className="text-[10px] text-amber-600">Partial Inward</span>
+        </div>
+
+        {/* 4. Pending Payment */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 block">
+            4. Pending
+          </span>
+          <div className="text-xl font-bold font-mono text-rose-700 mt-0.5">
+            {kpis.pendingCount}
+          </div>
+          <span className="text-[10px] text-rose-600">Awaiting FIRC</span>
+        </div>
+
+        {/* 5. Outstanding USD */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+            5. Outst (USD)
+          </span>
+          <div className="text-xl font-bold font-mono text-amber-700 mt-0.5">
+            ${Math.round(kpis.totalOutstandingUsd).toLocaleString()}
+          </div>
+          <span className="text-[10px] text-slate-500">Balance Due</span>
+        </div>
+
+        {/* 6. Net Forex INR */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+            6. Forex (INR)
+          </span>
+          <div
+            className={`text-xl font-bold font-mono mt-0.5 ${
+              kpis.totalNetForexInr >= 0 ? 'text-emerald-700' : 'text-rose-700'
+            }`}
+          >
+            {kpis.totalNetForexInr >= 0 ? '+' : ''}₹{Math.round(kpis.totalNetForexInr).toLocaleString()}
+          </div>
+          <span className="text-[10px] text-slate-500">Realised Gain/Loss</span>
+        </div>
+
+        {/* 7. DBK Pending */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">
+            7. DBK Pend
+          </span>
+          <div className="text-xl font-bold font-mono text-blue-700 mt-0.5">
+            ₹{Math.round(kpis.totalDrawbackPendingInr).toLocaleString()}
+          </div>
+          <span className="text-[10px] text-blue-600">Duty Drawback</span>
+        </div>
+
+        {/* 8. All Inc Pending */}
+        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 block">
+            8. All Inc Pend
+          </span>
+          <div className="text-xl font-bold font-mono text-purple-700 mt-0.5">
+            ₹{Math.round(kpis.totalAllIncentivesPendingInr).toLocaleString()}
+          </div>
+          <span className="text-[10px] text-purple-600">DBK+RoDTEP+RoSCTL</span>
         </div>
       </div>
 
-      {/* TOP 8 KPI SUMMARY CARDS (Part 8.1) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-        {/* Card 1: Bills */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Bills</span>
-          <div className="text-lg font-bold text-slate-900 font-mono mt-0.5">{kpis.totalBills}</div>
-          <span className="text-[10px] text-slate-400">Total Shipping Bills</span>
-        </div>
-
-        {/* Card 2: Paid */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 block">Paid</span>
-          <div className="text-lg font-bold text-emerald-700 font-mono mt-0.5">{kpis.paidCount}</div>
-          <span className="text-[10px] text-emerald-600/80">Fully Realised</span>
-        </div>
-
-        {/* Card 3: Part Paid */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 block">Part Paid</span>
-          <div className="text-lg font-bold text-amber-700 font-mono mt-0.5">{kpis.partPaidCount}</div>
-          <span className="text-[10px] text-amber-600/80">Partial Realised</span>
-        </div>
-
-        {/* Card 4: Pending */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 block">Pending</span>
-          <div className="text-lg font-bold text-rose-700 font-mono mt-0.5">{kpis.pendingCount}</div>
-          <span className="text-[10px] text-rose-600/80">Unrealised</span>
-        </div>
-
-        {/* Card 5: Outstanding USD */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Outstanding</span>
-          <div className="text-sm font-bold text-slate-900 font-mono mt-1 truncate" title={`$${kpis.totalOutstandingUsd.toLocaleString()}`}>
-            ${kpis.totalOutstandingUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+      {/* FILTER TOOLBAR (Part 8.3) */}
+      <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Filter size={15} className="text-blue-600" />
+            <span className="text-xs font-bold text-slate-800">Filter Operational Grid:</span>
           </div>
-          <span className="text-[10px] text-slate-400">USD Due Balance</span>
-        </div>
 
-        {/* Card 6: Net Forex INR */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block">Net Forex</span>
-          <div className={`text-sm font-bold font-mono mt-1 truncate ${kpis.totalNetForexInr >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-            {kpis.totalNetForexInr >= 0 ? '+' : ''}₹{kpis.totalNetForexInr.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          <div className="text-xs text-slate-500">
+            Tip: Click <strong>Edit</strong> or double-click any row to edit values inline. Formulas update live!
           </div>
-          <span className="text-[10px] text-slate-400">INR Gain/Loss</span>
         </div>
 
-        {/* Card 7: Drawback Pending */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 block">DBK Pending</span>
-          <div className="text-sm font-bold text-amber-800 font-mono mt-1 truncate">
-            ₹{kpis.totalDrawbackPendingInr.toLocaleString()}
-          </div>
-          <span className="text-[10px] text-amber-600/80">Duty Drawback Due</span>
-        </div>
-
-        {/* Card 8: All Incentives Pending */}
-        <div className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 block">All Inc. Due</span>
-          <div className="text-sm font-bold text-purple-800 font-mono mt-1 truncate">
-            ₹{kpis.totalAllIncentivesPendingInr.toLocaleString()}
-          </div>
-          <span className="text-[10px] text-purple-600/80">DBK+RoDTEP+RoSCTL</span>
-        </div>
-      </div>
-
-      {/* FILTER CONTROLS BAR */}
-      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 text-xs">
+          {/* Search Input */}
+          <div className="relative">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Filter by invoice, shipping bill, buyer..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Search invoice, SB, buyer..."
+              className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs outline-none focus:bg-white focus:border-blue-500"
             />
           </div>
 
-          {/* Consignee Buyer Dropdown */}
-          <select
-            value={selectedBuyer}
-            onChange={(e) => setSelectedBuyer(e.target.value)}
-            className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-700 outline-none max-w-xs"
-          >
-            <option value="ALL">All Buyers ({consignees.length})</option>
-            {consignees.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          {/* Buyer Selector */}
+          <div>
+            <select
+              value={selectedBuyer}
+              onChange={(e) => setSelectedBuyer(e.target.value)}
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 outline-none focus:bg-white focus:border-blue-500 truncate"
+            >
+              <option value="ALL">All Buyers ({consignees.length})</option>
+              {consignees.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {/* Payment Status Filter */}
-          <select
-            value={paymentStatusFilter}
-            onChange={(e) => setPaymentStatusFilter(e.target.value)}
-            className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-700 outline-none"
-          >
-            <option value="ALL">All Payment Statuses</option>
-            <option value="PAID">Fully Paid</option>
-            <option value="PART_PAID">Part Paid</option>
-            <option value="PENDING">Pending (Unpaid)</option>
-          </select>
+          {/* Payment Status */}
+          <div>
+            <select
+              value={paymentStatusFilter}
+              onChange={(e) => setPaymentStatusFilter(e.target.value)}
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 outline-none focus:bg-white focus:border-blue-500"
+            >
+              <option value="ALL">All Payment Statuses</option>
+              <option value="PAID">Fully Paid</option>
+              <option value="PART_PAID">Part-Paid</option>
+              <option value="PENDING">Pending (Unpaid)</option>
+            </select>
+          </div>
 
-          {/* BRC Status Filter */}
-          <select
-            value={brcStatusFilter}
-            onChange={(e) => setBrcStatusFilter(e.target.value)}
-            className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-700 outline-none"
-          >
-            <option value="ALL">All BRC Statuses</option>
-            <option value="REALISED">BRC Realised</option>
-            <option value="PENDING">BRC Pending</option>
-            <option value="OVERDUE">BRC Overdue (&gt;270d)</option>
-          </select>
+          {/* BRC Status */}
+          <div>
+            <select
+              value={brcStatusFilter}
+              onChange={(e) => setBrcStatusFilter(e.target.value)}
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 outline-none focus:bg-white focus:border-blue-500"
+            >
+              <option value="ALL">All BRC Statuses</option>
+              <option value="REALISED">BRC Realised</option>
+              <option value="PENDING">BRC Pending</option>
+              <option value="OVERDUE">BRC Overdue (&gt;9m)</option>
+            </select>
+          </div>
 
-          {/* Incentive Filter */}
-          <select
-            value={incentiveStatusFilter}
-            onChange={(e) => setIncentiveStatusFilter(e.target.value)}
-            className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-700 outline-none"
-          >
-            <option value="ALL">All Incentive Statuses</option>
-            <option value="ANY_PENDING">Any Incentive Pending</option>
-            <option value="ALL_RECEIVED">All Incentives Credited</option>
-          </select>
+          {/* Incentive Status */}
+          <div>
+            <select
+              value={incentiveStatusFilter}
+              onChange={(e) => setIncentiveStatusFilter(e.target.value)}
+              className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-700 outline-none focus:bg-white focus:border-blue-500"
+            >
+              <option value="ALL">All Incentive Statuses</option>
+              <option value="RECEIVED">DBK Received</option>
+              <option value="PENDING">DBK Pending</option>
+            </select>
+          </div>
+        </div>
 
-          {/* Reset button if filtered */}
-          {(searchTerm || selectedBuyer !== 'ALL' || paymentStatusFilter !== 'ALL' || brcStatusFilter !== 'ALL' || incentiveStatusFilter !== 'ALL') && (
+        {/* Active Filter Indicators */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 text-[11px] text-slate-500">
+          <span>
+            Showing <strong className="text-slate-800">{filteredShipments.length}</strong> of{' '}
+            <strong className="text-slate-800">{shipments.length}</strong> invoices
+          </span>
+
+          {(searchTerm ||
+            selectedBuyer !== 'ALL' ||
+            paymentStatusFilter !== 'ALL' ||
+            brcStatusFilter !== 'ALL' ||
+            incentiveStatusFilter !== 'ALL') && (
             <button
               onClick={() => {
                 setSearchTerm('');
@@ -355,7 +546,7 @@ export const QuickView: React.FC<QuickViewProps> = ({
                 setBrcStatusFilter('ALL');
                 setIncentiveStatusFilter('ALL');
               }}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2"
+              className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2 cursor-pointer"
             >
               Reset Filters
             </button>
@@ -363,10 +554,26 @@ export const QuickView: React.FC<QuickViewProps> = ({
         </div>
       </div>
 
-      {/* 15-COLUMN HIGH DENSITY OPERATIONAL TABLE (Part 8.1) */}
+      {/* Row-Level Error Message */}
+      {rowError && (
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="text-rose-600 shrink-0" />
+            <span>{rowError.message}</span>
+          </div>
+          <button
+            onClick={() => setRowError(null)}
+            className="text-rose-500 hover:text-rose-800 font-bold p-1"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* 15-COLUMN HIGH DENSITY OPERATIONAL TABLE WITH INLINE EDITING (Part 8.1 & Part 5) */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1500px] text-left text-xs whitespace-nowrap">
+          <table className="w-full min-w-[1600px] text-left text-xs whitespace-nowrap">
             <thead className="bg-slate-900 text-slate-200 text-[11px] uppercase tracking-wider font-semibold sticky top-0 z-10">
               <tr>
                 <th className="p-3 text-center w-12">1. S.No</th>
@@ -384,32 +591,53 @@ export const QuickView: React.FC<QuickViewProps> = ({
                 <th className="p-3">13. DBK Date</th>
                 <th className="p-3 text-right">14. All Inc Pending</th>
                 <th className="p-3 text-center">15. BRC Due</th>
+                <th className="p-3 text-right min-w-[130px]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredShipments.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="p-8 text-center text-xs text-slate-400">
+                  <td colSpan={16} className="p-8 text-center text-xs text-slate-400">
                     No shipments match the selected filters.
                   </td>
                 </tr>
               ) : (
                 filteredShipments.map((s, idx) => {
-                  const totalPaid = s.totalPaidUsd || 0;
-                  const balUsd = s.balanceDueUsd ?? Math.max(0, s.invoiceValueUsd - totalPaid);
+                  const isEditingThisRow = editingRowId === s.id;
 
-                  // Realised INR & Forex
+                  // Existing or in-progress values
+                  const currentInvUsd = isEditingThisRow && editFormData
+                    ? Number(editFormData.invoiceValueUsd)
+                    : s.invoiceValueUsd;
+                  const totalPaid = s.totalPaidUsd || 0;
+                  const balUsd = Math.max(0, currentInvUsd - totalPaid);
+
+                  // Derived payment status preview
+                  let derivedStatus = s.paymentStatus;
+                  if (totalPaid >= currentInvUsd && currentInvUsd > 0) {
+                    derivedStatus = totalPaid > currentInvUsd ? 'EXCESS_RECEIVED' : 'FULLY_PAID';
+                  } else if (totalPaid > 0) {
+                    derivedStatus = 'PART_PAID';
+                  } else {
+                    derivedStatus = 'UNPAID';
+                  }
+
+                  // Realised INR & Forex live recalculation
                   const realisedRate = s.averageRealisedRate || s.sbExchangeRate || 92.1;
                   const realisedInr = s.realisedInr || totalPaid * realisedRate;
-                  const fobInr = s.fobValueInr || 0;
-                  const netForexInr = balUsd === 0 && totalPaid > 0 ? (realisedInr - fobInr) : 0;
+                  const currentFobInr = isEditingThisRow && editFormData
+                    ? Math.round(currentInvUsd * (s.sbExchangeRate || 92.1) * 100) / 100
+                    : s.fobValueInr;
+                  const netForexInr = balUsd === 0 && totalPaid > 0 ? realisedInr - currentFobInr : 0;
 
-                  // Incentives
+                  // Incentives live recalculation
                   const dbk = s.incentives?.find((i) => i.type === 'DRAWBACK');
                   const rodtep = s.incentives?.find((i) => i.type === 'RODTEP');
                   const rosctl = s.incentives?.find((i) => i.type === 'ROSCTL');
 
-                  const dbkClaimed = dbk?.claimedAmount || 0;
+                  const dbkClaimed = isEditingThisRow && editFormData
+                    ? Number(editFormData.dbkClaimed)
+                    : (dbk?.claimedAmount || 0);
                   const dbkRecd = dbk?.receivedAmount || 0;
                   const dbkPending = Math.max(0, dbkClaimed - dbkRecd);
                   const rodtepPending = Math.max(0, (rodtep?.claimedAmount || 0) - (rodtep?.receivedAmount || 0));
@@ -419,16 +647,19 @@ export const QuickView: React.FC<QuickViewProps> = ({
                   // BRC
                   const brc = s.brcRecord;
                   const isBrcRealised = brc?.status === 'REALISED' || Boolean(brc?.brcNumber);
+                  const brcDeadlineDisplay = isEditingThisRow && editFormData
+                    ? editFormData.brcDeadline
+                    : brc?.statutoryDeadline;
                   const isBrcOverdue =
                     !isBrcRealised &&
-                    brc?.statutoryDeadline &&
-                    new Date(brc.statutoryDeadline).getTime() < Date.now();
+                    brcDeadlineDisplay &&
+                    new Date(brcDeadlineDisplay).getTime() < Date.now();
 
                   // Days pending calculation
                   let receivedOnText = 'Pending';
                   if (s.allocations && s.allocations.length > 0 && s.allocations[0].allocatedAt) {
                     receivedOnText = s.allocations[0].allocatedAt.split('T')[0];
-                  } else if (s.paymentStatus === 'FULLY_PAID') {
+                  } else if (derivedStatus === 'FULLY_PAID') {
                     receivedOnText = s.invoiceDate;
                   } else if (s.shippingBillDate) {
                     const daysAgo = Math.floor(
@@ -440,56 +671,125 @@ export const QuickView: React.FC<QuickViewProps> = ({
                   return (
                     <tr
                       key={s.id}
-                      onClick={() => onSelectShipment?.(s.id)}
-                      className="hover:bg-blue-50/50 cursor-pointer transition-colors group"
+                      onDoubleClick={(e) => startRowEdit(s, e)}
+                      onKeyDown={(e) => handleKeyDown(e, s)}
+                      className={`transition-colors group ${
+                        isEditingThisRow
+                          ? 'bg-blue-50/70 border-y-2 border-blue-400'
+                          : 'hover:bg-blue-50/40 cursor-pointer'
+                      }`}
+                      onClick={() => !isEditingThisRow && onSelectShipment?.(s.id)}
                     >
                       {/* 1. S.No */}
                       <td className="p-3 text-center font-mono text-slate-400 text-[11px]">
                         {idx + 1}
                       </td>
 
-                      {/* 2. Invoice No */}
+                      {/* 2. Invoice No (Canonical Key) */}
                       <td className="p-3 font-mono font-bold text-slate-900 group-hover:text-blue-600">
                         {s.invoiceNumber}
                       </td>
 
-                      {/* 3. Consignee */}
-                      <td className="p-3 text-slate-800 font-medium max-w-[200px] truncate" title={s.consigneeName}>
-                        {s.consigneeName || 'Unknown Buyer'}
+                      {/* 3. Consignee (Editable) */}
+                      <td className="p-3 text-slate-800 font-medium max-w-[220px]">
+                        {isEditingThisRow && editFormData ? (
+                          <select
+                            value={editFormData.consigneeId}
+                            onChange={(e) =>
+                              setEditFormData({ ...editFormData, consigneeId: e.target.value })
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full p-1 bg-white border border-blue-400 rounded text-xs font-semibold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          >
+                            {consignees.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span title={s.consigneeName} className="truncate block">
+                            {s.consigneeName || 'Unknown Buyer'}
+                          </span>
+                        )}
                       </td>
 
-                      {/* 4. SB Date */}
+                      {/* 4. SB Date (Editable) */}
                       <td className="p-3 font-mono text-slate-600">
-                        {s.shippingBillDate}
+                        {isEditingThisRow && editFormData ? (
+                          <input
+                            type="date"
+                            value={editFormData.shippingBillDate}
+                            onChange={(e) =>
+                              setEditFormData({ ...editFormData, shippingBillDate: e.target.value })
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1 bg-white border border-blue-400 rounded text-xs font-mono font-medium focus:outline-none"
+                          >
+                          </input>
+                        ) : (
+                          s.shippingBillDate || '—'
+                        )}
                       </td>
 
-                      {/* 5. Inv USD */}
+                      {/* 5. Inv USD (Editable - Triggers Live Dependency Recalculation!) */}
                       <td className="p-3 text-right font-mono tabular-nums font-semibold text-slate-900">
-                        ${s.invoiceValueUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {isEditingThisRow && editFormData ? (
+                          <div className="flex items-center justify-end">
+                            <span className="text-slate-400 mr-0.5">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editFormData.invoiceValueUsd}
+                              onChange={(e) =>
+                                setEditFormData({
+                                  ...editFormData,
+                                  invoiceValueUsd: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-28 p-1 text-right bg-white border border-blue-500 rounded font-bold font-mono text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                          </div>
+                        ) : (
+                          `$${s.invoiceValueUsd.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}`
+                        )}
                       </td>
 
-                      {/* 6. Recd USD */}
+                      {/* 6. Recd USD (Read-only Formula) */}
                       <td className="p-3 text-right font-mono tabular-nums font-bold text-emerald-700">
                         ${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
 
-                      {/* 7. Outst USD */}
+                      {/* 7. Outst USD (Live Calculated Preview: Inv USD - Recd USD) */}
                       <td className="p-3 text-right font-mono tabular-nums font-bold text-amber-700">
                         ${balUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
 
-                      {/* 8. Status */}
+                      {/* 8. Status (Live Derived Badge) */}
                       <td className="p-3 text-center">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            s.paymentStatus === 'FULLY_PAID'
+                            derivedStatus === 'FULLY_PAID'
                               ? 'bg-emerald-100 text-emerald-800'
-                              : s.paymentStatus === 'PART_PAID'
+                              : derivedStatus === 'PART_PAID'
                               ? 'bg-amber-100 text-amber-800'
+                              : derivedStatus === 'EXCESS_RECEIVED'
+                              ? 'bg-purple-100 text-purple-800'
                               : 'bg-rose-100 text-rose-800'
                           }`}
                         >
-                          {s.paymentStatus === 'FULLY_PAID' ? 'PAID' : s.paymentStatus === 'PART_PAID' ? 'PART PAID' : 'PENDING'}
+                          {derivedStatus === 'FULLY_PAID'
+                            ? 'PAID'
+                            : derivedStatus === 'PART_PAID'
+                            ? 'PART PAID'
+                            : derivedStatus === 'EXCESS_RECEIVED'
+                            ? 'EXCESS'
+                            : 'PENDING'}
                         </span>
                       </td>
 
@@ -498,17 +798,43 @@ export const QuickView: React.FC<QuickViewProps> = ({
                         {receivedOnText}
                       </td>
 
-                      {/* 10. Forex INR */}
-                      <td className={`p-3 text-right font-mono tabular-nums font-bold ${netForexInr >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                        {netForexInr >= 0 ? '+' : ''}₹{netForexInr.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {/* 10. Forex INR (Live Calculated Preview: Realised INR - FOB INR) */}
+                      <td
+                        className={`p-3 text-right font-mono tabular-nums font-bold ${
+                          netForexInr >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                        }`}
+                      >
+                        {netForexInr >= 0 ? '+' : ''}₹{netForexInr.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                       </td>
 
-                      {/* 11. DBK Claim */}
+                      {/* 11. DBK Claim (Editable) */}
                       <td className="p-3 text-right font-mono tabular-nums text-slate-700">
-                        ₹{dbkClaimed.toLocaleString()}
+                        {isEditingThisRow && editFormData ? (
+                          <div className="flex items-center justify-end">
+                            <span className="text-slate-400 mr-0.5">₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editFormData.dbkClaimed}
+                              onChange={(e) =>
+                                setEditFormData({
+                                  ...editFormData,
+                                  dbkClaimed: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-24 p-1 text-right bg-white border border-blue-500 rounded font-semibold font-mono text-slate-900 focus:outline-none"
+                            />
+                          </div>
+                        ) : (
+                          `₹${dbkClaimed.toLocaleString()}`
+                        )}
                       </td>
 
-                      {/* 12. DBK Status */}
+                      {/* 12. DBK Status (Live Calculated) */}
                       <td className="p-3 text-center">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -519,16 +845,35 @@ export const QuickView: React.FC<QuickViewProps> = ({
                               : 'bg-slate-100 text-slate-600'
                           }`}
                         >
-                          {dbkRecd >= dbkClaimed && dbkClaimed > 0 ? 'RECEIVED' : dbkRecd > 0 ? 'PARTIAL' : 'PENDING'}
+                          {dbkRecd >= dbkClaimed && dbkClaimed > 0
+                            ? 'RECEIVED'
+                            : dbkRecd > 0
+                            ? 'PARTIAL'
+                            : 'PENDING'}
                         </span>
                       </td>
 
-                      {/* 13. DBK Date */}
+                      {/* 13. DBK Date (Editable) */}
                       <td className="p-3 font-mono text-slate-500 text-[11px]">
-                        {dbk?.receivedDate || '—'}
+                        {isEditingThisRow && editFormData ? (
+                          <input
+                            type="date"
+                            value={editFormData.dbkReceivedDate}
+                            onChange={(e) =>
+                              setEditFormData({
+                                ...editFormData,
+                                dbkReceivedDate: e.target.value,
+                              })
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1 bg-white border border-blue-400 rounded text-xs font-mono"
+                          />
+                        ) : (
+                          dbk?.receivedDate || '—'
+                        )}
                       </td>
 
-                      {/* 14. All Inc Pending */}
+                      {/* 14. All Inc Pending (Live Recalculated) */}
                       <td className="p-3 text-right font-mono tabular-nums font-bold text-purple-700">
                         ₹{allIncPending.toLocaleString()}
                       </td>
@@ -548,8 +893,77 @@ export const QuickView: React.FC<QuickViewProps> = ({
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600">
                             <Clock size={12} className="text-slate-400" />
-                            <span>{brc?.statutoryDeadline || 'Due 9m'}</span>
+                            <span>{brcDeadlineDisplay || 'Due 9m'}</span>
                           </span>
+                        )}
+                      </td>
+
+                      {/* 16. Action Column (Inline Save / Cancel / Edit / Delete) */}
+                      <td
+                        className="p-3 text-right min-w-[130px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {isEditingThisRow ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => handleSaveInlineRow(s, e)}
+                              disabled={isRowSaving}
+                              title="Save Changes to Database"
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                            >
+                              {isRowSaving ? (
+                                <Loader2 size={13} className="animate-spin" />
+                              ) : (
+                                <Check size={13} />
+                              )}
+                              <span>Save</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => cancelRowEdit(e)}
+                              disabled={isRowSaving}
+                              title="Cancel & Revert Changes"
+                              className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-xs font-semibold transition-colors cursor-pointer"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1">
+                            {!isViewer && (
+                              <button
+                                type="button"
+                                onClick={(e) => startRowEdit(s, e)}
+                                title="Edit Values Inline (Excel-like)"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-blue-100 text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                              >
+                                <Edit size={14} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => onSelectShipment?.(s.id)}
+                              title="Open Shipment Dossier"
+                              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                            >
+                              <Eye size={14} />
+                            </button>
+                            {!isViewer && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTargetShipmentForDelete(s);
+                                  setDeleteError(null);
+                                }}
+                                title="Delete or Archive Shipment"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-50 text-rose-500 hover:text-rose-700 transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -567,10 +981,31 @@ export const QuickView: React.FC<QuickViewProps> = ({
             <strong className="text-slate-800">{shipments.length}</strong> invoices
           </span>
           <span className="text-[11px] text-slate-400">
-            Click any row to open the complete document &amp; realisation dossier
+            Double-click row or click <Edit size={11} className="inline text-blue-600" /> to edit values inline. Press Enter to Save, Esc to Cancel.
           </span>
         </div>
       </div>
+
+      {/* Confirmation Modal for Delete & Archival */}
+      {targetShipmentForDelete && (
+        <ConfirmationModal
+          isOpen={Boolean(targetShipmentForDelete)}
+          onClose={() => {
+            setTargetShipmentForDelete(null);
+            setDeleteError(null);
+          }}
+          onConfirm={handleDeleteShipment}
+          showArchiveOption={true}
+          onArchive={handleArchiveShipment}
+          title="Delete Export Shipment Record"
+          entityName={targetShipmentForDelete.invoiceNumber}
+          entityType="Export Invoice"
+          message={`Are you sure you want to delete shipment "${targetShipmentForDelete.invoiceNumber}"? If active payment allocations or realised statutory records exist, deletion will be blocked to safeguard customs and financial integrity; you may safely archive the record instead.`}
+          confirmText="Delete Record"
+          archiveText="Archive Safely"
+          error={deleteError}
+        />
+      )}
     </div>
   );
 };

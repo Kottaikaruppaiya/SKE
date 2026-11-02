@@ -18,9 +18,11 @@ import {
   Edit,
   Plus,
   Trash2,
+  Archive,
 } from 'lucide-react';
 import { Shipment, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from './ConfirmationModal.tsx';
 
 interface ShipmentDetailModalProps {
   shipmentId: string | null;
@@ -110,32 +112,124 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
     }
   }
 
-  const handleDeleteShipment = async () => {
-    if (!shipment) return;
-    const ok = window.confirm(
-      `Permanently delete export shipment "${shipment.invoiceNumber}"?\n\nThis will remove all associated payment allocations, invoice items, and documents.`
-    );
-    if (!ok) return;
+  // Unified confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    itemName: string;
+    itemType: string;
+    isArchiveOnly?: boolean;
+    isLoading: boolean;
+    errorMessage: string | null;
+    action: () => Promise<void>;
+    archiveAction?: () => Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    itemName: '',
+    itemType: '',
+    isArchiveOnly: false,
+    isLoading: false,
+    errorMessage: null,
+    action: async () => {},
+  });
 
-    try {
-      await api.deleteShipment(shipment.id);
-      if (onDeleted) onDeleted();
-      onClose();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete shipment.');
-    }
+  const promptDeleteShipment = () => {
+    if (!shipment) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Export Shipment',
+      itemName: shipment.invoiceNumber,
+      itemType: 'Export Shipment',
+      isArchiveOnly: false,
+      isLoading: false,
+      errorMessage: null,
+      action: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true, errorMessage: null }));
+        try {
+          await api.deleteShipment(shipment.id);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          if (onDeleted) onDeleted();
+          onClose();
+        } catch (err: any) {
+          setConfirmModal(prev => ({
+            ...prev,
+            isLoading: false,
+            errorMessage: err.message || 'Failed to delete shipment due to active dependencies.',
+          }));
+        }
+      },
+      archiveAction: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true, errorMessage: null }));
+        try {
+          await api.archiveShipment(shipment.id, 'User archived from shipment detail view');
+          setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          if (onDeleted) onDeleted();
+          onClose();
+        } catch (err: any) {
+          setConfirmModal(prev => ({
+            ...prev,
+            isLoading: false,
+            errorMessage: err.message || 'Failed to archive shipment.',
+          }));
+        }
+      },
+    });
   };
 
-  const handleDeleteDocument = async (docId: string, filename: string) => {
-    const ok = window.confirm(`Permanently delete document "${filename}"?`);
-    if (!ok) return;
+  const promptArchiveShipment = () => {
+    if (!shipment) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Archive Export Shipment',
+      itemName: shipment.invoiceNumber,
+      itemType: 'Export Shipment',
+      isArchiveOnly: true,
+      isLoading: false,
+      errorMessage: null,
+      action: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true, errorMessage: null }));
+        try {
+          await api.archiveShipment(shipment.id, 'User safely archived export shipment');
+          setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          if (onDeleted) onDeleted();
+          onClose();
+        } catch (err: any) {
+          setConfirmModal(prev => ({
+            ...prev,
+            isLoading: false,
+            errorMessage: err.message || 'Failed to archive shipment.',
+          }));
+        }
+      },
+    });
+  };
 
-    try {
-      await api.deleteDocument(docId);
-      loadData();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete document.');
-    }
+  const promptDeleteDocument = (docId: string, filename: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Document',
+      itemName: filename,
+      itemType: 'Original Document',
+      isArchiveOnly: false,
+      isLoading: false,
+      errorMessage: null,
+      action: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true, errorMessage: null }));
+        try {
+          await api.deleteDocument(docId);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          loadData();
+          if (onDeleted) onDeleted();
+        } catch (err: any) {
+          setConfirmModal(prev => ({
+            ...prev,
+            isLoading: false,
+            errorMessage: err.message || 'Failed to delete document.',
+          }));
+        }
+      },
+    });
   };
 
   const openEditBrc = () => {
@@ -168,17 +262,33 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
     }
   };
 
-  const handleResetBrc = async () => {
+  const promptResetBrc = () => {
     if (!shipment) return;
-    if (!window.confirm(`Reset BRC status to PENDING and clear BRC issuance details for invoice ${shipment.invoiceNumber}?`)) return;
-    try {
-      await api.resetBrc(shipment.brcRecord?.id || shipment.id);
-      setIsEditingBrc(false);
-      await loadData();
-      if (onDeleted) onDeleted();
-    } catch (err: any) {
-      alert(err.message || 'Failed to reset BRC');
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Reset Bank Realisation Certificate',
+      itemName: shipment.invoiceNumber,
+      itemType: 'BRC Record',
+      isArchiveOnly: false,
+      isLoading: false,
+      errorMessage: null,
+      action: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true, errorMessage: null }));
+        try {
+          await api.resetBrc(shipment.brcRecord?.id || shipment.id);
+          setIsEditingBrc(false);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          await loadData();
+          if (onDeleted) onDeleted();
+        } catch (err: any) {
+          setConfirmModal(prev => ({
+            ...prev,
+            isLoading: false,
+            errorMessage: err.message || 'Failed to reset BRC.',
+          }));
+        }
+      },
+    });
   };
 
   const openEditIncentive = (inc: any) => {
@@ -212,15 +322,58 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
     }
   };
 
-  const handleDeleteIncentive = async (incId: string, incTypeName: string) => {
-    if (!window.confirm(`Are you sure you want to delete ${incTypeName} incentive claim?`)) return;
-    try {
-      await api.deleteIncentive(incId);
-      await loadData();
-      if (onDeleted) onDeleted();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete incentive');
-    }
+  const promptDeleteIncentive = (incId: string, incTypeName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: `Delete ${incTypeName} Record`,
+      itemName: `${incTypeName} for ${shipment?.invoiceNumber || 'Shipment'}`,
+      itemType: 'Export Incentive Claim',
+      isArchiveOnly: false,
+      isLoading: false,
+      errorMessage: null,
+      action: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true, errorMessage: null }));
+        try {
+          await api.deleteIncentive(incId);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          await loadData();
+          if (onDeleted) onDeleted();
+        } catch (err: any) {
+          setConfirmModal(prev => ({
+            ...prev,
+            isLoading: false,
+            errorMessage: err.message || 'Failed to delete incentive.',
+          }));
+        }
+      },
+    });
+  };
+
+  const promptDeallocate = (allocId: string, amountUsd: number, irm?: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Reverse Payment Allocation',
+      itemName: `$${amountUsd.toLocaleString()} from ${irm || 'FIRC Remittance'}`,
+      itemType: 'Payment Allocation',
+      isArchiveOnly: false,
+      isLoading: false,
+      errorMessage: null,
+      action: async () => {
+        setConfirmModal(prev => ({ ...prev, isLoading: true, errorMessage: null }));
+        try {
+          await api.deallocatePayment(allocId);
+          setConfirmModal(prev => ({ ...prev, isOpen: false, isLoading: false }));
+          await loadData();
+          if (onDeleted) onDeleted();
+        } catch (err: any) {
+          setConfirmModal(prev => ({
+            ...prev,
+            isLoading: false,
+            errorMessage: err.message || 'Failed to reverse allocation.',
+          }));
+        }
+      },
+    });
   };
 
   const openCreateIncentive = () => {
@@ -309,9 +462,17 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   <span>Allocate</span>
                 </button>
                 <button
-                  onClick={handleDeleteShipment}
+                  onClick={promptArchiveShipment}
+                  title="Safely archive this shipment"
+                  className="h-8 px-3 bg-amber-950/80 hover:bg-amber-900 text-amber-300 rounded-lg text-xs font-semibold border border-amber-800/60 transition-colors inline-flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Archive size={14} />
+                  <span>Archive</span>
+                </button>
+                <button
+                  onClick={promptDeleteShipment}
                   title="Delete this shipment"
-                  className="h-8 px-3 bg-red-950/80 hover:bg-red-900 text-red-300 rounded-lg text-xs font-semibold border border-red-800/60 transition-colors inline-flex items-center justify-center gap-1.5 shrink-0"
+                  className="h-8 px-3 bg-red-950/80 hover:bg-red-900 text-red-300 rounded-lg text-xs font-semibold border border-red-800/60 transition-colors inline-flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                 >
                   <Trash2 size={14} />
                   <span>Delete</span>
@@ -590,9 +751,9 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                                 </a>
                                 {!isViewer && (
                                   <button
-                                    onClick={() => handleDeleteDocument(doc.id, doc.originalFilename)}
+                                    onClick={() => promptDeleteDocument(doc.id, doc.originalFilename)}
                                     title="Delete Document"
-                                    className="p-1 rounded hover:bg-red-50 text-red-600 hover:text-red-800"
+                                    className="p-1 rounded hover:bg-red-50 text-red-600 hover:text-red-800 transition-colors cursor-pointer"
                                   >
                                     <Trash2 size={13} />
                                   </button>
@@ -658,13 +819,8 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                             {!isViewer && (
                               <td className="p-3 text-right">
                                 <button
-                                  onClick={async () => {
-                                    if (confirm('Reverse this payment allocation?')) {
-                                      await api.deallocatePayment(alloc.id);
-                                      loadData();
-                                    }
-                                  }}
-                                  className="text-red-600 hover:text-red-800 font-medium px-2 py-1 bg-red-50 rounded"
+                                  onClick={() => promptDeallocate(alloc.id, alloc.allocatedAmountUsd, alloc.paymentIrm)}
+                                  className="text-red-600 hover:text-red-800 font-medium px-2 py-1 bg-red-50 hover:bg-red-100 rounded transition-colors cursor-pointer"
                                 >
                                   Deallocate
                                 </button>
@@ -716,8 +872,8 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                             </button>
                             {(shipment.brcRecord?.status === 'ISSUED' || shipment.brcRecord?.status === 'REALISED') && (
                               <button
-                                onClick={handleResetBrc}
-                                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded transition-colors"
+                                onClick={promptResetBrc}
+                                className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded transition-colors cursor-pointer"
                               >
                                 Reset BRC
                               </button>
@@ -1105,8 +1261,8 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                                     Edit
                                   </button>
                                   <button
-                                    onClick={() => handleDeleteIncentive(inc.id, inc.type)}
-                                    className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    onClick={() => promptDeleteIncentive(inc.id, inc.type === 'DRAWBACK' ? 'Duty Drawback' : inc.type)}
+                                    className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
                                     title="Delete incentive claim"
                                   >
                                     <Trash2 size={13} />
@@ -1132,6 +1288,19 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
           )}
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        itemName={confirmModal.itemName}
+        itemType={confirmModal.itemType}
+        isArchiveOnly={confirmModal.isArchiveOnly}
+        isLoading={confirmModal.isLoading}
+        errorMessage={confirmModal.errorMessage}
+        onConfirm={confirmModal.action}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false, errorMessage: null }))}
+        onArchiveAlternative={confirmModal.archiveAction}
+      />
     </div>
   );
 };

@@ -7,11 +7,13 @@ import React, { useState, useEffect } from 'react';
 import { FileCheck2, Calendar, AlertTriangle, CheckCircle2, Clock, Upload, ArrowRight, Eye } from 'lucide-react';
 import { Shipment, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface BrcManagementViewProps {
   selectedFyId: string;
   onSelectShipment: (id: string) => void;
   onOpenUpload: (shipment: Shipment) => void;
+  onRefresh?: () => void;
   userRole: Role;
   refreshKey?: number;
 }
@@ -20,12 +22,14 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
   selectedFyId,
   onSelectShipment,
   onOpenUpload,
+  onRefresh,
   userRole,
   refreshKey,
 }) => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingBrcShipment, setEditingBrcShipment] = useState<Shipment | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Edit BRC Form State
   const [brcNumber, setBrcNumber] = useState('');
@@ -35,6 +39,19 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
   const [statutoryDeadline, setStatutoryDeadline] = useState('');
   const [status, setStatus] = useState<any>('PENDING');
   const [remarks, setRemarks] = useState('');
+
+  // Reset BRC modal state
+  const [resetModalState, setResetModalState] = useState<{
+    isOpen: boolean;
+    shipment: Shipment | null;
+    loading: boolean;
+    error: string | null;
+  }>({
+    isOpen: false,
+    shipment: null,
+    loading: false,
+    error: null,
+  });
 
   const loadData = async () => {
     setLoading(true);
@@ -61,11 +78,13 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
     setStatutoryDeadline(s.brcRecord?.statutoryDeadline || '');
     setStatus(s.brcRecord?.status || 'PENDING');
     setRemarks(s.brcRecord?.remarks || '');
+    setEditError(null);
   };
 
   const handleSaveBrc = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingBrcShipment) return;
+    setEditError(null);
 
     try {
       const targetId = editingBrcShipment.brcRecord?.id || editingBrcShipment.id;
@@ -80,23 +99,28 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
       });
       setEditingBrcShipment(null);
       loadData();
+      onRefresh?.();
     } catch (err: any) {
-      alert(err.message || 'Failed to update BRC');
+      setEditError(err.message || 'Failed to update BRC');
     }
   };
 
-  const handleResetBrc = async (s: Shipment) => {
-    const ok = window.confirm(
-      `Reset BRC details for Invoice "${s.invoiceNumber}"?\n\nThis will clear the BRC certificate reference number, issue/realisation dates, and return status to PENDING.`
-    );
-    if (!ok) return;
+  const handleConfirmResetBrc = async () => {
+    if (!resetModalState.shipment) return;
+    setResetModalState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      const targetId = s.brcRecord?.id || s.id;
+      const targetId = resetModalState.shipment.brcRecord?.id || resetModalState.shipment.id;
       await api.resetBrc(targetId);
+      setResetModalState({ isOpen: false, shipment: null, loading: false, error: null });
       loadData();
+      onRefresh?.();
     } catch (err: any) {
-      alert(err.message || 'Failed to reset BRC');
+      setResetModalState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to reset BRC',
+      }));
     }
   };
 
@@ -206,7 +230,12 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                               </button>
                               {(brc?.brcNumber || brc?.status !== 'PENDING') && (
                                 <button
-                                  onClick={() => handleResetBrc(s)}
+                                  onClick={() => setResetModalState({
+                                    isOpen: true,
+                                    shipment: s,
+                                    loading: false,
+                                    error: null,
+                                  })}
                                   title="Reset / Clear BRC Data"
                                   className="h-7 px-2 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer shrink-0"
                                 >
@@ -249,6 +278,11 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveBrc} className="p-6 space-y-4 text-xs">
+              {editError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                  {editError}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
                   <label className="font-semibold text-slate-700 block mb-1">BRC Reference Number</label>
@@ -347,6 +381,18 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Reset BRC Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={resetModalState.isOpen}
+        title="Reset Bank Realisation Certificate"
+        itemName={resetModalState.shipment?.invoiceNumber || ''}
+        itemType="BRC / eBRC Record"
+        isLoading={resetModalState.loading}
+        errorMessage={resetModalState.error}
+        onConfirm={handleConfirmResetBrc}
+        onCancel={() => setResetModalState({ isOpen: false, shipment: null, loading: false, error: null })}
+      />
     </div>
   );
 };

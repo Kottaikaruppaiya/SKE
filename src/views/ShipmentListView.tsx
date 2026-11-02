@@ -13,9 +13,11 @@ import {
   CreditCard,
   Edit,
   Trash2,
+  Archive,
 } from 'lucide-react';
 import { Shipment, ConsigneeMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface ShipmentListViewProps {
   selectedFyId: string;
@@ -24,6 +26,7 @@ interface ShipmentListViewProps {
   onOpenNewShipment: () => void;
   onOpenAllocate: (shipment: Shipment) => void;
   onOpenEdit?: (shipment: Shipment) => void;
+  onRefresh?: () => void;
   userRole: Role;
   refreshKey?: number;
 }
@@ -35,6 +38,7 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
   onOpenNewShipment,
   onOpenAllocate,
   onOpenEdit,
+  onRefresh,
   userRole,
   refreshKey,
 }) => {
@@ -71,19 +75,71 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
     loadShipments();
   }, [selectedFyId, consigneeFilter, paymentStatusFilter, reviewStatusFilter, search, refreshKey]);
 
-  const handleDeleteShipment = async (s: Shipment) => {
-    const ok = window.confirm(
-      `Are you sure you want to permanently delete export shipment "${s.invoiceNumber}"?\n\nThis will remove associated invoice items, payment allocations, BRC records, and documents.`
-    );
-    if (!ok) return;
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    shipment: Shipment | null;
+    isArchiveOnly: boolean;
+    loading: boolean;
+    error: string | null;
+  }>({
+    isOpen: false,
+    shipment: null,
+    isArchiveOnly: false,
+    loading: false,
+    error: null,
+  });
 
+  const openDeleteModal = (s: Shipment, archiveOnly = false) => {
+    setDeleteModalState({
+      isOpen: true,
+      shipment: s,
+      isArchiveOnly: archiveOnly,
+      loading: false,
+      error: null,
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModalState.shipment) return;
+    setDeleteModalState(prev => ({ ...prev, loading: true, error: null }));
     try {
-      await api.deleteShipment(s.id);
-      setActionMessage({ text: `Shipment ${s.invoiceNumber} deleted successfully.`, type: 'success' });
+      await api.deleteShipment(deleteModalState.shipment.id);
+      setActionMessage({
+        text: `Shipment ${deleteModalState.shipment.invoiceNumber} permanently deleted.`,
+        type: 'success',
+      });
+      setDeleteModalState({ isOpen: false, shipment: null, isArchiveOnly: false, loading: false, error: null });
       setTimeout(() => setActionMessage(null), 4000);
       loadShipments();
+      onRefresh?.();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete shipment.');
+      setDeleteModalState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to delete shipment due to active dependencies.',
+      }));
+    }
+  };
+
+  const handleConfirmArchive = async () => {
+    if (!deleteModalState.shipment) return;
+    setDeleteModalState(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      await api.archiveShipment(deleteModalState.shipment.id, 'User archived from shipment register');
+      setActionMessage({
+        text: `Shipment ${deleteModalState.shipment.invoiceNumber} safely archived. Financial records preserved.`,
+        type: 'success',
+      });
+      setDeleteModalState({ isOpen: false, shipment: null, isArchiveOnly: false, loading: false, error: null });
+      setTimeout(() => setActionMessage(null), 4000);
+      loadShipments();
+      onRefresh?.();
+    } catch (err: any) {
+      setDeleteModalState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to archive shipment.',
+      }));
     }
   };
 
@@ -379,7 +435,14 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
                                 </button>
                               )}
                               <button
-                                onClick={() => handleDeleteShipment(s)}
+                                onClick={() => openDeleteModal(s, true)}
+                                title="Safely Archive Shipment"
+                                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-amber-50 text-amber-600 hover:text-amber-800 transition-colors cursor-pointer"
+                              >
+                                <Archive size={15} />
+                              </button>
+                              <button
+                                onClick={() => openDeleteModal(s, false)}
                                 title="Delete Shipment"
                                 className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-red-600 hover:text-red-800 transition-colors cursor-pointer"
                               >
@@ -432,6 +495,19 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
           </span>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={deleteModalState.isOpen}
+        title={deleteModalState.isArchiveOnly ? 'Archive Export Shipment' : 'Delete Export Shipment'}
+        itemName={deleteModalState.shipment?.invoiceNumber || ''}
+        itemType="Export Shipment"
+        isArchiveOnly={deleteModalState.isArchiveOnly}
+        isLoading={deleteModalState.loading}
+        errorMessage={deleteModalState.error}
+        onConfirm={deleteModalState.isArchiveOnly ? handleConfirmArchive : handleConfirmDelete}
+        onCancel={() => setDeleteModalState({ isOpen: false, shipment: null, isArchiveOnly: false, loading: false, error: null })}
+        onArchiveAlternative={!deleteModalState.isArchiveOnly ? handleConfirmArchive : undefined}
+      />
     </div>
   );
 };

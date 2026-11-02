@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Building2, PlusCircle, Edit, CheckCircle, XCircle, Search, Trash2, Globe, Filter, Download } from 'lucide-react';
 import { ConsigneeMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface ConsigneeMasterViewProps {
   consignees: ConsigneeMaster[];
@@ -36,7 +37,17 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    consignee: ConsigneeMaster | null;
+    loading: boolean;
+    error: string | null;
+  }>({
+    isOpen: false,
+    consignee: null,
+    loading: false,
+    error: null,
+  });
   const [pageSize, setPageSize] = useState<number | 'ALL'>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -122,19 +133,20 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete consignee "${name}"? This action cannot be undone.`)) {
-      return;
-    }
-    setDeletingId(id);
+  const handleConfirmDelete = async () => {
+    if (!deleteModalState.consignee) return;
+    setDeleteModalState(prev => ({ ...prev, loading: true, error: null }));
     try {
-      await api.deleteConsignee(id);
+      await api.deleteConsignee(deleteModalState.consignee.id);
+      setDeleteModalState({ isOpen: false, consignee: null, loading: false, error: null });
       await loadData();
       onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete consignee');
-    } finally {
-      setDeletingId(null);
+      setDeleteModalState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to delete buyer master record.',
+      }));
     }
   };
 
@@ -294,11 +306,15 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDelete(c.id, c.name)}
-                            disabled={deletingId === c.id}
-                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-semibold transition-colors disabled:opacity-50"
+                            onClick={() => setDeleteModalState({
+                              isOpen: true,
+                              consignee: c,
+                              loading: false,
+                              error: null,
+                            })}
+                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-semibold transition-colors cursor-pointer"
                           >
-                            {deletingId === c.id ? '...' : 'Delete'}
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -487,6 +503,18 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Delete Consignee Modal */}
+      <ConfirmationModal
+        isOpen={deleteModalState.isOpen}
+        title="Delete Consignee Record"
+        itemName={deleteModalState.consignee?.name || ''}
+        itemType="Consignee / Buyer Master"
+        isLoading={deleteModalState.loading}
+        errorMessage={deleteModalState.error}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModalState({ isOpen: false, consignee: null, loading: false, error: null })}
+      />
     </div>
   );
 };

@@ -18,6 +18,7 @@ import {
   AppSettings,
   DashboardMetrics,
   Role,
+  OcrJob,
 } from '../types/index.ts';
 
 const TOKEN_KEY = 'ske_auth_token';
@@ -157,6 +158,19 @@ export const api = {
   async deleteShipment(id: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/shipments/${id}`, {
       method: 'DELETE',
+    });
+  },
+
+  async archiveShipment(id: string, reason?: string): Promise<Shipment> {
+    return this.request<Shipment>(`/shipments/${id}/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async restoreShipment(id: string): Promise<Shipment> {
+    return this.request<Shipment>(`/shipments/${id}/restore`, {
+      method: 'POST',
     });
   },
 
@@ -351,6 +365,44 @@ export const api = {
     return this.request<any>('/excel/import', {
       method: 'POST',
       body: formData,
+    });
+  },
+
+  // OCR Background Queue & Staging
+  async getOcrJobs(status?: string, category?: string): Promise<{ jobs: OcrJob[]; concurrency: { activeJobs: number; maxConcurrency: number } }> {
+    const q = new URLSearchParams();
+    if (status) q.append('status', status);
+    if (category) q.append('category', category);
+    return this.request<{ jobs: OcrJob[]; concurrency: { activeJobs: number; maxConcurrency: number } }>(`/ocr/jobs?${q.toString()}`);
+  },
+
+  async getOcrJob(id: string): Promise<OcrJob> {
+    return this.request<OcrJob>(`/ocr/jobs/${id}`);
+  },
+
+  async queueOcrJob(formData: FormData): Promise<{ success: boolean; message: string; job: OcrJob }> {
+    return this.request<{ success: boolean; message: string; job: OcrJob }>('/ocr/jobs', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  async retryOcrJob(id: string): Promise<OcrJob> {
+    return this.request<OcrJob>(`/ocr/jobs/${id}/retry`, {
+      method: 'POST',
+    });
+  },
+
+  async deleteOcrJob(id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/ocr/jobs/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async approveOcrJob(id: string, reviewedValues: Record<string, any>): Promise<{ success: boolean; message: string; shipment?: Shipment; payment?: Payment; job: OcrJob }> {
+    return this.request<{ success: boolean; message: string; shipment?: Shipment; payment?: Payment; job: OcrJob }>(`/ocr/jobs/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ reviewedValues }),
     });
   },
 

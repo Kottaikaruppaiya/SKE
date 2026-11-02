@@ -7,11 +7,13 @@ import React, { useState, useEffect } from 'react';
 import { Award, PlusCircle, CheckCircle, Clock, AlertTriangle, Edit } from 'lucide-react';
 import { Shipment, IncentiveRecord, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface IncentivesViewProps {
   selectedFyId: string;
   userRole: Role;
   onSelectShipment: (id: string) => void;
+  onRefresh?: () => void;
   refreshKey?: number;
 }
 
@@ -19,6 +21,7 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
   selectedFyId,
   userRole,
   onSelectShipment,
+  onRefresh,
   refreshKey,
 }) => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -78,6 +81,26 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
   const totalReceived = allIncentives.reduce((sum, item) => sum + item.inc.receivedAmount, 0);
   const totalPending = Math.max(0, totalClaimed - totalReceived);
 
+  const [editError, setEditError] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  // Delete modal state
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    incId: string;
+    invoiceNo: string;
+    scheme: string;
+    loading: boolean;
+    error: string | null;
+  }>({
+    isOpen: false,
+    incId: '',
+    invoiceNo: '',
+    scheme: '',
+    loading: false,
+    error: null,
+  });
+
   const openEdit = (inc: IncentiveRecord, invoiceNo: string) => {
     setEditingInc({ inc, invoiceNo });
     setClaimedAmount(inc.claimedAmount || 0);
@@ -86,11 +109,13 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
     setScrollNumber(inc.scrollNumber || '');
     setStatus(inc.status || 'RECEIVED');
     setRemarks(inc.remarks || '');
+    setEditError(null);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingInc) return;
+    setEditError(null);
 
     try {
       await api.updateIncentive(editingInc.inc.id, {
@@ -103,13 +128,15 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
       });
       setEditingInc(null);
       loadData();
+      onRefresh?.();
     } catch (err: any) {
-      alert(err.message || 'Failed to update incentive');
+      setEditError(err.message || 'Failed to update incentive');
     }
   };
 
   const handleCreateIncentive = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAddError(null);
     try {
       if (!addShipmentId) throw new Error('Please select an export shipment.');
       await api.createIncentive({
@@ -123,15 +150,15 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
       });
       setShowAddModal(false);
       loadData();
+      onRefresh?.();
     } catch (err: any) {
-      alert(err.message || 'Failed to create incentive record.');
+      setAddError(err.message || 'Failed to create incentive record.');
     }
   };
 
   const isViewer = userRole === 'VIEWER';
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const filteredIncentives = allIncentives.filter(({ inc, shipment }) => {
     const q = searchTerm.toLowerCase();
@@ -143,18 +170,20 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
     );
   });
 
-  const handleDelete = async (incId: string, invoiceNo: string, scheme: string) => {
-    if (!window.confirm(`Are you sure you want to delete the ${scheme} incentive record for invoice ${invoiceNo}?`)) {
-      return;
-    }
-    setDeletingId(incId);
+  const handleConfirmDelete = async () => {
+    if (!deleteModalState.incId) return;
+    setDeleteModalState(prev => ({ ...prev, loading: true, error: null }));
     try {
-      await api.deleteIncentive(incId);
+      await api.deleteIncentive(deleteModalState.incId);
+      setDeleteModalState({ isOpen: false, incId: '', invoiceNo: '', scheme: '', loading: false, error: null });
       loadData();
+      onRefresh?.();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete incentive');
-    } finally {
-      setDeletingId(null);
+      setDeleteModalState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to delete incentive',
+      }));
     }
   };
 
@@ -343,11 +372,17 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
                             <span>Log Receipt</span>
                           </button>
                           <button
-                            onClick={() => handleDelete(inc.id, shipment.invoiceNumber, inc.type)}
-                            disabled={deletingId === inc.id}
-                            className="h-7 px-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-md font-medium text-[11px] transition-colors disabled:opacity-50 inline-flex items-center justify-center"
+                            onClick={() => setDeleteModalState({
+                              isOpen: true,
+                              incId: inc.id,
+                              invoiceNo: shipment.invoiceNumber,
+                              scheme: inc.type === 'DRAWBACK' ? 'Duty Drawback' : inc.type,
+                              loading: false,
+                              error: null,
+                            })}
+                            className="h-7 px-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-md font-medium text-[11px] transition-colors cursor-pointer inline-flex items-center justify-center"
                           >
-                            {deletingId === inc.id ? '...' : 'Delete'}
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -373,6 +408,11 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
             </div>
 
             <form onSubmit={handleSave} className="p-6 space-y-4 text-xs">
+              {editError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                  {editError}
+                </div>
+              )}
               <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-purple-900">
                 <span className="font-bold block">
                   {editingInc.inc.type === 'DRAWBACK' ? 'Duty Drawback' : editingInc.inc.type}
@@ -481,6 +521,11 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
             </div>
 
             <form onSubmit={handleCreateIncentive} className="p-6 space-y-4 text-xs">
+              {addError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                  {addError}
+                </div>
+              )}
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Export Shipment / Invoice *</label>
                 <select
@@ -584,6 +629,18 @@ export const IncentivesView: React.FC<IncentivesViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Delete Incentive Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteModalState.isOpen}
+        title={`Delete ${deleteModalState.scheme} Record`}
+        itemName={`${deleteModalState.scheme} for ${deleteModalState.invoiceNo}`}
+        itemType="Export Incentive Claim"
+        isLoading={deleteModalState.loading}
+        errorMessage={deleteModalState.error}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModalState({ isOpen: false, incId: '', invoiceNo: '', scheme: '', loading: false, error: null })}
+      />
     </div>
   );
 };

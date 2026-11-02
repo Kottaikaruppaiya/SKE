@@ -290,6 +290,9 @@ export interface Shipment {
   paymentStatus: PaymentStatus;
   reviewStatus: ReviewStatus;
   remarks?: string;
+  isArchived?: boolean;
+  archivedAt?: string;
+  archivedReason?: string;
   createdAt: string;
   updatedAt: string;
 
@@ -368,5 +371,34 @@ export interface ImportValidationReport {
     message: string;
   }>;
   importedShipmentIds: string[];
+}
+
+export type OcrJobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+
+export interface OcrJob {
+  id: string;
+  documentId?: string;
+  originalFilename: string;
+  fileSizeBytes: number;
+  category: DocumentCategory;
+  financialYearId?: string;
+  status: OcrJobStatus;
+  attempts: number;
+  maxAttempts: number;
+  error?: string;
+  executionTimeMs?: number;
+  ocrApplied?: boolean;
+  ocrConfidence?: number;
+  ocrTextPreview?: string;
+  extractionMethod?: 'PDF_TEXT' | 'LOCAL_OCR';
+  candidateFields?: Record<string, ExtractedFieldResult>;
+  candidateDraft?: MergedShipmentDraft;
+  approvedAt?: string;
+  approvedByUserId?: string;
+  approvedByName?: string;
+  targetShipmentId?: string;
+  targetPaymentId?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 

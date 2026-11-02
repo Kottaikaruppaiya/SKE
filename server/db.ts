@@ -21,6 +21,10 @@ import type {
   AuditLog,
   AppSettings,
   DashboardMetrics,
+  OcrJob,
+  OcrJobStatus,
+  MergedShipmentDraft,
+  DocumentCategory,
 } from '../src/types/index.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
 
@@ -46,6 +50,7 @@ interface DatabaseState {
   brcRecords: BrcRecord[];
   auditLogs: AuditLog[];
   settings: AppSettings;
+  ocrJobs: OcrJob[];
 }
 
 // In-memory mutex for concurrency control on allocations
@@ -73,6 +78,9 @@ class DatabaseService {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed.shipments && parsed.shipments.length > 0 && parsed.consignees?.some((c: any) => c.name.includes('S K Global'))) {
+          if (!Array.isArray(parsed.ocrJobs)) {
+            parsed.ocrJobs = [];
+          }
           return parsed;
         }
       } catch (err) {
@@ -310,6 +318,14 @@ class DatabaseService {
     const idx = this.state.consignees.findIndex((c) => c.id === id);
     if (idx === -1) throw new Error('Consignee not found');
 
+    const consignee = this.state.consignees[idx];
+    const referencedShipments = this.state.shipments.filter((s) => s.consigneeId === id);
+    if (referencedShipments.length > 0) {
+      throw new Error(
+        `Cannot delete Consignee "${consignee.name}": It is referenced by ${referencedShipments.length} export shipment(s) (e.g. ${referencedShipments[0].invoiceNumber}). You must reassign those shipments or deactivate the consignee instead.`
+      );
+    }
+
     const old = { ...this.state.consignees[idx] };
     this.state.consignees.splice(idx, 1);
 
@@ -381,6 +397,14 @@ class DatabaseService {
     const idx = this.state.banks.findIndex((b) => b.id === id);
     if (idx === -1) throw new Error('Bank not found');
 
+    const bank = this.state.banks[idx];
+    const referencedPayments = this.state.payments.filter((p) => p.bankId === id);
+    if (referencedPayments.length > 0) {
+      throw new Error(
+        `Cannot delete Bank "${bank.name}": It is referenced by ${referencedPayments.length} FIRC payment(s) (e.g. IRM ${referencedPayments[0].irmNumber}). You must reassign those payments or deactivate the bank instead.`
+      );
+    }
+
     const old = { ...this.state.banks[idx] };
     this.state.banks.splice(idx, 1);
 
@@ -402,8 +426,13 @@ class DatabaseService {
     paymentStatus?: string;
     reviewStatus?: string;
     search?: string;
+    includeArchived?: boolean;
   }): Shipment[] {
     let list = this.state.shipments;
+
+    if (!filters?.includeArchived) {
+      list = list.filter((s) => !s.isArchived);
+    }
 
     if (filters?.financialYearId && filters.financialYearId !== 'ALL') {
       list = list.filter((s) => s.financialYearId === filters.financialYearId);
@@ -699,11 +728,27 @@ class DatabaseService {
     if (updates.invoiceDate) shipment.invoiceDate = updates.invoiceDate;
     if (updates.portCode) shipment.portCode = updates.portCode.trim().toUpperCase();
     if (updates.packageCount !== undefined) shipment.packageCount = updates.packageCount;
-    if (updates.invoiceValueUsd !== undefined) shipment.invoiceValueUsd = Number(updates.invoiceValueUsd);
+    if (updates.invoiceValueUsd !== undefined) {
+      const newInvVal = Number(updates.invoiceValueUsd);
+      if (newInvVal < 0) throw new Error('Invoice Value cannot be negative.');
+      const currentAllocs = this.state.allocations.filter((a) => a.shipmentId === id);
+      const totalAllocated = currentAllocs.reduce((sum, a) => sum + Number(a.allocatedAmountUsd), 0);
+      if (newInvVal < totalAllocated - 0.001) {
+        throw new Error(
+          `Cannot reduce Invoice Value ($${newInvVal.toFixed(2)}) below already allocated payment amount ($${totalAllocated.toFixed(2)}) on Invoice ${shipment.invoiceNumber}. Please reverse excess payment allocations first.`
+        );
+      }
+      shipment.invoiceValueUsd = newInvVal;
+    }
     if (updates.shippingBillNumber) shipment.shippingBillNumber = updates.shippingBillNumber.trim();
     if (updates.shippingBillDate) shipment.shippingBillDate = updates.shippingBillDate;
     if (updates.sbExchangeRate !== undefined) shipment.sbExchangeRate = Number(updates.sbExchangeRate);
-    if (updates.fobValueInr !== undefined) shipment.fobValueInr = Number(updates.fobValueInr);
+    if (updates.fobValueInr !== undefined) {
+      shipment.fobValueInr = Number(updates.fobValueInr);
+    } else if (updates.invoiceValueUsd !== undefined || updates.sbExchangeRate !== undefined) {
+      // Recalculate FOB INR when USD or rate changes and FOB not explicitly provided
+      shipment.fobValueInr = Math.round(shipment.invoiceValueUsd * shipment.sbExchangeRate * 100) / 100;
+    }
     if (updates.blNumber !== undefined) shipment.blNumber = updates.blNumber ? updates.blNumber.trim() : undefined;
     if (updates.blDate !== undefined) shipment.blDate = updates.blDate || undefined;
     if (updates.vesselName !== undefined) shipment.vesselName = updates.vesselName ? updates.vesselName.trim() : undefined;
@@ -804,6 +849,17 @@ class DatabaseService {
       brc.updatedAt = new Date().toISOString();
     }
 
+    // Recalculate paymentStatus based on current allocations and new invoiceValueUsd
+    const currentAllocs = this.state.allocations.filter((a) => a.shipmentId === id);
+    const totalPaid = currentAllocs.reduce((sum, a) => sum + Number(a.allocatedAmountUsd), 0);
+    if (totalPaid >= shipment.invoiceValueUsd && shipment.invoiceValueUsd > 0) {
+      shipment.paymentStatus = totalPaid > shipment.invoiceValueUsd ? 'EXCESS_RECEIVED' : 'FULLY_PAID';
+    } else if (totalPaid > 0) {
+      shipment.paymentStatus = 'PART_PAID';
+    } else {
+      shipment.paymentStatus = 'UNPAID';
+    }
+
     shipment.updatedAt = new Date().toISOString();
 
     this.logAudit({
@@ -819,9 +875,86 @@ class DatabaseService {
     return this.hydrateShipment(shipment);
   }
 
+  public archiveShipment(id: string, reason: string | undefined, actorUserId: string): Shipment {
+    const idx = this.state.shipments.findIndex((s) => s.id === id);
+    if (idx === -1) throw new Error('Shipment not found');
+
+    const shipment = this.state.shipments[idx];
+    const old = { ...shipment };
+
+    shipment.isArchived = true;
+    shipment.archivedAt = new Date().toISOString();
+    shipment.archivedReason = reason?.trim() || 'Archived by administrator';
+    shipment.updatedAt = new Date().toISOString();
+
+    this.logAudit({
+      userId: actorUserId,
+      action: 'ARCHIVE',
+      entityType: 'SHIPMENT',
+      entityId: id,
+      oldValues: old,
+      newValues: shipment,
+    });
+
+    this.save();
+    return this.hydrateShipment(shipment);
+  }
+
+  public restoreShipment(id: string, actorUserId: string): Shipment {
+    const idx = this.state.shipments.findIndex((s) => s.id === id);
+    if (idx === -1) throw new Error('Shipment not found');
+
+    const shipment = this.state.shipments[idx];
+    const old = { ...shipment };
+
+    shipment.isArchived = false;
+    shipment.archivedAt = undefined;
+    shipment.archivedReason = undefined;
+    shipment.updatedAt = new Date().toISOString();
+
+    this.logAudit({
+      userId: actorUserId,
+      action: 'RESTORE',
+      entityType: 'SHIPMENT',
+      entityId: id,
+      oldValues: old,
+      newValues: shipment,
+    });
+
+    this.save();
+    return this.hydrateShipment(shipment);
+  }
+
   public deleteShipment(id: string, actorUserId: string): { success: boolean } {
     const idx = this.state.shipments.findIndex((s) => s.id === id);
     if (idx === -1) throw new Error('Shipment not found');
+
+    const shipment = this.state.shipments[idx];
+
+    // Dependency protection rule: active allocations
+    const allocs = this.state.allocations.filter((a) => a.shipmentId === id);
+    if (allocs.length > 0) {
+      const totalPaid = allocs.reduce((sum, a) => sum + Number(a.allocatedAmountUsd), 0);
+      throw new Error(
+        `Cannot delete shipment "${shipment.invoiceNumber}": It has active FIRC payment allocations totaling $${totalPaid.toFixed(2)} USD across ${allocs.length} payment(s). Please reverse all payment allocations first, or archive this shipment.`
+      );
+    }
+
+    // Dependency protection rule: received incentives
+    const receivedIncentives = this.state.incentives.filter((i) => i.shipmentId === id && Number(i.receivedAmount) > 0);
+    if (receivedIncentives.length > 0) {
+      throw new Error(
+        `Cannot delete shipment "${shipment.invoiceNumber}": Incentive funds have already been credited for this shipment. Deletion is blocked to preserve statutory customs history. Please archive this shipment instead.`
+      );
+    }
+
+    // Dependency protection rule: realised BRC
+    const brc = this.state.brcRecords.find((b) => b.shipmentId === id);
+    if (brc && (brc.status === 'REALISED' || Boolean(brc.brcNumber))) {
+      throw new Error(
+        `Cannot delete shipment "${shipment.invoiceNumber}": Bank Realisation Certificate (${brc.brcNumber || 'eBRC'}) is marked REALISED. Deletion of realised export records is prohibited under DGFT regulations. Please archive this shipment instead.`
+      );
+    }
 
     const old = { ...this.state.shipments[idx] };
 
@@ -831,13 +964,10 @@ class DatabaseService {
     // Remove associated items
     this.state.invoiceItems = this.state.invoiceItems.filter((i) => i.shipmentId !== id);
 
-    // Remove associated allocations
-    this.state.allocations = this.state.allocations.filter((a) => a.shipmentId !== id);
-
-    // Remove associated incentives
+    // Remove associated incentives (all unclaimed)
     this.state.incentives = this.state.incentives.filter((i) => i.shipmentId !== id);
 
-    // Remove associated BRC
+    // Remove associated BRC (unrealised)
     this.state.brcRecords = this.state.brcRecords.filter((b) => b.shipmentId !== id);
 
     // Remove or unlink associated documents
@@ -961,7 +1091,18 @@ class DatabaseService {
     }
 
     if (updates.senderReference !== undefined) payment.senderReference = updates.senderReference?.trim();
-    if (updates.verifiedAmount !== undefined) payment.verifiedAmount = Number(updates.verifiedAmount);
+    if (updates.verifiedAmount !== undefined) {
+      const newAmt = Number(updates.verifiedAmount);
+      if (newAmt <= 0) throw new Error('Payment verified amount must be greater than zero.');
+      const currentAllocs = this.state.allocations.filter((a) => a.paymentId === id);
+      const totalAllocated = currentAllocs.reduce((sum, a) => sum + Number(a.allocatedAmountUsd), 0);
+      if (newAmt < totalAllocated - 0.001) {
+        throw new Error(
+          `Cannot reduce payment verified amount ($${newAmt.toFixed(2)}) below active allocations ($${totalAllocated.toFixed(2)} across ${currentAllocs.length} invoice(s)). Please reverse excess allocations first.`
+        );
+      }
+      payment.verifiedAmount = newAmt;
+    }
     if (updates.exchangeRate !== undefined) payment.exchangeRate = Number(updates.exchangeRate);
     if (updates.inrAmount !== undefined) payment.inrAmount = Number(updates.inrAmount);
     if (updates.valueDate) payment.valueDate = updates.valueDate;
@@ -990,32 +1131,18 @@ class DatabaseService {
     const idx = this.state.payments.findIndex((p) => p.id === id);
     if (idx === -1) throw new Error('Payment not found');
 
-    const old = { ...this.state.payments[idx] };
+    const payment = this.state.payments[idx];
 
-    // Find affected shipments before removing allocations
-    const affectedShipmentIds = new Set(
-      this.state.allocations.filter((a) => a.paymentId === id).map((a) => a.shipmentId)
-    );
-
-    // Remove allocations
-    this.state.allocations = this.state.allocations.filter((a) => a.paymentId !== id);
-
-    // Recalculate status for affected shipments
-    for (const shId of affectedShipmentIds) {
-      const shipment = this.state.shipments.find((s) => s.id === shId);
-      if (shipment) {
-        const remainingAllocs = this.state.allocations.filter((a) => a.shipmentId === shId);
-        const totalPaid = remainingAllocs.reduce((sum, a) => sum + Number(a.allocatedAmountUsd), 0);
-        if (totalPaid >= Number(shipment.invoiceValueUsd) && Number(shipment.invoiceValueUsd) > 0) {
-          shipment.paymentStatus = 'FULLY_PAID';
-        } else if (totalPaid > 0) {
-          shipment.paymentStatus = 'PART_PAID';
-        } else {
-          shipment.paymentStatus = 'UNPAID';
-        }
-        shipment.updatedAt = new Date().toISOString();
-      }
+    // Dependency check: block deletion if allocations exist
+    const paymentAllocs = this.state.allocations.filter((a) => a.paymentId === id);
+    if (paymentAllocs.length > 0) {
+      const totalAllocated = paymentAllocs.reduce((sum, a) => sum + Number(a.allocatedAmountUsd), 0);
+      throw new Error(
+        `Cannot delete FIRC payment "${payment.irmNumber}": It has ${paymentAllocs.length} active allocation(s) totaling $${totalAllocated.toFixed(2)} USD. Please reverse all invoice allocations first before deleting this payment.`
+      );
     }
+
+    const old = { ...this.state.payments[idx] };
 
     // Unlink documents
     this.state.documents = this.state.documents.filter((d) => d.paymentId !== id);
@@ -1279,6 +1406,13 @@ class DatabaseService {
     const idx = this.state.incentives.findIndex((i) => i.id === id);
     if (idx === -1) throw new Error('Incentive record not found');
 
+    const item = this.state.incentives[idx];
+    if (Number(item.receivedAmount) > 0) {
+      throw new Error(
+        `Cannot delete incentive claim (${item.type}): Funds of ₹${Number(item.receivedAmount).toLocaleString()} have already been credited. Deletion of received incentive funds is prohibited. Please adjust amounts or record a correction instead.`
+      );
+    }
+
     const old = { ...this.state.incentives[idx] };
     this.state.incentives.splice(idx, 1);
 
@@ -1392,6 +1526,11 @@ class DatabaseService {
       fileSizeBytes: number;
       extractedData?: Record<string, any>;
       reviewStatus?: DocumentRecord['reviewStatus'];
+      ocrApplied?: boolean;
+      ocrConfidence?: number;
+      ocrTextPreview?: string;
+      extractionMethod?: any;
+      extractedFieldsJson?: string;
     },
     actorUserId: string
   ): DocumentRecord {
@@ -1424,6 +1563,11 @@ class DatabaseService {
       isCurrent: true,
       reviewStatus: data.reviewStatus || 'EXTRACTED',
       extractedData: data.extractedData,
+      ocrApplied: data.ocrApplied,
+      ocrConfidence: data.ocrConfidence,
+      ocrTextPreview: data.ocrTextPreview,
+      extractionMethod: data.extractionMethod,
+      extractedFieldsJson: data.extractedFieldsJson,
       uploadedByUserId: actorUserId,
       uploadedByName: user?.name || 'Admin',
       createdAt: new Date().toISOString(),
@@ -1508,6 +1652,297 @@ class DatabaseService {
 
     this.save();
     return { success: true };
+  }
+
+  // --- Asynchronous OCR Job Queue & Staging Store ---
+  public getOcrJobs(filters?: { status?: OcrJobStatus; category?: DocumentCategory }): OcrJob[] {
+    let list = this.state.ocrJobs || [];
+    if (filters?.status) list = list.filter((j) => j.status === filters.status);
+    if (filters?.category) list = list.filter((j) => j.category === filters.category);
+    return [...list].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public getOcrJobById(id: string): OcrJob | undefined {
+    return (this.state.ocrJobs || []).find((j) => j.id === id);
+  }
+
+  public enqueueOcrJob(
+    data: {
+      originalFilename: string;
+      fileSizeBytes: number;
+      category: DocumentCategory;
+      financialYearId?: string;
+      documentId?: string;
+    },
+    actorUserId: string
+  ): OcrJob {
+    if (!this.state.ocrJobs) this.state.ocrJobs = [];
+
+    // Deduplication check: prevent duplicate active jobs for identical file within 10 minutes
+    const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+    const existing = this.state.ocrJobs.find(
+      (j) =>
+        (j.status === 'PENDING' || j.status === 'PROCESSING') &&
+        j.originalFilename === data.originalFilename &&
+        j.category === data.category &&
+        j.fileSizeBytes === data.fileSizeBytes &&
+        new Date(j.createdAt).getTime() > tenMinutesAgo
+    );
+    if (existing) {
+      return existing;
+    }
+
+    const job: OcrJob = {
+      id: crypto.randomUUID(),
+      documentId: data.documentId,
+      originalFilename: data.originalFilename,
+      fileSizeBytes: data.fileSizeBytes,
+      category: data.category,
+      financialYearId: data.financialYearId || 'fy-2026-27',
+      status: 'PENDING',
+      attempts: 0,
+      maxAttempts: 3,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.state.ocrJobs.unshift(job);
+    this.logAudit({
+      userId: actorUserId,
+      action: 'ENQUEUE_OCR_JOB',
+      entityType: 'OCR_JOB',
+      entityId: job.id,
+      newValues: { filename: job.originalFilename, category: job.category },
+    });
+
+    this.save();
+    return job;
+  }
+
+  public updateOcrJob(id: string, updates: Partial<OcrJob>): OcrJob {
+    const job = (this.state.ocrJobs || []).find((j) => j.id === id);
+    if (!job) throw new Error('OCR job not found');
+
+    Object.assign(job, updates, { updatedAt: new Date().toISOString() });
+    this.save();
+    return job;
+  }
+
+  public retryOcrJob(id: string, actorUserId: string): OcrJob {
+    const job = (this.state.ocrJobs || []).find((j) => j.id === id);
+    if (!job) throw new Error('OCR job not found');
+
+    job.status = 'PENDING';
+    job.error = undefined;
+    job.updatedAt = new Date().toISOString();
+
+    this.logAudit({
+      userId: actorUserId,
+      action: 'RETRY_OCR_JOB',
+      entityType: 'OCR_JOB',
+      entityId: id,
+    });
+
+    this.save();
+    return job;
+  }
+
+  public deleteOcrJob(id: string, actorUserId: string): { success: boolean } {
+    const idx = (this.state.ocrJobs || []).findIndex((j) => j.id === id);
+    if (idx === -1) throw new Error('OCR job not found');
+
+    const job = this.state.ocrJobs[idx];
+    this.state.ocrJobs.splice(idx, 1);
+
+    this.logAudit({
+      userId: actorUserId,
+      action: 'DELETE_OCR_JOB',
+      entityType: 'OCR_JOB',
+      entityId: id,
+      oldValues: { filename: job.originalFilename, status: job.status },
+    });
+
+    this.save();
+    return { success: true };
+  }
+
+  public approveOcrJob(
+    jobId: string,
+    reviewedValues: Record<string, any>,
+    actorUserId: string
+  ): { shipment?: Shipment; payment?: Payment; job: OcrJob } {
+    const job = (this.state.ocrJobs || []).find((j) => j.id === jobId);
+    if (!job) throw new Error('OCR job not found');
+
+    const user = this.getUserById(actorUserId);
+    let targetShipment: Shipment | undefined;
+    let targetPayment: Payment | undefined;
+
+    if (
+      job.category === 'COMMERCIAL_INVOICE' ||
+      job.category === 'SHIPPING_BILL' ||
+      job.category === 'BILL_OF_LADING' ||
+      job.category === 'ADDITIONAL_DOC'
+    ) {
+      const invoiceNumber = (reviewedValues.invoiceNumber || job.candidateDraft?.invoiceNumber || '').trim();
+      if (!invoiceNumber) {
+        throw new Error('Invoice Number is required to commit approved shipment data.');
+      }
+
+      const fyId = job.financialYearId || 'fy-2026-27';
+      const normalizedKey = normalizeInvoiceKey(invoiceNumber);
+      const existing = this.state.shipments.find(
+        (s) => s.financialYearId === fyId && s.normalizedInvoiceKey === normalizedKey
+      );
+
+      if (existing) {
+        // Update existing shipment with reviewed fields
+        targetShipment = this.updateShipment(
+          existing.id,
+          {
+            invoiceDate: reviewedValues.invoiceDate || existing.invoiceDate,
+            invoiceValueUsd: reviewedValues.invoiceValueUsd !== undefined ? Number(reviewedValues.invoiceValueUsd) : existing.invoiceValueUsd,
+            shippingBillNumber: reviewedValues.shippingBillNumber || existing.shippingBillNumber,
+            shippingBillDate: reviewedValues.shippingBillDate || existing.shippingBillDate,
+            sbExchangeRate: reviewedValues.sbExchangeRate !== undefined ? Number(reviewedValues.sbExchangeRate) : existing.sbExchangeRate,
+            fobValueInr: reviewedValues.fobValueInr !== undefined ? Number(reviewedValues.fobValueInr) : existing.fobValueInr,
+            blNumber: reviewedValues.blNumber !== undefined ? reviewedValues.blNumber : existing.blNumber,
+            blDate: reviewedValues.blDate !== undefined ? reviewedValues.blDate : existing.blDate,
+            vesselName: reviewedValues.vesselName !== undefined ? reviewedValues.vesselName : existing.vesselName,
+            packageCount: reviewedValues.packageCount !== undefined ? Number(reviewedValues.packageCount) : existing.packageCount,
+            portCode: reviewedValues.portCode || existing.portCode,
+            reviewStatus: 'CONFIRMED',
+          },
+          actorUserId
+        );
+      } else {
+        // Match or resolve consignee
+        let consigneeId = reviewedValues.consigneeId;
+        if (!consigneeId && (reviewedValues.consigneeName || job.candidateDraft?.consigneeName)) {
+          const cName = (reviewedValues.consigneeName || job.candidateDraft?.consigneeName || '').trim();
+          const found = this.state.consignees.find((c) => c.name.toLowerCase() === cName.toLowerCase());
+          if (found) {
+            consigneeId = found.id;
+          } else if (cName) {
+            const created = this.createConsignee(
+              {
+                name: cName,
+                country: 'International',
+                portOfDischarge: reviewedValues.portCode || 'LKCMB',
+                paymentTerms: 'DA 90 DAYS',
+                currency: 'USD',
+                isActive: true,
+              },
+              actorUserId
+            );
+            consigneeId = created.id;
+          }
+        }
+        if (!consigneeId) consigneeId = this.state.consignees[0]?.id;
+
+        targetShipment = this.createShipment(
+          {
+            financialYearId: fyId,
+            invoiceNumber,
+            invoiceDate: reviewedValues.invoiceDate || new Date().toISOString().split('T')[0],
+            consigneeId,
+            portCode: reviewedValues.portCode || 'INMAA1',
+            packageCount: Number(reviewedValues.packageCount || 0),
+            invoiceValueUsd: Number(reviewedValues.invoiceValueUsd || 0),
+            shippingBillNumber: reviewedValues.shippingBillNumber || 'PENDING',
+            shippingBillDate: reviewedValues.shippingBillDate || new Date().toISOString().split('T')[0],
+            sbExchangeRate: Number(reviewedValues.sbExchangeRate || 92.1),
+            fobValueInr: Number(reviewedValues.fobValueInr || 0),
+            blNumber: reviewedValues.blNumber,
+            blDate: reviewedValues.blDate,
+            vesselName: reviewedValues.vesselName,
+            remarks: reviewedValues.remarks,
+            reviewStatus: 'CONFIRMED',
+            initialFircPaymentId: reviewedValues.initialFircPaymentId,
+            initialFircDocumentUploaded: Boolean(reviewedValues.initialFircPaymentId || reviewedValues.initialFircDocumentUploaded),
+            incentives: {
+              dbkClaimed: Number(reviewedValues.dbkClaimed || 0),
+              rodtepClaimed: Number(reviewedValues.rodtepClaimed || 0),
+              rosctlClaimed: Number(reviewedValues.rosctlClaimed || 0),
+            },
+          },
+          actorUserId
+        );
+      }
+
+      job.targetShipmentId = targetShipment.id;
+    } else if (job.category === 'FIRC_PAYMENT') {
+      const irmNumber = (reviewedValues.irmNumber || job.candidateFields?.irmNumber?.value || '').toString().trim().toUpperCase();
+      if (!irmNumber) {
+        throw new Error('Inward Remittance Number (IRM) is required to commit payment data.');
+      }
+
+      const existingPayment = this.state.payments.find((p) => p.irmNumber.toUpperCase() === irmNumber);
+      if (existingPayment) {
+        targetPayment = this.updatePayment(
+          existingPayment.id,
+          {
+            verifiedAmount: reviewedValues.verifiedAmount !== undefined ? Number(reviewedValues.verifiedAmount) : existingPayment.verifiedAmount,
+            exchangeRate: reviewedValues.exchangeRate !== undefined ? Number(reviewedValues.exchangeRate) : existingPayment.exchangeRate,
+            inrAmount: reviewedValues.inrAmount !== undefined ? Number(reviewedValues.inrAmount) : existingPayment.inrAmount,
+            valueDate: reviewedValues.valueDate || existingPayment.valueDate,
+            creditDate: reviewedValues.creditDate || existingPayment.creditDate,
+          },
+          actorUserId
+        );
+      } else {
+        const banks = this.getBanks();
+        targetPayment = this.createPayment(
+          {
+            irmNumber,
+            senderReference: reviewedValues.senderReference,
+            currency: reviewedValues.currency || 'USD',
+            verifiedAmount: Number(reviewedValues.verifiedAmount || 0),
+            exchangeRate: Number(reviewedValues.exchangeRate || 93.28),
+            inrAmount: Number(reviewedValues.inrAmount || 0),
+            valueDate: reviewedValues.valueDate || new Date().toISOString().split('T')[0],
+            creditDate: reviewedValues.creditDate || new Date().toISOString().split('T')[0],
+            bankId: reviewedValues.bankId || banks[0]?.id || '',
+            purposeCode: reviewedValues.purposeCode || 'P0103',
+            remarks: reviewedValues.remarks,
+          },
+          actorUserId
+        );
+      }
+
+      job.targetPaymentId = targetPayment.id;
+    }
+
+    // Link original document if exists
+    if (job.documentId) {
+      const doc = this.getDocumentById(job.documentId);
+      if (doc) {
+        if (targetShipment && !doc.shipmentId) doc.shipmentId = targetShipment.id;
+        if (targetPayment && !doc.paymentId) doc.paymentId = targetPayment.id;
+        doc.reviewStatus = 'CONFIRMED';
+        doc.updatedAt = new Date().toISOString();
+      }
+    }
+
+    job.approvedAt = new Date().toISOString();
+    job.approvedByUserId = actorUserId;
+    job.approvedByName = user?.name || 'Administrator';
+    job.updatedAt = new Date().toISOString();
+
+    this.logAudit({
+      userId: actorUserId,
+      action: 'APPROVE_OCR_CANDIDATE_DATA',
+      entityType: 'OCR_JOB',
+      entityId: job.id,
+      newValues: {
+        targetShipmentId: job.targetShipmentId,
+        targetPaymentId: job.targetPaymentId,
+        approvedValues: reviewedValues,
+      },
+    });
+
+    this.save();
+    return { shipment: targetShipment, payment: targetPayment, job };
   }
 
   // --- Audit Logs ---
@@ -2260,6 +2695,7 @@ class DatabaseService {
         iecNumber: '0308019921',
         panNumber: 'AAECS9812K',
       },
+      ocrJobs: [],
     };
   }
 }

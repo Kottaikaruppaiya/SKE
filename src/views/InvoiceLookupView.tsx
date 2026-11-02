@@ -29,12 +29,14 @@ import { normalizeInvoiceKey } from '../../server/normalizer.ts';
 interface InvoiceLookupViewProps {
   selectedFyId: string;
   onSelectShipment: (id: string) => void;
+  onRefresh?: () => void;
   refreshKey?: number;
 }
 
 export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
   selectedFyId,
   onSelectShipment,
+  onRefresh,
   refreshKey,
 }) => {
   const [inputVal, setInputVal] = useState('SKE/26-27/020');
@@ -249,8 +251,10 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
 
       const updated = await api.updateShipment(selectedShipment.id, updates);
       setSelectedShipment(updated);
+      setAllShipments((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
       clearChangeToInputs();
       setSaveSuccess(`Successfully updated invoice ${updated.invoiceNumber}. All changes recorded in audit log.`);
+      if (onRefresh) onRefresh();
 
       // Refresh audits
       const newLogs = await api.getAuditLogs(50);

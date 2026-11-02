@@ -4,9 +4,16 @@
  */
 
 import { createRequire } from 'module';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
 const require = createRequire(import.meta.url);
 const pdfParseModule = require('pdf-parse');
 const tesseractModule = require('tesseract.js');
+const execFileAsync = promisify(execFile);
 
 import type {
   DocumentCategory,
@@ -34,14 +41,58 @@ export interface LocalExtractionOutput {
 }
 
 /**
+ * Attempts server-side native Python OCR pipeline (PyMuPDF + OpenCV + Tesseract)
+ * Returns null if Python or packages are unavailable, allowing seamless Node fallback.
+ */
+async function tryPythonOcrEngine(buffer: Buffer, filename?: string): Promise<LocalExtractionOutput | null> {
+  const tempDir = os.tmpdir();
+  const ext = filename ? path.extname(filename) : '.pdf';
+  const tempPath = path.join(tempDir, `ske_ocr_${Date.now()}_${Math.random().toString(36).substring(2)}${ext || '.pdf'}`);
+
+  try {
+    await fs.promises.writeFile(tempPath, buffer);
+    const engineScript = path.resolve('server/ocr_engine.py');
+    if (!fs.existsSync(engineScript)) return null;
+
+    const { stdout } = await execFileAsync('python3', [engineScript, tempPath], { timeout: 45000 });
+    const parsed = JSON.parse(stdout.trim());
+    if (parsed.success && parsed.text && parsed.text.trim().length > 0) {
+      return {
+        text: parsed.text.trim(),
+        numpages: parsed.numpages || 1,
+        method: parsed.method || (parsed.ocrApplied ? 'LOCAL_OCR' : 'PDF_TEXT'),
+        ocrApplied: Boolean(parsed.ocrApplied),
+        ocrConfidence: parsed.ocrConfidence,
+        ocrTextPreview: parsed.ocrTextPreview || parsed.text.slice(0, 300),
+      };
+    }
+  } catch {
+    // Graceful fallback to Node-native engine
+  } finally {
+    try {
+      if (fs.existsSync(tempPath)) await fs.promises.unlink(tempPath);
+    } catch {}
+  }
+  return null;
+}
+
+/**
  * Extract text from a PDF buffer or image buffer.
- * If digital PDF text is empty or < 50 characters (e.g. scanned Bill of Lading),
- * falls back automatically to local WASM OCR via Tesseract.js.
+ * Priority:
+ * 1. Native Python Server-side Engine (PyMuPDF / OpenCV / Tesseract)
+ * 2. Node.js Digital Vector PDF extraction (pdf-parse)
+ * 3. Node.js Local WASM OCR (Tesseract.js)
  */
 export async function parsePdfBuffer(
   buffer: Buffer,
   filename?: string
 ): Promise<LocalExtractionOutput> {
+  // 0. Try server-side native Python OCR engine first
+  const pythonResult = await tryPythonOcrEngine(buffer, filename);
+  if (pythonResult) {
+    return pythonResult;
+  }
+
   const isImage =
     (filename && /\.(png|jpe?g|tiff?|bmp|webp)$/i.test(filename)) ||
     (buffer.length > 4 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) ||

@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Landmark, PlusCircle, Edit, Download } from 'lucide-react';
 import { BankMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface BankMasterViewProps {
   banks: BankMaster[];
@@ -33,6 +34,19 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const isViewer = userRole === 'VIEWER';
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    bank: BankMaster | null;
+    loading: boolean;
+    error: string | null;
+  }>({
+    isOpen: false,
+    bank: null,
+    loading: false,
+    error: null,
+  });
 
   const openCreate = () => {
     setEditingId(null);
@@ -92,9 +106,6 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
     }
   };
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-
   const filteredBanks = banks.filter((b) => {
     const q = searchTerm.toLowerCase();
     return (
@@ -107,18 +118,19 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
     );
   });
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete bank "${name}"? This action cannot be undone.`)) {
-      return;
-    }
-    setDeletingId(id);
+  const handleConfirmDelete = async () => {
+    if (!deleteModalState.bank) return;
+    setDeleteModalState(prev => ({ ...prev, loading: true, error: null }));
     try {
-      await api.deleteBank(id);
+      await api.deleteBank(deleteModalState.bank.id);
+      setDeleteModalState({ isOpen: false, bank: null, loading: false, error: null });
       onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete bank');
-    } finally {
-      setDeletingId(null);
+      setDeleteModalState(prev => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Failed to delete bank master record.',
+      }));
     }
   };
 
@@ -217,11 +229,15 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
                             Edit
                           </button>
                           <button
-                            onClick={() => handleDelete(b.id, b.name)}
-                            disabled={deletingId === b.id}
-                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-semibold transition-colors disabled:opacity-50"
+                            onClick={() => setDeleteModalState({
+                              isOpen: true,
+                              bank: b,
+                              loading: false,
+                              error: null,
+                            })}
+                            className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-semibold transition-colors cursor-pointer"
                           >
-                            {deletingId === b.id ? '...' : 'Delete'}
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -353,6 +369,18 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Delete Bank Modal */}
+      <ConfirmationModal
+        isOpen={deleteModalState.isOpen}
+        title="Delete Bank Master Record"
+        itemName={deleteModalState.bank?.name || ''}
+        itemType="Authorised Dealer Bank"
+        isLoading={deleteModalState.loading}
+        errorMessage={deleteModalState.error}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModalState({ isOpen: false, bank: null, loading: false, error: null })}
+      />
     </div>
   );
 };

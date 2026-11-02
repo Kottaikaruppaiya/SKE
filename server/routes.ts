@@ -12,6 +12,7 @@ import { authenticate, requireRole, generateToken, type AuthenticatedRequest } f
 import { extractDocumentData, mergeExtractedDocuments } from './extractor.ts';
 import { generateExportWorkbook, generateCsvExport, parseHistoricalExcelMigration } from './excel.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
+import { ocrWorker } from './ocr_worker.ts';
 import type { DocumentCategory } from '../src/types/index.ts';
 
 export const apiRouter = express.Router();
@@ -533,6 +534,34 @@ apiRouter.delete(
   }
 );
 
+apiRouter.post(
+  '/shipments/:id/archive',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const archived = db.archiveShipment(req.params.id, req.body.reason, req.user!.id);
+      res.json(archived);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to archive shipment.' });
+    }
+  }
+);
+
+apiRouter.post(
+  '/shipments/:id/restore',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const restored = db.restoreShipment(req.params.id, req.user!.id);
+      res.json(restored);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to restore shipment.' });
+    }
+  }
+);
+
 // --- Payments & Allocations ---
 apiRouter.get('/payments', authenticate, (req, res) => {
   res.json(db.getPayments());
@@ -681,6 +710,115 @@ apiRouter.post(
       res.json(reset);
     } catch (err: any) {
       res.status(400).json({ error: err.message || 'Failed to reset BRC record.' });
+    }
+  }
+);
+
+// --- Asynchronous OCR Job Queue & Staging Endpoints ---
+apiRouter.get('/ocr/jobs', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const status = req.query.status as any;
+  const category = req.query.category as any;
+  const jobs = db.getOcrJobs({ status, category });
+  res.json({
+    jobs,
+    concurrency: ocrWorker.getConcurrencyMetrics(),
+  });
+});
+
+apiRouter.get('/ocr/jobs/:id', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const job = db.getOcrJobById(req.params.id);
+  if (!job) return res.status(404).json({ error: 'OCR Job not found.' });
+  res.json(job);
+});
+
+apiRouter.post(
+  '/ocr/jobs',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  upload.single('file'),
+  (req: AuthenticatedRequest, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No document file provided for OCR queue.' });
+    }
+
+    const category = (req.body.category || 'COMMERCIAL_INVOICE') as DocumentCategory;
+    const financialYearId = req.body.financialYearId || 'fy-2026-27';
+
+    // Enqueue job without blocking Express request
+    const job = db.enqueueOcrJob(
+      {
+        originalFilename: req.file.originalname,
+        fileSizeBytes: req.file.size,
+        category,
+        financialYearId,
+      },
+      req.user!.id
+    );
+
+    // Register staging buffer for background worker
+    ocrWorker.registerStagingBuffer(job.id, req.file.buffer);
+
+    // Save backup staging copy on disk
+    try {
+      const stagingPath = path.resolve('storage/staging', `${job.id}.bin`);
+      fs.writeFileSync(stagingPath, req.file.buffer);
+    } catch {}
+
+    // Trigger worker asynchronously
+    ocrWorker.triggerProcessing();
+
+    res.status(202).json({
+      success: true,
+      message: 'Document queued for background server-side OCR processing.',
+      job,
+    });
+  }
+);
+
+apiRouter.post(
+  '/ocr/jobs/:id/retry',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const job = db.retryOcrJob(req.params.id, req.user!.id);
+      ocrWorker.triggerProcessing();
+      res.json(job);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to retry job.' });
+    }
+  }
+);
+
+apiRouter.delete(
+  '/ocr/jobs/:id',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = db.deleteOcrJob(req.params.id, req.user!.id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to delete job.' });
+    }
+  }
+);
+
+apiRouter.post(
+  '/ocr/jobs/:id/approve',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const reviewedValues = req.body.reviewedValues || req.body;
+      const result = db.approveOcrJob(req.params.id, reviewedValues, req.user!.id);
+      res.json({
+        success: true,
+        message: 'Candidate OCR data approved and committed to ledger.',
+        ...result,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to approve OCR data.' });
     }
   }
 );

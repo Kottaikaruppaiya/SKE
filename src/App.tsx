@@ -198,6 +198,7 @@ export default function App() {
               onOpenNewShipment={() => setIsNewShipmentOpen(true)}
               onOpenAllocate={setAllocatingShipment}
               onOpenEdit={setEditingShipment}
+              onRefresh={triggerRefresh}
               userRole={currentUser.role}
               refreshKey={refreshKey}
             />
@@ -207,6 +208,8 @@ export default function App() {
             <QuickView
               selectedFyId={selectedFyId}
               onSelectShipment={setSelectedShipmentId}
+              onRefresh={triggerRefresh}
+              userRole={currentUser.role}
               refreshKey={refreshKey}
             />
           )}
@@ -217,6 +220,7 @@ export default function App() {
             <InvoiceLookupView
               selectedFyId={selectedFyId}
               onSelectShipment={setSelectedShipmentId}
+              onRefresh={triggerRefresh}
               refreshKey={refreshKey}
             />
           )}
@@ -226,6 +230,7 @@ export default function App() {
               banks={banks}
               userRole={currentUser.role}
               onSelectShipment={setSelectedShipmentId}
+              onRefresh={triggerRefresh}
               refreshKey={refreshKey}
             />
           )}
@@ -235,6 +240,7 @@ export default function App() {
               selectedFyId={selectedFyId}
               onSelectShipment={setSelectedShipmentId}
               onOpenUpload={setUploadingShipment}
+              onRefresh={triggerRefresh}
               userRole={currentUser.role}
               refreshKey={refreshKey}
             />
@@ -245,6 +251,7 @@ export default function App() {
               selectedFyId={selectedFyId}
               userRole={currentUser.role}
               onSelectShipment={setSelectedShipmentId}
+              onRefresh={triggerRefresh}
               refreshKey={refreshKey}
             />
           )}
