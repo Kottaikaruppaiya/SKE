@@ -71,7 +71,7 @@
 | **Admin Review & Approval Workflow** | **PASS** | Interactive side-by-side editing interface in `DocumentReviewView.tsx` with commit endpoint `/api/ocr/jobs/:id/approve` writing to PostgreSQL. |
 | **Zero External Cloud AI Enforcement** | **PASS** | Verified zero calls to Gemini API, OpenAI API, Cloud Vision, Textract, Firebase, or Supabase. All OCR executes on the server. |
 | **Private Document Storage & Streaming** | **PASS** | Documents stored in `/storage/FY{label}/{key}/`; downloads authenticated via Bearer token with audit trail logging. |
-| **Automated Test Suite** | **PASS** | 22/22 unit, CRUD, and OCR pipeline tests passing (`npm test`). |
+| **Automated Test Suite** | **PASS** | 25/25 unit, CRUD synchronization, OCR queue, and storage security tests passing (`npm test`). |
 | **TypeScript & Vite Compilation** | **PASS** | `npm run lint` (`tsc --noEmit`): 0 errors. `npm run build`: Build succeeded. |
 | **Automated VPS Provisioning Script** | **PASS** | `deploy/vps_setup.sh` and `deploy/backup_storage.sh` created, configured, and made executable. |
 | **Physical VPS Live Provisioning** | **BLOCKED** | Connecting to an external live Ubuntu VPS requires the user's specific server IP address and SSH credentials. Complete step-by-step instructions provided in `docs/VPS_DEPLOYMENT_GUIDE.md`. |

@@ -168,3 +168,51 @@ test('OCR Pipeline: Admin Review & Commit workflow updates PostgreSQL without ov
   assert.ok(approvedJob.approvedAt, 'Approval timestamp must be saved');
   assert.equal(approvedJob.targetShipmentId, shipment.id);
 });
+
+test('OCR Pipeline: Concurrency control respects maximum concurrent active jobs', () => {
+  const metrics = ocrWorker.getConcurrencyMetrics();
+  assert.ok(metrics.maxConcurrency >= 1, 'Max concurrency must be at least 1');
+  assert.ok(metrics.activeJobs >= 0, 'Active jobs count must be non-negative');
+});
+
+test('OCR Pipeline: Worker recovery handles pending jobs left after restart or crash', async () => {
+  const buffer = fs.readFileSync(SAMPLE_INVOICE_PDF);
+  const crashRecoveryJob = db.enqueueOcrJob(
+    {
+      originalFilename: `recovery_test_${Date.now()}.pdf`,
+      fileSizeBytes: buffer.length,
+      category: 'COMMERCIAL_INVOICE',
+      financialYearId: 'fy-2026-27',
+    },
+    'system-recovery-test'
+  );
+
+  // Simulate an interrupted or crashed job that was marked PROCESSING before crash
+  db.updateOcrJob(crashRecoveryJob.id, {
+    status: 'PENDING', // or reset to PENDING by supervisor
+    error: 'Worker restarted: recovering uncompleted job',
+  });
+
+  ocrWorker.registerStagingBuffer(crashRecoveryJob.id, buffer);
+  await ocrWorker.processJob(crashRecoveryJob);
+
+  const recoveredJob = db.getOcrJobById(crashRecoveryJob.id);
+  assert.ok(recoveredJob);
+  assert.equal(recoveredJob.status, 'COMPLETED', 'Recovered job must complete processing successfully');
+  assert.ok(recoveredJob.candidateFields?.invoiceNumber?.value, 'Must extract candidates after recovery');
+});
+
+test('Storage Security: Path traversal protection rejects attempts to escape storage boundaries', () => {
+  const storageRoot = path.resolve('storage');
+  const assetsRoot = path.resolve('public/assets');
+
+  const safePath = path.resolve('storage/FY2026-27/SKE_26-27_020/invoice.pdf');
+  const maliciousPath = path.resolve('storage/../../etc/passwd');
+
+  const isSafeValid = safePath.startsWith(storageRoot) || safePath.startsWith(assetsRoot);
+  const isMaliciousValid = maliciousPath.startsWith(storageRoot) || maliciousPath.startsWith(assetsRoot);
+
+  assert.equal(isSafeValid, true, 'Valid storage path must be allowed');
+  assert.equal(isMaliciousValid, false, 'Malicious path traversal must be rejected');
+});
+

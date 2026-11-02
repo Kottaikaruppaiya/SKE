@@ -906,12 +906,21 @@ apiRouter.get('/documents/:id/download', authenticate, (req: AuthenticatedReques
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
   const absolutePath = path.resolve(doc.storedPath);
+  const storageRoot = path.resolve('storage');
+  const assetsRoot = path.resolve('public/assets');
+
+  // Path containment guard: prevent path traversal attacks
+  if (!absolutePath.startsWith(storageRoot) && !absolutePath.startsWith(assetsRoot)) {
+    return res.status(403).json({ error: 'Access denied: document path is outside permitted storage boundaries.' });
+  }
+
   if (!fs.existsSync(absolutePath)) {
     return res.status(404).json({ error: 'Physical document file missing on server.' });
   }
 
   db.logAudit({
     userId: req.user!.id,
+    userName: req.user!.name,
     action: 'DOWNLOAD',
     entityType: 'DOCUMENT',
     entityId: doc.id,
