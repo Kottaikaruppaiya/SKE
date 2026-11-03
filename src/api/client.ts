@@ -14,11 +14,12 @@ import {
   IncentiveRecord,
   BrcRecord,
   DocumentRecord,
-  AuditLog,
   AppSettings,
   DashboardMetrics,
   Role,
   OcrJob,
+  GstEntry,
+  GstSummary,
 } from '../types/index.ts';
 
 const TOKEN_KEY = 'ske_auth_token';
@@ -413,9 +414,102 @@ export const api = {
     });
   },
 
-  // Audit
-  async getAuditLogs(limit = 100): Promise<AuditLog[]> {
-    return this.request<AuditLog[]>(`/audit?limit=${limit}`);
+  // GST Entry Module
+  async getGstEntries(filters?: {
+    consigneeId?: string;
+    result?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ entries: GstEntry[]; total: number; summary: GstSummary }> {
+    const q = new URLSearchParams();
+    if (filters?.consigneeId) q.append('consigneeId', filters.consigneeId);
+    if (filters?.result) q.append('result', filters.result);
+    if (filters?.startDate) q.append('startDate', filters.startDate);
+    if (filters?.endDate) q.append('endDate', filters.endDate);
+    if (filters?.search) q.append('search', filters.search);
+    if (filters?.sortBy) q.append('sortBy', filters.sortBy);
+    if (filters?.sortOrder) q.append('sortOrder', filters.sortOrder);
+    if (filters?.page) q.append('page', String(filters.page));
+    if (filters?.limit) q.append('limit', String(filters.limit));
+    return this.request<{ entries: GstEntry[]; total: number; summary: GstSummary }>(`/gst-entries?${q.toString()}`);
+  },
+
+  async getGstSummary(filters?: {
+    consigneeId?: string;
+    result?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }): Promise<GstSummary> {
+    const q = new URLSearchParams();
+    if (filters?.consigneeId) q.append('consigneeId', filters.consigneeId);
+    if (filters?.result) q.append('result', filters.result);
+    if (filters?.startDate) q.append('startDate', filters.startDate);
+    if (filters?.endDate) q.append('endDate', filters.endDate);
+    if (filters?.search) q.append('search', filters.search);
+    return this.request<GstSummary>(`/gst-entries/summary?${q.toString()}`);
+  },
+
+  async createGstEntry(data: {
+    entryDate?: string;
+    consigneeId: string;
+    igst?: number;
+    cgst?: number;
+    sgst?: number;
+    refundEligible?: number;
+    remarks?: string;
+  }): Promise<GstEntry> {
+    return this.request<GstEntry>('/gst-entries', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateGstEntry(
+    id: string,
+    data: Partial<{
+      entryDate: string;
+      consigneeId: string;
+      igst: number;
+      cgst: number;
+      sgst: number;
+      refundEligible: number;
+      remarks: string;
+    }>
+  ): Promise<GstEntry> {
+    return this.request<GstEntry>(`/gst-entries/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteGstEntry(id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/gst-entries/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getGstExportUrl(filters?: {
+    consigneeId?: string;
+    result?: string;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }): string {
+    const token = this.getToken();
+    const q = new URLSearchParams();
+    if (filters?.consigneeId) q.append('consigneeId', filters.consigneeId);
+    if (filters?.result) q.append('result', filters.result);
+    if (filters?.startDate) q.append('startDate', filters.startDate);
+    if (filters?.endDate) q.append('endDate', filters.endDate);
+    if (filters?.search) q.append('search', filters.search);
+    if (token) q.append('token', token);
+    return `/api/gst-entries/export?${q.toString()}`;
   },
 
   // Users (Super Admin)

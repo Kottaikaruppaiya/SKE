@@ -18,13 +18,15 @@ import type {
   PaymentAllocation,
   IncentiveRecord,
   BrcRecord,
-  AuditLog,
   AppSettings,
   DashboardMetrics,
   OcrJob,
   OcrJobStatus,
   MergedShipmentDraft,
   DocumentCategory,
+  GstEntry,
+  GstSummary,
+  GstResult,
 } from '../src/types/index.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
 
@@ -55,7 +57,7 @@ interface DatabaseState {
   allocations: PaymentAllocation[];
   incentives: IncentiveRecord[];
   brcRecords: BrcRecord[];
-  auditLogs: AuditLog[];
+  gstEntries: GstEntry[];
   settings: AppSettings;
   ocrJobs: OcrJob[];
   revokedTokens: RevokedToken[];
@@ -86,11 +88,23 @@ class DatabaseService {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed.shipments && parsed.shipments.length > 0 && parsed.consignees?.some((c: any) => c.name.includes('S K Global'))) {
+          let needsSave = false;
+          if ('auditLogs' in parsed) {
+            delete parsed.auditLogs;
+            needsSave = true;
+          }
+          if (!Array.isArray(parsed.gstEntries)) {
+            parsed.gstEntries = this.getDefaultGstEntries(parsed.consignees || []);
+            needsSave = true;
+          }
           if (!Array.isArray(parsed.ocrJobs)) {
             parsed.ocrJobs = [];
           }
           if (!Array.isArray(parsed.revokedTokens)) {
             parsed.revokedTokens = [];
+          }
+          if (needsSave) {
+            this.persist(parsed);
           }
           return parsed;
         }
@@ -107,12 +121,6 @@ class DatabaseService {
   public reseedWithDefaults(actorUserId?: string) {
     this.state = this.getInitialSeedState();
     if (actorUserId) {
-      this.logAudit({
-        userId: actorUserId,
-        action: 'RESEED_DATABASE',
-        entityType: 'DATABASE',
-        newValues: { shipments: this.state.shipments.length },
-      });
     }
     this.save();
     return { success: true, count: this.state.shipments.length };
@@ -132,38 +140,7 @@ class DatabaseService {
     this.state = this.loadOrInitialize();
   }
 
-  public logAudit(entry: {
-    userId?: string;
-    userName?: string;
-    action: string;
-    entityType: string;
-    entityId?: string;
-    oldValues?: any;
-    newValues?: any;
-    ipAddress?: string;
-    userAgent?: string;
-  }) {
-    const log: AuditLog = {
-      id: crypto.randomUUID(),
-      userId: entry.userId,
-      userName: entry.userName || (entry.userId ? this.getUserById(entry.userId)?.name : 'System'),
-      action: entry.action,
-      entityType: entry.entityType,
-      entityId: entry.entityId,
-      oldValues: entry.oldValues,
-      newValues: entry.newValues,
-      ipAddress: entry.ipAddress || '127.0.0.1',
-      userAgent: entry.userAgent || 'SKE Internal Engine',
-      timestamp: new Date().toISOString(),
-    };
-    this.state.auditLogs.unshift(log);
-    // Keep max 2000 logs in memory
-    if (this.state.auditLogs.length > 2000) {
-      this.state.auditLogs = this.state.auditLogs.slice(0, 2000);
-    }
-    this.save();
-    return log;
-  }
+  
 
   // --- Users & Auth ---
   public getUsers(): User[] {
@@ -194,13 +171,6 @@ class DatabaseService {
     };
 
     this.state.users.push(newUser);
-    this.logAudit({
-      userId: actorUserId,
-      action: 'CREATE',
-      entityType: 'USER',
-      entityId: newUser.id,
-      newValues: { email: newUser.email, role: newUser.role, name: newUser.name },
-    });
     this.save();
 
     const { passwordHash, ...clean } = newUser;
@@ -222,14 +192,6 @@ class DatabaseService {
     }
     user.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'UPDATE',
-      entityType: 'USER',
-      entityId: id,
-      oldValues: old,
-      newValues: user,
-    });
     this.save();
     return user;
   }
@@ -251,13 +213,6 @@ class DatabaseService {
     const old = { ...user };
     this.state.users.splice(idx, 1);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DELETE',
-      entityType: 'USER',
-      entityId: id,
-      oldValues: old,
-    });
 
     this.save();
     return { success: true };
@@ -295,13 +250,6 @@ class DatabaseService {
     };
 
     this.state.consignees.push(record);
-    this.logAudit({
-      userId: actorUserId,
-      action: 'CREATE',
-      entityType: 'CONSIGNEE_MASTER',
-      entityId: record.id,
-      newValues: record,
-    });
     this.save();
     return record;
   }
@@ -313,14 +261,6 @@ class DatabaseService {
     const old = { ...item };
     Object.assign(item, updates, { updatedAt: new Date().toISOString() });
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'UPDATE',
-      entityType: 'CONSIGNEE_MASTER',
-      entityId: id,
-      oldValues: old,
-      newValues: item,
-    });
     this.save();
     return item;
   }
@@ -340,13 +280,6 @@ class DatabaseService {
     const old = { ...this.state.consignees[idx] };
     this.state.consignees.splice(idx, 1);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DELETE',
-      entityType: 'CONSIGNEE_MASTER',
-      entityId: id,
-      oldValues: old,
-    });
     this.save();
     return { success: true };
   }
@@ -374,13 +307,6 @@ class DatabaseService {
     };
 
     this.state.banks.push(record);
-    this.logAudit({
-      userId: actorUserId,
-      action: 'CREATE',
-      entityType: 'BANK_MASTER',
-      entityId: record.id,
-      newValues: record,
-    });
     this.save();
     return record;
   }
@@ -392,14 +318,6 @@ class DatabaseService {
     const old = { ...item };
     Object.assign(item, updates, { updatedAt: new Date().toISOString() });
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'UPDATE',
-      entityType: 'BANK_MASTER',
-      entityId: id,
-      oldValues: old,
-      newValues: item,
-    });
     this.save();
     return item;
   }
@@ -419,13 +337,6 @@ class DatabaseService {
     const old = { ...this.state.banks[idx] };
     this.state.banks.splice(idx, 1);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DELETE',
-      entityType: 'BANK_MASTER',
-      entityId: id,
-      oldValues: old,
-    });
     this.save();
     return { success: true };
   }
@@ -704,13 +615,6 @@ class DatabaseService {
       );
     }
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'CREATE',
-      entityType: 'SHIPMENT',
-      entityId: shipmentId,
-      newValues: newShipment,
-    });
 
     this.save();
     return this.hydrateShipment(newShipment);
@@ -873,14 +777,6 @@ class DatabaseService {
 
     shipment.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'UPDATE',
-      entityType: 'SHIPMENT',
-      entityId: id,
-      oldValues: old,
-      newValues: shipment,
-    });
 
     this.save();
     return this.hydrateShipment(shipment);
@@ -898,14 +794,6 @@ class DatabaseService {
     shipment.archivedReason = reason?.trim() || 'Archived by administrator';
     shipment.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'ARCHIVE',
-      entityType: 'SHIPMENT',
-      entityId: id,
-      oldValues: old,
-      newValues: shipment,
-    });
 
     this.save();
     return this.hydrateShipment(shipment);
@@ -923,14 +811,6 @@ class DatabaseService {
     shipment.archivedReason = undefined;
     shipment.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'RESTORE',
-      entityType: 'SHIPMENT',
-      entityId: id,
-      oldValues: old,
-      newValues: shipment,
-    });
 
     this.save();
     return this.hydrateShipment(shipment);
@@ -984,13 +864,6 @@ class DatabaseService {
     // Remove or unlink associated documents
     this.state.documents = this.state.documents.filter((d) => d.shipmentId !== id);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DELETE',
-      entityType: 'SHIPMENT',
-      entityId: id,
-      oldValues: old,
-    });
 
     this.save();
     return { success: true };
@@ -1071,13 +944,6 @@ class DatabaseService {
     };
 
     this.state.payments.push(newPayment);
-    this.logAudit({
-      userId: actorUserId,
-      action: 'CREATE',
-      entityType: 'PAYMENT',
-      entityId: paymentId,
-      newValues: newPayment,
-    });
 
     this.save();
     return this.hydratePayment(newPayment);
@@ -1125,14 +991,6 @@ class DatabaseService {
 
     payment.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'UPDATE',
-      entityType: 'PAYMENT',
-      entityId: id,
-      oldValues: old,
-      newValues: payment,
-    });
 
     this.save();
     return this.hydratePayment(payment);
@@ -1161,13 +1019,6 @@ class DatabaseService {
     // Remove payment
     this.state.payments.splice(idx, 1);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DELETE',
-      entityType: 'PAYMENT',
-      entityId: id,
-      oldValues: old,
-    });
 
     this.save();
     return { success: true };
@@ -1257,19 +1108,6 @@ class DatabaseService {
       }
       shipment.updatedAt = new Date().toISOString();
 
-      this.logAudit({
-        userId: actorUserId,
-        action: 'ALLOCATE',
-        entityType: 'PAYMENT_ALLOCATION',
-        entityId: allocation.id,
-        newValues: {
-          allocation,
-          paymentIrm: payment.irmNumber,
-          shipmentInvoice: shipment.invoiceNumber,
-          remainingPaymentBalance: availablePaymentBalance - amount,
-          remainingInvoiceBalance: invoiceBalanceDue - amount,
-        },
-      });
 
       this.save();
       return allocation;
@@ -1301,13 +1139,6 @@ class DatabaseService {
       shipment.updatedAt = new Date().toISOString();
     }
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DEALLOCATE',
-      entityType: 'PAYMENT_ALLOCATION',
-      entityId: allocationId,
-      oldValues: alloc,
-    });
 
     this.save();
     return { success: true };
@@ -1348,13 +1179,6 @@ class DatabaseService {
     };
 
     this.state.incentives.push(record);
-    this.logAudit({
-      userId: actorUserId,
-      action: 'CREATE',
-      entityType: 'INCENTIVE',
-      entityId: record.id,
-      newValues: record,
-    });
     this.save();
     return {
       ...record,
@@ -1397,14 +1221,6 @@ class DatabaseService {
 
     item.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'UPDATE',
-      entityType: 'INCENTIVE',
-      entityId: id,
-      oldValues: old,
-      newValues: item,
-    });
 
     this.save();
     return {
@@ -1427,13 +1243,6 @@ class DatabaseService {
     const old = { ...this.state.incentives[idx] };
     this.state.incentives.splice(idx, 1);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DELETE',
-      entityType: 'INCENTIVE',
-      entityId: id,
-      oldValues: old,
-    });
 
     this.save();
     return { success: true };
@@ -1488,14 +1297,6 @@ class DatabaseService {
 
     item.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'UPDATE',
-      entityType: 'BRC_RECORD',
-      entityId: item.id,
-      oldValues: old,
-      newValues: item,
-    });
 
     this.save();
     return item;
@@ -1513,14 +1314,6 @@ class DatabaseService {
     item.remarks = undefined;
     item.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'RESET_BRC',
-      entityType: 'BRC_RECORD',
-      entityId: item.id,
-      oldValues: old,
-      newValues: item,
-    });
     this.save();
     return item;
   }
@@ -1586,19 +1379,6 @@ class DatabaseService {
     };
 
     this.state.documents.push(newDoc);
-    this.logAudit({
-      userId: actorUserId,
-      action: nextVersion > 1 ? 'REPLACE_DOCUMENT' : 'UPLOAD_DOCUMENT',
-      entityType: 'DOCUMENT',
-      entityId: newDoc.id,
-      newValues: {
-        category: newDoc.category,
-        filename: newDoc.originalFilename,
-        version: newDoc.version,
-        shipmentId: newDoc.shipmentId,
-        paymentId: newDoc.paymentId,
-      },
-    });
 
     this.save();
     return newDoc;
@@ -1623,14 +1403,6 @@ class DatabaseService {
     doc.reviewStatus = status;
     doc.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'REVIEW_DOCUMENT',
-      entityType: 'DOCUMENT',
-      entityId: id,
-      oldValues: { reviewStatus: oldStatus },
-      newValues: { reviewStatus: status },
-    });
 
     this.save();
     return doc;
@@ -1653,13 +1425,6 @@ class DatabaseService {
 
     this.state.documents.splice(idx, 1);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DELETE',
-      entityType: 'DOCUMENT',
-      entityId: id,
-      oldValues: old,
-    });
 
     this.save();
     return { success: true };
@@ -1718,13 +1483,6 @@ class DatabaseService {
     };
 
     this.state.ocrJobs.unshift(job);
-    this.logAudit({
-      userId: actorUserId,
-      action: 'ENQUEUE_OCR_JOB',
-      entityType: 'OCR_JOB',
-      entityId: job.id,
-      newValues: { filename: job.originalFilename, category: job.category },
-    });
 
     this.save();
     return job;
@@ -1747,12 +1505,6 @@ class DatabaseService {
     job.error = undefined;
     job.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'RETRY_OCR_JOB',
-      entityType: 'OCR_JOB',
-      entityId: id,
-    });
 
     this.save();
     return job;
@@ -1765,13 +1517,6 @@ class DatabaseService {
     const job = this.state.ocrJobs[idx];
     this.state.ocrJobs.splice(idx, 1);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'DELETE_OCR_JOB',
-      entityType: 'OCR_JOB',
-      entityId: id,
-      oldValues: { filename: job.originalFilename, status: job.status },
-    });
 
     this.save();
     return { success: true };
@@ -1926,11 +1671,6 @@ class DatabaseService {
   public revokeAllUserSessions(userId: string): void {
     if (!this.state.revokedTokens) this.state.revokedTokens = [];
     // Mark a user-level revocation timestamp in audit log and invalidate
-    this.logAudit({
-      userId,
-      action: 'REVOKE_ALL_SESSIONS',
-      entityType: 'SECURITY',
-    });
   }
 
   public approveOcrJob(
@@ -2096,25 +1836,334 @@ class DatabaseService {
     job.approvedByName = user?.name || 'Administrator';
     job.updatedAt = new Date().toISOString();
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'APPROVE_OCR_CANDIDATE_DATA',
-      entityType: 'OCR_JOB',
-      entityId: job.id,
-      newValues: {
-        targetShipmentId: job.targetShipmentId,
-        targetPaymentId: job.targetPaymentId,
-        approvedValues: reviewedValues,
-      },
-    });
 
     this.save();
     return { shipment: targetShipment, payment: targetPayment, job };
   }
 
-  // --- Audit Logs ---
-  public getAuditLogs(limit = 100): AuditLog[] {
-    return this.state.auditLogs.slice(0, limit);
+  // --- GST Entry Module ---
+  public getDefaultGstEntries(consignees: ConsigneeMaster[]): GstEntry[] {
+    const c1 = consignees.find((c) => c.name.includes('S K GLOBAL')) || consignees[0];
+    const c2 = consignees.find((c) => c.name.includes('SHASVANTH')) || consignees[1] || c1;
+    const c3 = consignees.find((c) => c.name.includes('PRECISION')) || consignees[2] || c1;
+
+    return [
+      {
+        id: 'gst-init-1',
+        entryNumber: 'GST-26-27-001',
+        entryDate: '2026-04-10',
+        consigneeId: c1?.id || 'c-sk-global-lk',
+        consigneeName: c1?.name || 'S K GLOBAL VENTURES PRIVATE LIMITED',
+        igst: 10000.0,
+        cgst: 2000.0,
+        sgst: 2000.0,
+        totalGst: 14000.0,
+        refundEligible: 20000.0,
+        difference: 6000.0,
+        result: 'GAIN',
+        remarks: 'LUT export refund eligible exceeds total input credit. Net refund claim filed under Section 54.',
+        createdAt: '2026-04-10T10:00:00.000Z',
+        updatedAt: '2026-04-10T10:00:00.000Z',
+      },
+      {
+        id: 'gst-init-2',
+        entryNumber: 'GST-26-27-002',
+        entryDate: '2026-04-20',
+        consigneeId: c2?.id || 'c-shasvanth-lk',
+        consigneeName: c2?.name || 'SHASVANTH IMPEX PRIVATE LIMITED',
+        igst: 10000.0,
+        cgst: 2000.0,
+        sgst: 2000.0,
+        totalGst: 14000.0,
+        refundEligible: 12000.0,
+        difference: -2000.0,
+        result: 'LOSS',
+        remarks: 'Apparel export consignment with lower refund eligibility due to inverted duty schedule.',
+        createdAt: '2026-04-20T11:00:00.000Z',
+        updatedAt: '2026-04-20T11:00:00.000Z',
+      },
+      {
+        id: 'gst-init-3',
+        entryNumber: 'GST-26-27-003',
+        entryDate: '2026-05-05',
+        consigneeId: c3?.id || 'c-precision-lk',
+        consigneeName: c3?.name || 'PRECISION TEX LANKA PVT LTD',
+        igst: 10000.0,
+        cgst: 2000.0,
+        sgst: 2000.0,
+        totalGst: 14000.0,
+        refundEligible: 14000.0,
+        difference: 0.0,
+        result: 'NIL',
+        remarks: 'Exact balanced refund credit parity with zero net difference.',
+        createdAt: '2026-05-05T09:30:00.000Z',
+        updatedAt: '2026-05-05T09:30:00.000Z',
+      },
+    ];
+  }
+
+  public getGstEntries(filters?: {
+    consigneeId?: string;
+    result?: GstResult;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): GstEntry[] {
+    let list = [...this.state.gstEntries];
+
+    if (filters?.consigneeId) {
+      list = list.filter((e) => e.consigneeId === filters.consigneeId);
+    }
+
+    if (filters?.result) {
+      list = list.filter((e) => e.result === filters.result);
+    }
+
+    if (filters?.startDate) {
+      list = list.filter((e) => e.entryDate >= filters.startDate!);
+    }
+
+    if (filters?.endDate) {
+      list = list.filter((e) => e.entryDate <= filters.endDate!);
+    }
+
+    if (filters?.search && filters.search.trim()) {
+      const q = filters.search.trim().toLowerCase();
+      list = list.filter(
+        (e) =>
+          e.entryNumber.toLowerCase().includes(q) ||
+          (e.consigneeName && e.consigneeName.toLowerCase().includes(q)) ||
+          (e.remarks && e.remarks.toLowerCase().includes(q))
+      );
+    }
+
+    const sortBy = filters?.sortBy || 'entryDate';
+    const sortOrder = filters?.sortOrder || 'desc';
+
+    list.sort((a, b) => {
+      let valA: any = (a as any)[sortBy];
+      let valB: any = (b as any)[sortBy];
+      if (typeof valA === 'string') {
+        const cmp = valA.localeCompare(valB);
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      valA = Number(valA || 0);
+      valB = Number(valB || 0);
+      return sortOrder === 'asc' ? valA - valB : valB - valA;
+    });
+
+    return list;
+  }
+
+  public getGstEntryById(id: string): GstEntry | undefined {
+    return this.state.gstEntries.find((e) => e.id === id);
+  }
+
+  public createGstEntry(
+    data: {
+      entryDate?: string;
+      consigneeId: string;
+      igst?: number;
+      cgst?: number;
+      sgst?: number;
+      refundEligible?: number;
+      remarks?: string;
+    },
+    actorUserId: string
+  ): GstEntry {
+    const consignee = this.state.consignees.find((c) => c.id === data.consigneeId);
+    if (!consignee) {
+      throw new Error('Selected consignee does not exist in Consignee Master.');
+    }
+
+    const rawIgst = Number(data.igst ?? 0);
+    const rawCgst = Number(data.cgst ?? 0);
+    const rawSgst = Number(data.sgst ?? 0);
+    const rawRefund = Number(data.refundEligible ?? 0);
+
+    if (isNaN(rawIgst) || isNaN(rawCgst) || isNaN(rawSgst) || isNaN(rawRefund)) {
+      throw new Error('Invalid numeric input: GST and refund eligible amounts must be valid numbers.');
+    }
+
+    if (rawIgst < 0 || rawCgst < 0 || rawSgst < 0 || rawRefund < 0) {
+      throw new Error('GST amounts and Refund Eligible values cannot be negative.');
+    }
+
+    const igst = Math.round(rawIgst * 100) / 100;
+    const cgst = Math.round(rawCgst * 100) / 100;
+    const sgst = Math.round(rawSgst * 100) / 100;
+    const refundEligible = Math.round(rawRefund * 100) / 100;
+
+    const totalGstCents = Math.round(igst * 100) + Math.round(cgst * 100) + Math.round(sgst * 100);
+    const totalGst = totalGstCents / 100;
+
+    const refundCents = Math.round(refundEligible * 100);
+    const diffCents = refundCents - totalGstCents;
+    const difference = diffCents / 100;
+
+    const result: GstResult = diffCents > 0 ? 'GAIN' : diffCents < 0 ? 'LOSS' : 'NIL';
+
+    const nextSeq = this.state.gstEntries.length + 1;
+    let entryNumber = `GST-26-27-${String(nextSeq).padStart(3, '0')}`;
+    let counter = nextSeq;
+    while (this.state.gstEntries.some((e) => e.entryNumber === entryNumber)) {
+      counter++;
+      entryNumber = `GST-26-27-${String(counter).padStart(3, '0')}`;
+    }
+
+    const newEntry: GstEntry = {
+      id: crypto.randomUUID(),
+      entryNumber,
+      entryDate: data.entryDate || new Date().toISOString().split('T')[0],
+      consigneeId: consignee.id,
+      consigneeName: consignee.name,
+      igst,
+      cgst,
+      sgst,
+      totalGst,
+      refundEligible,
+      difference,
+      result,
+      remarks: data.remarks?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.state.gstEntries.unshift(newEntry);
+    this.save();
+    return newEntry;
+  }
+
+  public updateGstEntry(
+    id: string,
+    updates: Partial<{
+      entryDate: string;
+      consigneeId: string;
+      igst: number;
+      cgst: number;
+      sgst: number;
+      refundEligible: number;
+      remarks: string;
+    }>,
+    actorUserId: string
+  ): GstEntry {
+    const idx = this.state.gstEntries.findIndex((e) => e.id === id);
+    if (idx === -1) throw new Error('GST Entry not found.');
+
+    const current = this.state.gstEntries[idx];
+    let consigneeId = current.consigneeId;
+    let consigneeName = current.consigneeName;
+
+    if (updates.consigneeId && updates.consigneeId !== current.consigneeId) {
+      const consignee = this.state.consignees.find((c) => c.id === updates.consigneeId);
+      if (!consignee) throw new Error('Selected consignee does not exist in Consignee Master.');
+      consigneeId = consignee.id;
+      consigneeName = consignee.name;
+    }
+
+    const rawIgst = updates.igst !== undefined ? Number(updates.igst) : current.igst;
+    const rawCgst = updates.cgst !== undefined ? Number(updates.cgst) : current.cgst;
+    const rawSgst = updates.sgst !== undefined ? Number(updates.sgst) : current.sgst;
+    const rawRefund = updates.refundEligible !== undefined ? Number(updates.refundEligible) : current.refundEligible;
+
+    if (isNaN(rawIgst) || isNaN(rawCgst) || isNaN(rawSgst) || isNaN(rawRefund)) {
+      throw new Error('Invalid numeric input: GST and refund eligible amounts must be valid numbers.');
+    }
+
+    if (rawIgst < 0 || rawCgst < 0 || rawSgst < 0 || rawRefund < 0) {
+      throw new Error('GST amounts and Refund Eligible values cannot be negative.');
+    }
+
+    const igst = Math.round(rawIgst * 100) / 100;
+    const cgst = Math.round(rawCgst * 100) / 100;
+    const sgst = Math.round(rawSgst * 100) / 100;
+    const refundEligible = Math.round(rawRefund * 100) / 100;
+
+    const totalGstCents = Math.round(igst * 100) + Math.round(cgst * 100) + Math.round(sgst * 100);
+    const totalGst = totalGstCents / 100;
+
+    const refundCents = Math.round(refundEligible * 100);
+    const diffCents = refundCents - totalGstCents;
+    const difference = diffCents / 100;
+
+    const result: GstResult = diffCents > 0 ? 'GAIN' : diffCents < 0 ? 'LOSS' : 'NIL';
+
+    const updated: GstEntry = {
+      ...current,
+      entryDate: updates.entryDate || current.entryDate,
+      consigneeId,
+      consigneeName,
+      igst,
+      cgst,
+      sgst,
+      totalGst,
+      refundEligible,
+      difference,
+      result,
+      remarks: updates.remarks !== undefined ? updates.remarks.trim() || undefined : current.remarks,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.state.gstEntries[idx] = updated;
+    this.save();
+    return updated;
+  }
+
+  public deleteGstEntry(id: string, actorUserId: string): { success: boolean } {
+    const idx = this.state.gstEntries.findIndex((e) => e.id === id);
+    if (idx === -1) throw new Error('GST Entry not found.');
+
+    this.state.gstEntries.splice(idx, 1);
+    this.save();
+    return { success: true };
+  }
+
+  public getGstSummary(filters?: {
+    consigneeId?: string;
+    result?: GstResult;
+    startDate?: string;
+    endDate?: string;
+    search?: string;
+  }): GstSummary {
+    const entries = this.getGstEntries(filters);
+
+    let totalIgstCents = 0;
+    let totalCgstCents = 0;
+    let totalSgstCents = 0;
+    let totalGstCents = 0;
+    let totalRefundEligibleCents = 0;
+    let gainCount = 0;
+    let lossCount = 0;
+    let nilCount = 0;
+
+    for (const e of entries) {
+      totalIgstCents += Math.round(e.igst * 100);
+      totalCgstCents += Math.round(e.cgst * 100);
+      totalSgstCents += Math.round(e.sgst * 100);
+      totalGstCents += Math.round(e.totalGst * 100);
+      totalRefundEligibleCents += Math.round(e.refundEligible * 100);
+
+      if (e.result === 'GAIN') gainCount++;
+      else if (e.result === 'LOSS') lossCount++;
+      else nilCount++;
+    }
+
+    const netDiffCents = totalRefundEligibleCents - totalGstCents;
+
+    return {
+      totalEntries: entries.length,
+      totalIgst: totalIgstCents / 100,
+      totalCgst: totalCgstCents / 100,
+      totalSgst: totalSgstCents / 100,
+      totalGst: totalGstCents / 100,
+      totalRefundEligible: totalRefundEligibleCents / 100,
+      netDifference: netDiffCents / 100,
+      gainCount,
+      lossCount,
+      nilCount,
+    };
   }
 
   // --- Settings ---
@@ -2126,13 +2175,6 @@ class DatabaseService {
     const old = { ...this.state.settings };
     Object.assign(this.state.settings, updates);
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'UPDATE_SETTINGS',
-      entityType: 'SETTINGS',
-      oldValues: old,
-      newValues: this.state.settings,
-    });
 
     this.save();
     return this.state.settings;
@@ -2170,12 +2212,6 @@ class DatabaseService {
     this.state.incentives = [];
     this.state.brcRecords = [];
 
-    this.logAudit({
-      userId: actorUserId,
-      action: 'CLEAR_ALL_OPERATIONAL_DATA',
-      entityType: 'DATABASE',
-      newValues: countSummary,
-    });
 
     this.save();
     return { success: true, cleared: countSummary };
@@ -2246,7 +2282,7 @@ class DatabaseService {
       brcRealisedCount,
       brcOverdueCount,
       pendingReviewCount,
-      recentActivity: this.state.auditLogs.slice(0, 10),
+      recentGstEntries: this.state.gstEntries.slice(0, 5),
     };
   }
 
@@ -2805,54 +2841,11 @@ class DatabaseService {
           updatedAt: '2026-09-15T14:00:00.000Z',
         },
       ],
-      auditLogs: [
-        {
-          id: 'audit-init-1',
-          userId: superAdminId,
-          userName: 'Suresh Kumar (Owner)',
-          action: 'LOGIN',
-          entityType: 'SECURITY',
-          ipAddress: '127.0.0.1',
-          userAgent: 'Chrome on macOS',
-          timestamp: '2026-05-12T09:00:00.000Z',
-        },
-        {
-          id: 'audit-init-2',
-          userId: adminId,
-          userName: 'Pooja Verma (Sr. Accountant)',
-          action: 'CREATE',
-          entityType: 'SHIPMENT',
-          entityId: shipment1Id,
-          newValues: { invoiceNumber: 'SKE/26-27/020', normalizedInvoiceKey: 'SKE-26-27-020', invoiceValueUsd: 48500.0 },
-          ipAddress: '127.0.0.1',
-          userAgent: 'Chrome on Windows 11',
-          timestamp: '2026-05-12T10:00:00.000Z',
-        },
-        {
-          id: 'audit-init-3',
-          userId: adminId,
-          userName: 'Pooja Verma (Sr. Accountant)',
-          action: 'CREATE',
-          entityType: 'PAYMENT',
-          entityId: payment1Id,
-          newValues: { irmNumber: 'IRM26052026001', verifiedAmount: 50000.0 },
-          ipAddress: '127.0.0.1',
-          userAgent: 'Chrome on Windows 11',
-          timestamp: '2026-05-20T11:00:00.000Z',
-        },
-        {
-          id: 'audit-init-4',
-          userId: adminId,
-          userName: 'Pooja Verma (Sr. Accountant)',
-          action: 'ALLOCATE',
-          entityType: 'PAYMENT_ALLOCATION',
-          entityId: 'alloc-1',
-          newValues: { allocatedAmountUsd: 48500.0, shipmentInvoice: 'SKE/26-27/020', paymentIrm: 'IRM26052026001' },
-          ipAddress: '127.0.0.1',
-          userAgent: 'Chrome on Windows 11',
-          timestamp: '2026-05-20T12:00:00.000Z',
-        },
-      ],
+      gstEntries: this.getDefaultGstEntries([
+        { id: consignee1Id, name: 'S K GLOBAL VENTURES PRIVATE LIMITED' } as any,
+        { id: consignee2Id, name: 'SHASVANTH IMPEX PRIVATE LIMITED' } as any,
+        { id: consignee3Id, name: 'PRECISION TEX LANKA PVT LTD' } as any,
+      ]),
       settings: {
         statutoryBrcDays: 270,
         defaultPortCode: 'INNSA1',

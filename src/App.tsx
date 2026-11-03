@@ -31,7 +31,7 @@ import { BankMasterView } from './views/BankMasterView.tsx';
 import { ExcelImportExportView } from './views/ExcelImportExportView.tsx';
 import { DocumentReviewView } from './views/DocumentReviewView.tsx';
 import { CompanyLedgerView } from './views/CompanyLedgerView.tsx';
-import { AuditHistoryView } from './views/AuditHistoryView.tsx';
+import { GstEntryView } from './views/GstEntryView.tsx';
 import { UserManagementView } from './views/UserManagementView.tsx';
 import { SettingsView } from './views/SettingsView.tsx';
 
@@ -353,7 +353,13 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'audit' && <AuditHistoryView />}
+          {currentTab === 'gst-entry' && (
+            <GstEntryView
+              consignees={consignees}
+              userRole={currentUser.role}
+              refreshKey={refreshKey}
+            />
+          )}
 
           {currentTab === 'users' && <UserManagementView />}
 

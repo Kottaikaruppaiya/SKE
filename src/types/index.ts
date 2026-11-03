@@ -310,18 +310,37 @@ export interface Shipment {
   hasFircEvidence?: boolean;
 }
 
-export interface AuditLog {
+export type GstResult = 'GAIN' | 'LOSS' | 'NIL';
+
+export interface GstEntry {
   id: string;
-  userId?: string;
-  userName?: string;
-  action: string; // CREATE, UPDATE, DELETE, ALLOCATE, DEALLOCATE, DOWNLOAD, LOGIN
-  entityType: string;
-  entityId?: string;
-  oldValues?: any;
-  newValues?: any;
-  ipAddress?: string;
-  userAgent?: string;
-  timestamp: string;
+  entryNumber: string;
+  entryDate: string; // YYYY-MM-DD
+  consigneeId: string;
+  consigneeName?: string;
+  igst: number;
+  cgst: number;
+  sgst: number;
+  totalGst: number;
+  refundEligible: number;
+  difference: number;
+  result: GstResult;
+  remarks?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GstSummary {
+  totalEntries: number;
+  totalIgst: number;
+  totalCgst: number;
+  totalSgst: number;
+  totalGst: number;
+  totalRefundEligible: number;
+  netDifference: number;
+  gainCount: number;
+  lossCount: number;
+  nilCount: number;
 }
 
 export interface AppSettings {
@@ -351,7 +370,7 @@ export interface DashboardMetrics {
   brcRealisedCount: number;
   brcOverdueCount: number;
   pendingReviewCount: number;
-  recentActivity: AuditLog[];
+  recentGstEntries?: GstEntry[];
 }
 
 export interface ImportValidationReport {

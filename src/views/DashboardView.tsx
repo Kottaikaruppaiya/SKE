@@ -11,7 +11,7 @@ import {
   CheckCircle,
   FileCheck2,
   Award,
-  Clock,
+  Receipt,
   ArrowUpRight,
   PlusCircle,
   FileSpreadsheet,
@@ -242,39 +242,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Audit Log / Recent Activity */}
+        {/* GST Entry & Refund Quick Card */}
         <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-              <Clock size={18} className="text-slate-600" />
-              <span>Recent Immutable Audit Activity</span>
+              <Receipt size={18} className="text-blue-600" />
+              <span>GST Entry &amp; Statutory Refund Tracker</span>
             </h3>
             <button
-              onClick={() => onNavigate('audit')}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+              onClick={() => onNavigate('gst-entry')}
+              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
             >
-              <span>View Full Audit Log</span>
+              <span>View GST Module</span>
               <ArrowUpRight size={13} />
             </button>
           </div>
 
-          <div className="space-y-2 text-xs">
-            {metrics.recentActivity?.slice(0, 4).map((log) => (
-              <div
-                key={log.id}
-                className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 flex items-center justify-between"
-              >
-                <div>
-                  <span className="font-semibold text-slate-800">{log.userName || 'System'}</span>
-                  <span className="text-slate-500 ml-1.5">
-                    {log.action} on <strong>{log.entityType}</strong>
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            ))}
+          <div className="p-3.5 bg-blue-50/60 border border-blue-200/80 rounded-xl space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-700">Consignee-wise GST Ledger</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">Section 54</span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Calculate Difference = Refund Eligible - Total GST (IGST + CGST + SGST) with automated GAIN, LOSS, and NIL statutory classification.
+            </p>
           </div>
         </div>
       </div>

@@ -576,3 +576,65 @@ function parseExcelDate(val: any): string | null {
   }
   return str;
 }
+
+export function generateGstExcelExport(filters?: {
+  consigneeId?: string;
+  result?: any;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}): Buffer {
+  const wb = XLSX.utils.book_new();
+  const entries = db.getGstEntries(filters);
+  const summary = db.getGstSummary(filters);
+
+  // Rows with precise numeric cells
+  const rows: any[] = entries.map((e) => ({
+    'Entry ID': e.entryNumber,
+    'Entry Date': e.entryDate,
+    'Consignee': e.consigneeName || 'Unknown Consignee',
+    'IGST': Number(e.igst.toFixed(2)),
+    'CGST': Number(e.cgst.toFixed(2)),
+    'SGST': Number(e.sgst.toFixed(2)),
+    'Total GST': Number(e.totalGst.toFixed(2)),
+    'Refund Eligible': Number(e.refundEligible.toFixed(2)),
+    'Difference': Number(e.difference.toFixed(2)),
+    'Result': e.result,
+    'Remarks': e.remarks || '',
+  }));
+
+  // Append empty spacer row and summary totals row
+  rows.push({
+    'Entry ID': 'TOTALS',
+    'Entry Date': '',
+    'Consignee': `Total Entries: ${summary.totalEntries}`,
+    'IGST': Number(summary.totalIgst.toFixed(2)),
+    'CGST': Number(summary.totalCgst.toFixed(2)),
+    'SGST': Number(summary.totalSgst.toFixed(2)),
+    'Total GST': Number(summary.totalGst.toFixed(2)),
+    'Refund Eligible': Number(summary.totalRefundEligible.toFixed(2)),
+    'Difference': Number(summary.netDifference.toFixed(2)),
+    'Result': summary.netDifference > 0 ? 'NET GAIN' : summary.netDifference < 0 ? 'NET LOSS' : 'NIL',
+    'Remarks': `GAIN: ${summary.gainCount} | LOSS: ${summary.lossCount} | NIL: ${summary.nilCount}`,
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+
+  // Set column widths
+  ws['!cols'] = [
+    { wch: 16 }, // Entry ID
+    { wch: 14 }, // Entry Date
+    { wch: 40 }, // Consignee
+    { wch: 14 }, // IGST
+    { wch: 14 }, // CGST
+    { wch: 14 }, // SGST
+    { wch: 16 }, // Total GST
+    { wch: 18 }, // Refund Eligible
+    { wch: 16 }, // Difference
+    { wch: 12 }, // Result
+    { wch: 35 }, // Remarks
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'GST Entries');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}

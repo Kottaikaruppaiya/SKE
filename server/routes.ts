@@ -11,10 +11,10 @@ import jwt from 'jsonwebtoken';
 import { db } from './db.ts';
 import { authenticate, requireRole, generateToken, type AuthenticatedRequest } from './auth.ts';
 import { extractDocumentData, mergeExtractedDocuments } from './extractor.ts';
-import { generateExportWorkbook, generateCsvExport, parseHistoricalExcelMigration } from './excel.ts';
+import { generateExportWorkbook, generateCsvExport, parseHistoricalExcelMigration, generateGstExcelExport } from './excel.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
 import { ocrWorker } from './ocr_worker.ts';
-import type { DocumentCategory } from '../src/types/index.ts';
+import type { DocumentCategory, GstResult } from '../src/types/index.ts';
 
 export const apiRouter = express.Router();
 
@@ -47,13 +47,6 @@ apiRouter.post('/auth/login', (req, res) => {
   const { passwordHash, ...user } = userWithHash as any;
   const token = generateToken(user);
 
-  db.logAudit({
-    userId: user.id,
-    action: 'LOGIN',
-    entityType: 'SECURITY',
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'],
-  });
 
   res.json({ token, user });
 });
@@ -68,15 +61,6 @@ apiRouter.post('/auth/logout', authenticate, (req: AuthenticatedRequest, res) =>
       }
     } catch {}
     db.revokeToken(req.token, req.user.id, expiresAt);
-    db.logAudit({
-      userId: req.user.id,
-      userName: req.user.name,
-      action: 'LOGOUT',
-      entityType: 'SECURITY',
-      ipAddress: req.ip,
-      userAgent: req.headers['user-agent'],
-      newValues: { revokedTokenPrefix: req.token.slice(0, 16) + '...' },
-    });
   }
   res.json({ success: true, message: 'Session revoked and logged out successfully.' });
 });
@@ -388,24 +372,6 @@ apiRouter.post(
         req.user!.id
       );
 
-      // Audit manual corrections vs extracted values
-      const manualEdits: Record<string, { extracted: any; accepted: any }> = {};
-      if (extractions.invoiceDoc?.fields?.invoiceValueUsd?.value !== undefined && Number(extractions.invoiceDoc.fields.invoiceValueUsd.value) !== invVal) {
-        manualEdits['invoiceValueUsd'] = { extracted: extractions.invoiceDoc.fields.invoiceValueUsd.value, accepted: invVal };
-      }
-      if (extractions.shippingBillDoc?.fields?.fobValueInr?.value !== undefined && Number(extractions.shippingBillDoc.fields.fobValueInr.value) !== fobVal) {
-        manualEdits['fobValueInr'] = { extracted: extractions.shippingBillDoc.fields.fobValueInr.value, accepted: fobVal };
-      }
-      if (Object.keys(manualEdits).length > 0) {
-        db.logAudit({
-          userId: req.user!.id,
-          userName: req.user!.name,
-          action: 'MANUAL_EXTRACTION_CORRECTION',
-          entityType: 'SHIPMENT',
-          entityId: shipment.id,
-          newValues: manualEdits,
-        });
-      }
 
       // Handle FIRC payment creation & allocation
       const finalIrm = fircIrmNumber || extractions.fircDoc?.fields?.irmNumber?.value;
@@ -946,14 +912,6 @@ apiRouter.get('/documents/:id/download', authenticate, (req: AuthenticatedReques
     return res.status(404).json({ error: 'Physical document file missing on server.' });
   }
 
-  db.logAudit({
-    userId: req.user!.id,
-    userName: req.user!.name,
-    action: 'DOWNLOAD',
-    entityType: 'DOCUMENT',
-    entityId: doc.id,
-    newValues: { filename: doc.originalFilename, category: doc.category },
-  });
 
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.originalFilename)}"`);
   res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
@@ -1125,11 +1083,110 @@ apiRouter.post(
   }
 );
 
-// --- Audit History ---
-apiRouter.get('/audit', authenticate, (req, res) => {
-  const limit = parseInt(String(req.query.limit || '100'), 10);
-  res.json(db.getAuditLogs(limit));
+
+// --- GST Entry Module ---
+apiRouter.get('/gst-entries', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const { consigneeId, result, startDate, endDate, search, sortBy, sortOrder, page, limit } = req.query as any;
+
+  const filtered = db.getGstEntries({
+    consigneeId: consigneeId || undefined,
+    result: (result && result !== 'ALL') ? (result as GstResult) : undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    search: search || undefined,
+    sortBy: sortBy || 'entryDate',
+    sortOrder: sortOrder || 'desc',
+  });
+
+  const summary = db.getGstSummary({
+    consigneeId: consigneeId || undefined,
+    result: (result && result !== 'ALL') ? (result as GstResult) : undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    search: search || undefined,
+  });
+
+  const pageNum = parseInt(page || '1', 10);
+  const limitNum = parseInt(limit || '1000', 10);
+  const start = (pageNum - 1) * limitNum;
+  const paginated = limit ? filtered.slice(start, start + limitNum) : filtered;
+
+  res.json({
+    entries: paginated,
+    total: filtered.length,
+    summary,
+  });
 });
+
+apiRouter.get('/gst-entries/summary', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const { consigneeId, result, startDate, endDate, search } = req.query as any;
+  const summary = db.getGstSummary({
+    consigneeId: consigneeId || undefined,
+    result: (result && result !== 'ALL') ? (result as GstResult) : undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    search: search || undefined,
+  });
+  res.json(summary);
+});
+
+apiRouter.get('/gst-entries/export', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const { consigneeId, result, startDate, endDate, search } = req.query as any;
+  const buffer = generateGstExcelExport({
+    consigneeId: consigneeId || undefined,
+    result: (result && result !== 'ALL') ? (result as GstResult) : undefined,
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+    search: search || undefined,
+  });
+
+  const filename = `SKE_GST_Entries_${new Date().toISOString().split('T')[0]}.xlsx`;
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.send(buffer);
+});
+
+apiRouter.post(
+  '/gst-entries',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const created = db.createGstEntry(req.body, req.user!.id);
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to create GST entry.' });
+    }
+  }
+);
+
+apiRouter.put(
+  '/gst-entries/:id',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const updated = db.updateGstEntry(req.params.id, req.body, req.user!.id);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to update GST entry.' });
+    }
+  }
+);
+
+apiRouter.delete(
+  '/gst-entries/:id',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const result = db.deleteGstEntry(req.params.id, req.user!.id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to delete GST entry.' });
+    }
+  }
+);
 
 // --- User Management (SUPER ADMIN ONLY) ---
 apiRouter.get('/users', authenticate, requireRole(['SUPER_ADMIN']), (req, res) => {

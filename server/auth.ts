@@ -69,16 +69,6 @@ export function requireRole(allowedRoles: Role[]) {
     }
 
     if (!allowedRoles.includes(req.user.role)) {
-      db.logAudit({
-        userId: req.user.id,
-        action: 'PERMISSION_DENIED',
-        entityType: 'SECURITY',
-        newValues: {
-          attemptedUrl: req.originalUrl,
-          requiredRoles: allowedRoles,
-          userRole: req.user.role,
-        },
-      });
       return res.status(403).json({
         error: `Permission Denied: Action requires one of [${allowedRoles.join(', ')}]. Your current role is '${req.user.role}'.`,
       });

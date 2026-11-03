@@ -19,11 +19,10 @@ import {
   CreditCard,
   Building2,
   Calendar,
-  History,
   Info
 } from 'lucide-react';
 import { api } from '../api/client.ts';
-import { Shipment, ConsigneeMaster, AuditLog } from '../types/index.ts';
+import { Shipment, ConsigneeMaster } from '../types/index.ts';
 import { normalizeInvoiceKey } from '../../server/normalizer.ts';
 
 interface InvoiceLookupViewProps {
@@ -44,7 +43,6 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [allShipments, setAllShipments] = useState<Shipment[]>([]);
   const [consignees, setConsignees] = useState<ConsigneeMaster[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
@@ -109,13 +107,11 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
     Promise.all([
       api.getShipments({ financialYearId: selectedFyId !== 'ALL' ? selectedFyId : undefined }),
       api.getConsignees(),
-      api.getAuditLogs(50),
     ])
-      .then(([shipmentsData, consigneesData, logs]) => {
+      .then(([shipmentsData, consigneesData]) => {
         if (!mounted) return;
         setAllShipments(shipmentsData);
         setConsignees(consigneesData);
-        setAuditLogs(logs);
 
         // Auto select first match if found
         if (inputVal && !selectedShipment) {
@@ -253,12 +249,8 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
       setSelectedShipment(updated);
       setAllShipments((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
       clearChangeToInputs();
-      setSaveSuccess(`Successfully updated invoice ${updated.invoiceNumber}. All changes recorded in audit log.`);
+      setSaveSuccess(`Successfully updated invoice ${updated.invoiceNumber}.`);
       if (onRefresh) onRefresh();
-
-      // Refresh audits
-      const newLogs = await api.getAuditLogs(50);
-      setAuditLogs(newLogs);
     } catch (err: any) {
       console.error(err);
       setSaveError(err.message || 'Failed to save changes.');
@@ -280,17 +272,6 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
   const fobInr = selectedShipment?.fobValueInr || 0;
   const differenceInr = realisedInr - fobInr;
   const netForexInr = balanceDueUsd === 0 ? differenceInr : 0;
-
-  // Filtered audit history for this specific shipment
-  const shipmentAudits = useMemo(() => {
-    if (!selectedShipment) return [];
-    return auditLogs.filter(
-      (log) =>
-        (log.entityType === 'SHIPMENT' && log.entityId === selectedShipment.id) ||
-        (log.newValues?.invoiceNumber === selectedShipment.invoiceNumber) ||
-        (log.oldValues?.invoiceNumber === selectedShipment.invoiceNumber)
-    );
-  }, [auditLogs, selectedShipment]);
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -916,39 +897,6 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
                   />
                 </div>
               </div>
-            </div>
-
-            {/* Audit Trail Section */}
-            <div className="space-y-3 pt-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <History size={14} className="text-slate-500" />
-                <span>Audit Trail for Invoice {selectedShipment.invoiceNumber} ({shipmentAudits.length} entries)</span>
-              </h4>
-
-              {shipmentAudits.length === 0 ? (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-400 italic">
-                  No previous field modifications recorded for this invoice.
-                </div>
-              ) : (
-                <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50 text-xs divide-y divide-slate-200 max-h-48 overflow-y-auto">
-                  {shipmentAudits.map((a) => (
-                    <div key={a.id} className="p-2.5 flex items-start justify-between gap-3 bg-white">
-                      <div>
-                        <span className="font-bold text-slate-800">{a.action}</span>
-                        <span className="text-slate-400 text-[11px] ml-2">by {a.userName || 'System Admin'}</span>
-                        {a.newValues && (
-                          <div className="text-[11px] text-slate-600 font-mono mt-0.5">
-                            Updated: {Object.keys(a.newValues).filter((k) => k !== 'updatedAt').slice(0, 4).join(', ')}
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-mono shrink-0">
-                        {new Date(a.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         </div>

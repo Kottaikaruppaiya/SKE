@@ -16,7 +16,7 @@ import {
   Building2,
   Landmark,
   FileDown,
-  History,
+  Receipt,
   Users,
   Settings,
   Eye,
@@ -46,7 +46,7 @@ export type NavItemKey =
   | 'consignee-master'
   | 'bank-master'
   | 'excel'
-  | 'audit'
+  | 'gst-entry'
   | 'users'
   | 'settings';
 
@@ -149,6 +149,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => handleItemClick('incentives')}
           />
           <NavItem
+            icon={<Receipt size={16} />}
+            label="GST Entry"
+            active={currentTab === 'gst-entry'}
+            onClick={() => handleItemClick('gst-entry')}
+          />
+          <NavItem
             icon={<FileText size={16} />}
             label="Document Review & Vault"
             active={currentTab === 'documents'}
@@ -235,12 +241,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           Security & Controls
         </div>
         <div className="space-y-1">
-          <NavItem
-            icon={<History size={16} />}
-            label="Audit History"
-            active={currentTab === 'audit'}
-            onClick={() => handleItemClick('audit')}
-          />
           {isSuperAdmin && (
             <NavItem
               icon={<Users size={16} className="text-indigo-400" />}
