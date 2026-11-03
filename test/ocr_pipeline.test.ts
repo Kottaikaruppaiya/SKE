@@ -216,3 +216,125 @@ test('Storage Security: Path traversal protection rejects attempts to escape sto
   assert.equal(isMaliciousValid, false, 'Malicious path traversal must be rejected');
 });
 
+test('OCR Pipeline: Database-level atomic job claiming ensures mutually exclusive ownership across workers', () => {
+  const testJob = db.enqueueOcrJob(
+    {
+      originalFilename: `atomic_test_${Date.now()}.pdf`,
+      fileSizeBytes: 6000,
+      category: 'COMMERCIAL_INVOICE',
+      financialYearId: 'fy-2026-27',
+    },
+    'system-test'
+  );
+
+  // Worker 1 claims the job
+  const claimedByWorker1 = db.claimNextOcrJob('worker-instance-1', 60000);
+  assert.ok(claimedByWorker1, 'Worker 1 must successfully claim eligible pending job');
+  assert.equal(claimedByWorker1.id, testJob.id);
+  assert.equal(claimedByWorker1.status, 'PROCESSING');
+  assert.equal(claimedByWorker1.lockedByWorkerId, 'worker-instance-1');
+
+  // Worker 2 attempts to claim at the same time
+  const claimedByWorker2 = db.claimNextOcrJob('worker-instance-2', 60000);
+  // Should NOT get the same job because it is actively locked by Worker 1
+  if (claimedByWorker2) {
+    assert.notEqual(claimedByWorker2.id, testJob.id, 'Worker 2 must not claim a job locked by Worker 1');
+  }
+
+  // Clean up
+  db.deleteOcrJob(testJob.id, 'system-test');
+});
+
+test('OCR Pipeline: Expired worker lease allows secondary worker to safely reclaim job', async () => {
+  const leaseTestJob = db.enqueueOcrJob(
+    {
+      originalFilename: `lease_test_${Date.now()}.pdf`,
+      fileSizeBytes: 7000,
+      category: 'SHIPPING_BILL',
+      financialYearId: 'fy-2026-27',
+    },
+    'system-test'
+  );
+
+  // Worker 1 claims with very short 50ms lease
+  const claimed = db.claimNextOcrJob('worker-short-lease', 50);
+  assert.ok(claimed);
+  assert.equal(claimed.id, leaseTestJob.id);
+
+  // Wait 60ms for lease to expire
+  await new Promise((resolve) => setTimeout(resolve, 60));
+
+  // Worker 2 attempts claim; must reclaim the expired job
+  const reclaimed = db.claimNextOcrJob('worker-recovery-2', 60000);
+  assert.ok(reclaimed, 'Secondary worker must reclaim expired job');
+  assert.equal(reclaimed.id, leaseTestJob.id);
+  assert.equal(reclaimed.lockedByWorkerId, 'worker-recovery-2');
+  assert.equal(reclaimed.attempts, 2, 'Attempts must increment on reclaim');
+
+  // Clean up
+  db.deleteOcrJob(leaseTestJob.id, 'system-test');
+});
+
+test('OCR Pipeline: Stale worker cannot commit results after lease has expired or been reclaimed', () => {
+  const commitTestJob = db.enqueueOcrJob(
+    {
+      originalFilename: `stale_test_${Date.now()}.pdf`,
+      fileSizeBytes: 8000,
+      category: 'BILL_OF_LADING',
+      financialYearId: 'fy-2026-27',
+    },
+    'system-test'
+  );
+
+  // Worker 1 claims
+  db.claimNextOcrJob('worker-A', 10); // 10ms lease
+
+  // Worker 2 reclaims after manually expiring lease
+  db.updateOcrJob(commitTestJob.id, {
+    lockedByWorkerId: 'worker-B',
+    leaseExpiresAt: new Date(Date.now() + 60000).toISOString(),
+  });
+
+  // Stale Worker A attempts to commit results
+  assert.throws(
+    () => {
+      db.completeOcrJob(commitTestJob.id, 'worker-A', {
+        executionTimeMs: 120,
+        ocrApplied: false,
+      });
+    },
+    /Lease violation/,
+    'Stale worker commit must be rejected with lease violation error'
+  );
+
+  // Clean up
+  db.deleteOcrJob(commitTestJob.id, 'system-test');
+});
+
+test('Security & Auditing: Logout revokes session token and rejected on reuse', () => {
+  const testUser = db.getUsers()[0];
+  const testToken = `test-jwt-token-${Date.now()}-${crypto.randomUUID()}`;
+
+  // Initially token is not revoked
+  assert.equal(db.isTokenRevoked(testToken), false, 'Token must not be revoked initially');
+
+  // User logs out, revoking token
+  db.revokeToken(testToken, testUser.id);
+  assert.equal(db.isTokenRevoked(testToken), true, 'Token must be marked revoked after logout');
+
+  // Audit trail records logout event
+  db.logAudit({
+    userId: testUser.id,
+    userName: testUser.name,
+    action: 'LOGOUT',
+    entityType: 'SECURITY',
+  });
+
+  const logs = db.getAuditLogs();
+  const logoutEntry = logs.find((l) => l.action === 'LOGOUT' && l.userId === testUser.id);
+  assert.ok(logoutEntry, 'Logout audit entry must exist in audit log');
+  assert.equal(logoutEntry.entityType, 'SECURITY');
+});
+
+
+

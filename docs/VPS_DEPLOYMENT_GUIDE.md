@@ -40,12 +40,34 @@ The SKE Export Documents & Realisation Tracker is engineered for **100% self-hos
 4. **Candidate Staging & Data Protection**: OCR results are saved in the `ocrJobs` staging table separately from verified financial records. **Unapproved OCR data never overwrites verified ledger records**.
 5. **Admin Review & Approval**: Admins review candidate values side-by-side with original document previews, edit values in form inputs, and click "Approve & Commit to Ledger".
 
+### 3. VPS Resource Sizing & Memory Recommendations
+
+Local OCR using PyMuPDF, OpenCV image thresholding, and Tesseract neural LSTM engines places distinct computational demands on CPU and RAM.
+
+#### Memory Profile Breakdown
+- **Base System (Ubuntu OS + Docker Engine + Nginx + PostgreSQL 16)**: ~1.0 GB to 1.2 GB RAM baseline.
+- **Node.js Express Application Server**: ~120 MB to 220 MB RAM under active user traffic.
+- **Digital Vector PDF Processing (Selectable text)**: < 40 MB RAM spike, 10–50 ms CPU burst.
+- **Scanned / Raster PDF Processing (300 DPI rasterization + OpenCV + Tesseract)**:
+  - 300 DPI A4 page rendering: ~26 MB raw RGB pixel buffer per page.
+  - OpenCV adaptive Otsu binarization & deskewing: ~50–100 MB per page.
+  - Tesseract OCR LSTM neural network inference: ~150–300 MB peak per active process.
+  - **Total Peak RAM per concurrent OCR job**: ~400 MB to 600 MB.
+
+#### Sizing Tiers & Recommendations
+
+| Deployment Tier | Concurrency Profile | Recommended VPS Specs | Configuration | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Small Production (Baseline)** | 2–3 concurrent users | **4 GB RAM, 2 vCPUs** | `OCR_CONCURRENCY=1` or `2` | 4 GB is the initial production planning baseline. Prevents Linux OOM (Out Of Memory) killer during simultaneous scanned PDF uploads. |
+| **Standard Production (Recommended)** | 5–10 concurrent users | **8 GB RAM, 4 vCPUs** | `OCR_CONCURRENCY=2` or `3` | Preferred for business hours with multiple accountants uploading invoices, FIRCs, and Shipping Bills simultaneously. |
+| **High-Volume Batch Processing** | 10+ users, heavy document batches | **16 GB RAM, 4–8 vCPUs** | `OCR_CONCURRENCY=4` | Required if batch-uploading dozens of 300 DPI multi-page scanned statutory packets concurrently. |
+
 ---
 
-### 3. Ubuntu VPS Automated Deployment Instructions
+### 4. Ubuntu VPS Automated Deployment Instructions
 
 #### Prerequisites
-- Fresh Ubuntu 22.04 LTS or 24.04 LTS VPS (Minimum 2GB RAM, 2 vCPU recommended).
+- Fresh Ubuntu 22.04 LTS or 24.04 LTS VPS (Minimum 4GB RAM, 2 vCPU initial baseline; 8GB RAM recommended for multi-user OCR).
 - Root or `sudo` shell access.
 - Registered domain name pointing (A Record) to your VPS IP address (e.g., `exports.skenterprises.com`).
 
@@ -111,11 +133,15 @@ To trigger an on-demand manual backup at any time:
 sudo /opt/ske-applet/deploy/backup_storage.sh
 ```
 
-To restore from a backup:
+To restore from a backup using the automated disaster recovery script:
 ```bash
-# 1. Restore Database
-docker compose exec -T postgres pg_restore -U ske_user -d ske_export_db --clean < /var/backups/ske/<TIMESTAMP>/postgres_*.dump
+# 1. Run a dry-run integrity verification first (verifies SHA256 checksums without modifying data)
+sudo /opt/ske-applet/deploy/restore_storage.sh /var/backups/ske/<TIMESTAMP> --dry-run
 
-# 2. Restore Physical Documents
-tar -xzf /var/backups/ske/<TIMESTAMP>/storage_archive_*.tar.gz -C /
+# 2. Test restore into an isolated verification database (safe, does not overwrite production data)
+sudo /opt/ske-applet/deploy/restore_storage.sh /var/backups/ske/<TIMESTAMP> --target-db ske_test_restore
+
+# 3. Full production restore (restores PostgreSQL database and physical document storage)
+sudo /opt/ske-applet/deploy/restore_storage.sh /var/backups/ske/<TIMESTAMP>
 ```
+

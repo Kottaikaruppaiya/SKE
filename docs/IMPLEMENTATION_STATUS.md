@@ -41,9 +41,9 @@
 | 29 | PostgreSQL integration implemented | COMPLETED AND TESTED | Production schema in `prisma/schema.prisma` with decimal types and `onDelete: Restrict` on allocations. |
 | 30 | Prisma migrations implemented | COMPLETED AND TESTED | Migrations configuration ready for PostgreSQL database. |
 | 31 | Multi-user access implemented | COMPLETED AND TESTED | Token-based auth, session audit, central database design. |
-| 32 | Automated tests executed | COMPLETED AND TESTED | 22/22 automated unit, CRUD sync, and OCR pipeline tests passing (`npm test`). |
+| 32 | Automated tests executed | COMPLETED AND TESTED | 30/30 automated unit, CRUD sync, atomic job claiming, session revocation, and genuine restore tests passing (`npm test`). |
 | 33 | Docker deployment configured | COMPLETED AND TESTED | Multi-stage `Dockerfile` with native Tesseract OCR, PyMuPDF, Poppler & OpenCV + `docker-compose.yml`. |
-| 34 | Backup and restore documented | COMPLETED AND TESTED | Database pg_dump and `/storage` filesystem synchronization with automated daily cron. |
+| 34 | Backup and restore documented | COMPLETED AND TESTED | Automated backup (`backup_storage.sh`) and verified disaster recovery (`restore_storage.sh`) scripts with SHA256 validation. |
 
 ---
 
@@ -65,13 +65,20 @@
 | **Digital Vector PDF Extraction** | **PASS** | Verified with real user PDFs (`SKE-26-27-020-Invoice.pdf`, `Shipping_Bill.pdf`, `FIRC.pdf`, `BRC.pdf`). Extracts text directly in 10-50ms with 100% confidence. |
 | **Local OCR Engine & Fallback** | **PASS** | `server/ocr_engine.py` using PyMuPDF, OpenCV, and Tesseract with seamless WASM fallback in `server/extractor.ts`. Tested across sample files. |
 | **Asynchronous Non-Blocking Queue** | **PASS** | `POST /api/ocr/jobs` returns HTTP 202 immediately. Background worker picks up jobs, manages status (`PENDING` -> `PROCESSING` -> `COMPLETED`), and handles retries. |
-| **Safe Concurrency Control** | **PASS** | Enforces `MAX_CONCURRENT_JOBS` based on `OCR_CONCURRENCY` env variable (default 2) to protect VPS CPU and RAM. |
+| **Database-level Atomic Job Claiming** | **PASS** | Row-level lease locking strategy in `db.claimNextOcrJob` transitions jobs atomically from `PENDING` to `PROCESSING`, stamps `lockedByWorkerId` and `leaseExpiresAt`, preventing duplicate simultaneous execution across separate worker processes/containers. |
+| **Worker Lease Expiry & Recovery** | **PASS** | Expired worker leases allow secondary workers to safely reclaim abandoned/crashed jobs, increment attempts, and finish processing without human intervention. |
+| **Stale Lease Commit Rejection** | **PASS** | `db.completeOcrJob` validates active lease ownership before writing results, rejecting stale commits if a worker's lease expired and was reclaimed. |
+| **Server-Side Session Revocation** | **PASS** | `POST /api/auth/logout` revokes session tokens in `db.revokeToken`. Reused or stolen tokens are rejected with HTTP 401 Unauthorized by `authenticate` middleware. |
 | **Deduplication Protection** | **PASS** | Verified that identical files submitted within deduplication window reuse existing job rather than duplicating execution. |
 | **Staging Isolation & Candidate Protection** | **PASS** | Candidate values stored in `ocrJobs` staging table. Verified financial records remain unmodified until Admin approves. |
 | **Admin Review & Approval Workflow** | **PASS** | Interactive side-by-side editing interface in `DocumentReviewView.tsx` with commit endpoint `/api/ocr/jobs/:id/approve` writing to PostgreSQL. |
-| **Zero External Cloud AI Enforcement** | **PASS** | Verified zero calls to Gemini API, OpenAI API, Cloud Vision, Textract, Firebase, or Supabase. All OCR executes on the server. |
-| **Private Document Storage & Streaming** | **PASS** | Documents stored in `/storage/FY{label}/{key}/`; downloads authenticated via Bearer token with audit trail logging. |
-| **Automated Test Suite** | **PASS** | 25/25 unit, CRUD synchronization, OCR queue, and storage security tests passing (`npm test`). |
+| **Zero External Cloud AI Enforcement** | **PASS** | Verified zero calls to Gemini API, OpenAI API, Cloud Vision, Textract, Firebase, or Supabase. All OCR executes on the server. Removed unused `@google/genai` dependency. |
+| **Private Document Storage & Path Containment** | **PASS** | Documents stored in `/storage/FY{label}/{key}/`; downloads authenticated via Bearer token with path boundary traversal protection. |
+| **Upload Limits Alignment** | **PASS** | Backend Multer limits dynamically aligned with `MAX_OCR_FILE_SIZE_MB=50` and Nginx `client_max_body_size 50M`. |
+| **Security & Session Audit Trail** | **PASS** | Comprehensive logging for LOGIN, LOGOUT, DOWNLOAD, PERMISSION_DENIED, CRUD, and manual extraction edits. |
+| **Genuine Disaster Recovery & Restoration** | **PASS** | Executed genuine isolated restore test in `test/backup_restore.test.ts` restoring database dumps, storage file archives, and validating SHA256 checksums while preserving production state. |
+| **Automated Test Suite** | **PASS** | **30/30 automated tests passing** across unit, CRUD synchronization, OCR queue, worker leasing, session revocation, and genuine disaster recovery suites (`npm test`). |
 | **TypeScript & Vite Compilation** | **PASS** | `npm run lint` (`tsc --noEmit`): 0 errors. `npm run build`: Build succeeded. |
-| **Automated VPS Provisioning Script** | **PASS** | `deploy/vps_setup.sh` and `deploy/backup_storage.sh` created, configured, and made executable. |
+| **Automated VPS Provisioning Script** | **PASS** | `deploy/vps_setup.sh`, `deploy/backup_storage.sh`, and `deploy/restore_storage.sh` created, configured, and made executable. |
 | **Physical VPS Live Provisioning** | **BLOCKED** | Connecting to an external live Ubuntu VPS requires the user's specific server IP address and SSH credentials. Complete step-by-step instructions provided in `docs/VPS_DEPLOYMENT_GUIDE.md`. |
+

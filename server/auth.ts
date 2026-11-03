@@ -12,6 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'ske_export_documents_tracker_secre
 
 export interface AuthenticatedRequest extends Request {
   user?: User;
+  token?: string;
 }
 
 export function generateToken(user: User): string {
@@ -41,6 +42,11 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     return res.status(401).json({ error: 'Authentication required. Please sign in.' });
   }
 
+  // Check server-side session revocation store
+  if (db.isTokenRevoked(token)) {
+    return res.status(401).json({ error: 'Session has been revoked or logged out. Please sign in again.' });
+  }
+
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const user = db.getUserById(decoded.id);
@@ -48,6 +54,7 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
       return res.status(401).json({ error: 'User session expired or account deactivated.' });
     }
     req.user = user;
+    req.token = token;
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired session token.' });

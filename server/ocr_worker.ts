@@ -15,12 +15,14 @@ const STAGING_DIR = path.resolve('storage/staging');
 if (!fs.existsSync(STAGING_DIR)) fs.mkdirSync(STAGING_DIR, { recursive: true });
 
 class OcrQueueWorker {
+  public readonly workerId: string;
   private activeJobsCount = 0;
   private isProcessing = false;
   private timer: NodeJS.Timeout | null = null;
   private stagingBufferMap = new Map<string, Buffer>();
 
-  constructor() {
+  constructor(workerId?: string) {
+    this.workerId = workerId || `worker-${process.pid}-${crypto.randomUUID().slice(0, 8)}`;
     this.startPolling();
   }
 
@@ -56,15 +58,9 @@ class OcrQueueWorker {
 
     try {
       while (this.activeJobsCount < MAX_CONCURRENT_JOBS) {
-        const pendingJobs = db.getOcrJobs({ status: 'PENDING' });
-        if (pendingJobs.length === 0) break;
-
-        const nextJob = pendingJobs[0];
-        // Mark as processing immediately to prevent duplicate pick up
-        db.updateOcrJob(nextJob.id, {
-          status: 'PROCESSING',
-          attempts: (nextJob.attempts || 0) + 1,
-        });
+        // Database-level atomic job claiming with 60s lease
+        const nextJob = db.claimNextOcrJob(this.workerId, 60000);
+        if (!nextJob) break;
 
         this.activeJobsCount++;
         this.processJob(nextJob).finally(() => {
@@ -120,9 +116,8 @@ class OcrQueueWorker {
       // Create draft preview
       const mergedDraft = mergeExtractedDocuments([extraction]);
 
-      // 3. Save extraction results separately in staging (never overwriting verified records)
-      db.updateOcrJob(job.id, {
-        status: 'COMPLETED',
+      // 3. Atomically commit extraction results, verifying worker lease remains valid
+      db.completeOcrJob(job.id, this.workerId, {
         executionTimeMs,
         ocrApplied: extraction.ocrApplied,
         ocrConfidence: extraction.ocrConfidence,
@@ -130,7 +125,6 @@ class OcrQueueWorker {
         extractionMethod: extraction.extractionMethod,
         candidateFields: extraction.fields,
         candidateDraft: mergedDraft,
-        error: undefined,
       });
 
       // Update linked document record if present
@@ -149,16 +143,7 @@ class OcrQueueWorker {
     } catch (err: any) {
       const executionTimeMs = Date.now() - startTime;
       const errorMsg = err?.message || 'Local OCR extraction failed.';
-      const maxAttempts = job.maxAttempts || 3;
-      const currentAttempts = (job.attempts || 0);
-
-      const isFinalFailure = currentAttempts >= maxAttempts;
-
-      db.updateOcrJob(job.id, {
-        status: isFinalFailure ? 'FAILED' : 'PENDING',
-        error: errorMsg,
-        executionTimeMs,
-      });
+      db.failOcrJob(job.id, this.workerId, errorMsg, executionTimeMs);
     }
   }
 
@@ -171,3 +156,4 @@ class OcrQueueWorker {
 }
 
 export const ocrWorker = new OcrQueueWorker();
+export { OcrQueueWorker };

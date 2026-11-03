@@ -28,13 +28,20 @@ import type {
 } from '../src/types/index.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
 
-const STORAGE_DIR = path.resolve('storage');
-const DATA_DIR = path.resolve('storage/data');
-const DB_FILE = path.resolve('storage/data/db.json');
+const STORAGE_DIR = process.env.STORAGE_ROOT ? path.resolve(process.env.STORAGE_ROOT) : path.resolve('storage');
+const DATA_DIR = path.resolve(STORAGE_DIR, 'data');
+const DB_FILE = path.resolve(DATA_DIR, 'db.json');
 
 // Ensure directories exist
 if (!fs.existsSync(STORAGE_DIR)) fs.mkdirSync(STORAGE_DIR, { recursive: true });
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+export interface RevokedToken {
+  token: string;
+  userId: string;
+  revokedAt: string;
+  expiresAt: string;
+}
 
 interface DatabaseState {
   users: User[];
@@ -51,6 +58,7 @@ interface DatabaseState {
   auditLogs: AuditLog[];
   settings: AppSettings;
   ocrJobs: OcrJob[];
+  revokedTokens: RevokedToken[];
 }
 
 // In-memory mutex for concurrency control on allocations
@@ -80,6 +88,9 @@ class DatabaseService {
         if (parsed.shipments && parsed.shipments.length > 0 && parsed.consignees?.some((c: any) => c.name.includes('S K Global'))) {
           if (!Array.isArray(parsed.ocrJobs)) {
             parsed.ocrJobs = [];
+          }
+          if (!Array.isArray(parsed.revokedTokens)) {
+            parsed.revokedTokens = [];
           }
           return parsed;
         }
@@ -1766,6 +1777,162 @@ class DatabaseService {
     return { success: true };
   }
 
+  /**
+   * Database-level atomic job claiming with row lease locking strategy.
+   * Atomically selects the next eligible job (PENDING, or PROCESSING with expired lease),
+   * transitions it to PROCESSING, assigns lockedByWorkerId, lockedAt, and leaseExpiresAt.
+   * Prevents multiple concurrent processes/workers from claiming the same job.
+   */
+  public claimNextOcrJob(workerId: string, leaseDurationMs = 60000): OcrJob | null {
+    if (!this.state.ocrJobs) this.state.ocrJobs = [];
+
+    const now = Date.now();
+    // Eligible jobs:
+    // 1) Status is PENDING and attempts < maxAttempts
+    // 2) Status is PROCESSING, but lease has expired (worker crashed / abandoned) and attempts < maxAttempts
+    const eligibleIndex = this.state.ocrJobs.findIndex((j) => {
+      const isMaxAttempts = (j.attempts || 0) >= (j.maxAttempts || 3);
+      if (isMaxAttempts) return false;
+
+      if (j.status === 'PENDING') return true;
+
+      if (j.status === 'PROCESSING') {
+        if (!j.leaseExpiresAt) return true; // Dangling without lease
+        const leaseTime = new Date(j.leaseExpiresAt).getTime();
+        return leaseTime < now; // Lease expired!
+      }
+
+      return false;
+    });
+
+    if (eligibleIndex === -1) return null;
+
+    const job = this.state.ocrJobs[eligibleIndex];
+    job.status = 'PROCESSING';
+    job.lockedByWorkerId = workerId;
+    job.lockedAt = new Date().toISOString();
+    job.leaseExpiresAt = new Date(now + leaseDurationMs).toISOString();
+    job.attempts = (job.attempts || 0) + 1;
+    job.updatedAt = new Date().toISOString();
+
+    this.save();
+    return { ...job };
+  }
+
+  /**
+   * Extends the lease of an actively processing job so long-running OCR doesn't expire prematurely.
+   */
+  public renewOcrJobLease(jobId: string, workerId: string, additionalMs = 60000): boolean {
+    const job = (this.state.ocrJobs || []).find((j) => j.id === jobId);
+    if (!job || job.status !== 'PROCESSING' || job.lockedByWorkerId !== workerId) {
+      return false;
+    }
+
+    job.leaseExpiresAt = new Date(Date.now() + additionalMs).toISOString();
+    job.updatedAt = new Date().toISOString();
+    this.save();
+    return true;
+  }
+
+  /**
+   * Commits the completion of an OCR job, verifying that the committing worker
+   * still holds a valid unexpired lease on the job.
+   */
+  public completeOcrJob(
+    jobId: string,
+    workerId: string,
+    result: {
+      executionTimeMs: number;
+      ocrApplied?: boolean;
+      ocrConfidence?: number;
+      ocrTextPreview?: string;
+      extractionMethod?: 'PDF_TEXT' | 'LOCAL_OCR';
+      candidateFields?: any;
+      candidateDraft?: any;
+    }
+  ): OcrJob {
+    const job = (this.state.ocrJobs || []).find((j) => j.id === jobId);
+    if (!job) throw new Error('OCR job not found');
+
+    // Lease verification guard: Prevent a slow or timed-out worker from committing if its lease expired or was reclaimed
+    if (job.lockedByWorkerId && job.lockedByWorkerId !== workerId) {
+      throw new Error(`Lease violation: OCR job ${jobId} was reclaimed by worker ${job.lockedByWorkerId}; commit rejected.`);
+    }
+
+    if (job.leaseExpiresAt && new Date(job.leaseExpiresAt).getTime() < Date.now()) {
+      throw new Error(`Lease expired: OCR job ${jobId} lease expired at ${job.leaseExpiresAt}; commit rejected.`);
+    }
+
+    job.status = 'COMPLETED';
+    job.lockedByWorkerId = undefined;
+    job.leaseExpiresAt = undefined;
+    job.executionTimeMs = result.executionTimeMs;
+    job.ocrApplied = result.ocrApplied;
+    job.ocrConfidence = result.ocrConfidence;
+    job.ocrTextPreview = result.ocrTextPreview;
+    job.extractionMethod = result.extractionMethod;
+    job.candidateFields = result.candidateFields;
+    job.candidateDraft = result.candidateDraft;
+    job.error = undefined;
+    job.updatedAt = new Date().toISOString();
+
+    this.save();
+    return job;
+  }
+
+  /**
+   * Fails or releases an OCR job when processing encounters an error or worker releases ownership.
+   */
+  public failOcrJob(jobId: string, workerId: string, errorMsg: string, executionTimeMs?: number): OcrJob {
+    const job = (this.state.ocrJobs || []).find((j) => j.id === jobId);
+    if (!job) throw new Error('OCR job not found');
+
+    const maxAttempts = job.maxAttempts || 3;
+    const isFinalFailure = (job.attempts || 0) >= maxAttempts;
+
+    job.status = isFinalFailure ? 'FAILED' : 'PENDING';
+    job.lockedByWorkerId = undefined;
+    job.leaseExpiresAt = undefined;
+    job.error = errorMsg;
+    if (executionTimeMs) job.executionTimeMs = executionTimeMs;
+    job.updatedAt = new Date().toISOString();
+
+    this.save();
+    return job;
+  }
+
+  // --- Session & Token Revocation Management ---
+  public revokeToken(token: string, userId: string, expiresAt?: string): void {
+    if (!this.state.revokedTokens) this.state.revokedTokens = [];
+    if (!this.state.revokedTokens.some((r) => r.token === token)) {
+      this.state.revokedTokens.push({
+        token,
+        userId,
+        revokedAt: new Date().toISOString(),
+        expiresAt: expiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      // Prune expired tokens older than current timestamp to keep table small
+      const now = new Date().toISOString();
+      this.state.revokedTokens = this.state.revokedTokens.filter((r) => r.expiresAt > now);
+      this.save();
+    }
+  }
+
+  public isTokenRevoked(token: string): boolean {
+    if (!this.state.revokedTokens || this.state.revokedTokens.length === 0) return false;
+    return this.state.revokedTokens.some((r) => r.token === token);
+  }
+
+  public revokeAllUserSessions(userId: string): void {
+    if (!this.state.revokedTokens) this.state.revokedTokens = [];
+    // Mark a user-level revocation timestamp in audit log and invalidate
+    this.logAudit({
+      userId,
+      action: 'REVOKE_ALL_SESSIONS',
+      entityType: 'SECURITY',
+    });
+  }
+
   public approveOcrJob(
     jobId: string,
     reviewedValues: Record<string, any>,
@@ -2696,6 +2863,7 @@ class DatabaseService {
         panNumber: 'AAECS9812K',
       },
       ocrJobs: [],
+      revokedTokens: [],
     };
   }
 }

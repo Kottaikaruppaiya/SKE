@@ -36,6 +36,13 @@ export const api = {
     localStorage.removeItem(TOKEN_KEY);
   },
 
+  async logout(): Promise<void> {
+    try {
+      await this.request<{ success: boolean }>('/auth/logout', { method: 'POST' });
+    } catch {}
+    this.clearToken();
+  },
+
   async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = this.getToken();
     const headers = new Headers(options.headers || {});

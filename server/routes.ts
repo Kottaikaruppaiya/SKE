@@ -17,10 +17,11 @@ import type { DocumentCategory } from '../src/types/index.ts';
 
 export const apiRouter = express.Router();
 
-// Configure Multer for secure private file storage
+// Configure Multer for secure private file storage (aligned with Nginx and MAX_OCR_FILE_SIZE_MB)
+const MAX_UPLOAD_SIZE_MB = parseInt(process.env.MAX_OCR_FILE_SIZE_MB || '50', 10);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+  limits: { fileSize: MAX_UPLOAD_SIZE_MB * 1024 * 1024 },
 });
 
 // --- Auth Routes ---
@@ -51,6 +52,22 @@ apiRouter.post('/auth/login', (req, res) => {
   });
 
   res.json({ token, user });
+});
+
+apiRouter.post('/auth/logout', authenticate, (req: AuthenticatedRequest, res) => {
+  if (req.token && req.user) {
+    db.revokeToken(req.token, req.user.id);
+    db.logAudit({
+      userId: req.user.id,
+      userName: req.user.name,
+      action: 'LOGOUT',
+      entityType: 'SECURITY',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      newValues: { revokedTokenPrefix: req.token.slice(0, 16) + '...' },
+    });
+  }
+  res.json({ success: true, message: 'Session revoked and logged out successfully.' });
 });
 
 apiRouter.get('/auth/me', authenticate, (req: AuthenticatedRequest, res) => {

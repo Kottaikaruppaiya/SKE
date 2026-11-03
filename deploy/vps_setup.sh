@@ -102,7 +102,7 @@ fi
 
 # 7. Setup Automated Daily Backup Cron Job
 echo "--> Registering daily backup cron job..."
-chmod +x deploy/backup_storage.sh
+chmod +x deploy/backup_storage.sh deploy/restore_storage.sh
 cat <<EOF > /etc/cron.d/ske-backup
 0 2 * * * root cd ${APP_DIR} && ./deploy/backup_storage.sh >> /var/log/ske-backup.log 2>&1
 EOF
@@ -115,13 +115,14 @@ docker compose up -d
 
 echo "--> Waiting for application healthcheck..."
 sleep 10
-if curl -f http://localhost:3000/health >/dev/null 2>&1; then
+if curl -f http://localhost/health >/dev/null 2>&1 || docker compose exec -T app curl -f http://localhost:3000/health >/dev/null 2>&1; then
     echo "=========================================================="
     echo " SKE Online VPS Deployment Successful!"
     echo " - HTTP/HTTPS Reverse Proxy: ACTIVE (Ports 80 / 443)"
     echo " - PostgreSQL Database: ACTIVE (Container: postgres)"
     echo " - Local Tesseract OCR & PyMuPDF Worker: ACTIVE"
     echo " - Nightly Backup Cron: 02:00 AM (/var/backups/ske)"
+    echo " - Disaster Recovery Script: ACTIVE (${APP_DIR}/deploy/restore_storage.sh)"
     echo "=========================================================="
 else
     echo "WARNING: Backend container still initializing. Check logs with 'docker compose logs -f app'."

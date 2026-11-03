@@ -121,8 +121,8 @@ export default function App() {
     window.open(api.getExportUrl(selectedFyId), '_blank');
   };
 
-  const handleLogout = () => {
-    api.clearToken();
+  const handleLogout = async () => {
+    await api.logout();
     setCurrentUser(null);
     setCurrentTab('dashboard');
   };

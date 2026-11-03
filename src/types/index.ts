@@ -393,6 +393,9 @@ export interface OcrJob {
   extractionMethod?: 'PDF_TEXT' | 'LOCAL_OCR';
   candidateFields?: Record<string, ExtractedFieldResult>;
   candidateDraft?: MergedShipmentDraft;
+  lockedByWorkerId?: string;
+  lockedAt?: string;
+  leaseExpiresAt?: string;
   approvedAt?: string;
   approvedByUserId?: string;
   approvedByName?: string;
