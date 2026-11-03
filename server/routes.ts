@@ -7,6 +7,7 @@ import express, { type Response } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import jwt from 'jsonwebtoken';
 import { db } from './db.ts';
 import { authenticate, requireRole, generateToken, type AuthenticatedRequest } from './auth.ts';
 import { extractDocumentData, mergeExtractedDocuments } from './extractor.ts';
@@ -16,6 +17,9 @@ import { ocrWorker } from './ocr_worker.ts';
 import type { DocumentCategory } from '../src/types/index.ts';
 
 export const apiRouter = express.Router();
+
+// Helper to resolve the configured STORAGE_ROOT dynamically
+export const getStorageDir = () => (process.env.STORAGE_ROOT ? path.resolve(process.env.STORAGE_ROOT) : path.resolve('storage'));
 
 // Configure Multer for secure private file storage (aligned with Nginx and MAX_OCR_FILE_SIZE_MB)
 const MAX_UPLOAD_SIZE_MB = parseInt(process.env.MAX_OCR_FILE_SIZE_MB || '50', 10);
@@ -56,7 +60,14 @@ apiRouter.post('/auth/login', (req, res) => {
 
 apiRouter.post('/auth/logout', authenticate, (req: AuthenticatedRequest, res) => {
   if (req.token && req.user) {
-    db.revokeToken(req.token, req.user.id);
+    let expiresAt: string | undefined;
+    try {
+      const decoded = jwt.decode(req.token) as any;
+      if (decoded && decoded.exp) {
+        expiresAt = new Date(decoded.exp * 1000).toISOString();
+      }
+    } catch {}
+    db.revokeToken(req.token, req.user.id, expiresAt);
     db.logAudit({
       userId: req.user.id,
       userName: req.user.name,
@@ -462,7 +473,7 @@ apiRouter.post(
       // Save uploaded files to storage
       const normalizedKey = shipment.normalizedInvoiceKey;
       const fyLabel = db.getFinancialYears().find((f) => f.id === financialYearId)?.label || '2026-27';
-      const safeYearDir = path.resolve('storage', `FY${fyLabel}`);
+      const safeYearDir = path.resolve(getStorageDir(), `FY${fyLabel}`);
       const safeInvoiceDir = path.resolve(safeYearDir, normalizedKey.replace(/[^A-Z0-9\-_]/gi, '_'));
       if (!fs.existsSync(safeInvoiceDir)) fs.mkdirSync(safeInvoiceDir, { recursive: true });
 
@@ -879,7 +890,7 @@ apiRouter.post(
 
     // Server-side storage path per Section 7:
     // storage/FY{year}/{normalized_key}/{filename}
-    const safeYearDir = path.resolve('storage', `FY${financialYear}`);
+    const safeYearDir = path.resolve(getStorageDir(), `FY${financialYear}`);
     const safeInvoiceDir = path.resolve(safeYearDir, invoiceKey.replace(/[^A-Z0-9\-_]/gi, '_'));
     if (!fs.existsSync(safeInvoiceDir)) fs.mkdirSync(safeInvoiceDir, { recursive: true });
 
@@ -923,7 +934,7 @@ apiRouter.get('/documents/:id/download', authenticate, (req: AuthenticatedReques
   if (!doc) return res.status(404).json({ error: 'Document not found.' });
 
   const absolutePath = path.resolve(doc.storedPath);
-  const storageRoot = path.resolve('storage');
+  const storageRoot = getStorageDir();
   const assetsRoot = path.resolve('public/assets');
 
   // Path containment guard: prevent path traversal attacks
@@ -1195,11 +1206,11 @@ apiRouter.put(
   }
 );
 
-// --- Danger Zone / System Purge ---
+// --- Danger Zone / System Purge (SUPER ADMIN ONLY) ---
 apiRouter.post(
   '/system/clear-records',
   authenticate,
-  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  requireRole(['SUPER_ADMIN']),
   (req: AuthenticatedRequest, res: Response) => {
     try {
       const result = db.clearAllOperationalData(req.user!.id);
@@ -1213,7 +1224,7 @@ apiRouter.post(
 apiRouter.post(
   '/system/reseed',
   authenticate,
-  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  requireRole(['SUPER_ADMIN']),
   (req: AuthenticatedRequest, res: Response) => {
     try {
       const result = db.reseedWithDefaults(req.user!.id);

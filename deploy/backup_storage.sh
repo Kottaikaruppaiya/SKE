@@ -44,6 +44,7 @@ fi
 echo "Generating SHA256 checksum manifest..."
 (
     cd "${BACKUP_DIR}"
+    rm -f SHA256SUMS.txt
     sha256sum * > SHA256SUMS.txt
 )
 

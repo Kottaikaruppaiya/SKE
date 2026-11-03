@@ -75,7 +75,20 @@ class OcrQueueWorker {
 
   public async processJob(job: OcrJob): Promise<void> {
     const startTime = Date.now();
+    let heartbeatTimer: NodeJS.Timeout | null = null;
+
     try {
+      // Active lease renewal heartbeat: extends lease every 20s during long OCR processing
+      heartbeatTimer = setInterval(() => {
+        const renewed = db.renewOcrJobLease(job.id, this.workerId, 60000);
+        if (!renewed) {
+          console.warn(`[OCR Worker ${this.workerId}] Failed to renew lease for job ${job.id} (may have been reclaimed)`);
+        }
+      }, 20000);
+      if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') {
+        heartbeatTimer.unref();
+      }
+
       // 1. Resolve file buffer
       let buffer: Buffer | null = this.stagingBufferMap.get(job.id) || null;
 
@@ -144,6 +157,11 @@ class OcrQueueWorker {
       const executionTimeMs = Date.now() - startTime;
       const errorMsg = err?.message || 'Local OCR extraction failed.';
       db.failOcrJob(job.id, this.workerId, errorMsg, executionTimeMs);
+    } finally {
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
     }
   }
 

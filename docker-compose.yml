@@ -13,6 +13,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-ske_production_secret_key_change_me_in_vps}
       - OCR_CONCURRENCY=${OCR_CONCURRENCY:-2}
       - MAX_OCR_FILE_SIZE_MB=${MAX_OCR_FILE_SIZE_MB:-50}
+      - STORAGE_ROOT=${STORAGE_ROOT:-/app/storage}
     volumes:
       - ske_storage:/app/storage
     depends_on:

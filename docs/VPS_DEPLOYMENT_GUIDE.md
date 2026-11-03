@@ -141,7 +141,38 @@ sudo /opt/ske-applet/deploy/restore_storage.sh /var/backups/ske/<TIMESTAMP> --dr
 # 2. Test restore into an isolated verification database (safe, does not overwrite production data)
 sudo /opt/ske-applet/deploy/restore_storage.sh /var/backups/ske/<TIMESTAMP> --target-db ske_test_restore
 
-# 3. Full production restore (restores PostgreSQL database and physical document storage)
+# 3. Full production restore (restores PostgreSQL database and physical document storage with safety backup of existing storage)
 sudo /opt/ske-applet/deploy/restore_storage.sh /var/backups/ske/<TIMESTAMP>
 ```
+
+---
+
+### 6. Documented Off-Server Backup Strategy
+
+To guard against VPS hardware failure, datacenter outages, or ransomware, on-server backups (`/var/backups/ske/`) should be replicated off-server daily.
+
+#### Option A: S3 / Cloud Object Storage via `rclone` (Recommended)
+1. Install `rclone`:
+```bash
+sudo apt-get install -y rclone
+rclone config
+# Configure a remote named 'offsite-backup' (AWS S3, Cloudflare R2, Wasabi, or Google Cloud Storage)
+```
+2. Add automated synchronization to `/etc/cron.d/ske-backup`:
+```bash
+# Append to /etc/cron.d/ske-backup after local backup finishes:
+15 2 * * * root rclone sync /var/backups/ske/ offsite-backup:ske-backups/ --transfers 4 --fast-list >> /var/log/ske-rclone.log 2>&1
+```
+
+#### Option B: Remote Dedicated Storage via Encrypted `rsync` over SSH
+1. Configure SSH key authentication to your secondary backup server:
+```bash
+ssh-keygen -t ed25519 -N "" -f /root/.ssh/ske_backup_key
+ssh-copy-id -i /root/.ssh/ske_backup_key.pub backupuser@backupserver.example.com
+```
+2. Add synchronization command:
+```bash
+30 2 * * * root rsync -avz -e "ssh -i /root/.ssh/ske_backup_key" --delete /var/backups/ske/ backupuser@backupserver.example.com:/data/ske-vault-backups/ >> /var/log/ske-rsync.log 2>&1
+```
+*Note: Off-server sync requires external storage credentials provided by the organization and is documented for administrator configuration.*
 
