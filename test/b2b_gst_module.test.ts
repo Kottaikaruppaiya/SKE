@@ -37,6 +37,19 @@ test('1. GSTR Period Normalization and FY calculation', () => {
   assert.equal(p4.periodKey, '2027-01');
   assert.equal(p4.financialYear, '2026-27');
 
+  // Test portal apostrophe format Jul'26 and Aug'26
+  const pApos1 = normalizeGstrPeriod("Jul'26");
+  assert.ok(pApos1, "Jul'26 must be parsed");
+  assert.equal(pApos1.periodKey, '2026-07');
+  assert.equal(pApos1.displayPeriod, 'July 2026');
+  assert.equal(pApos1.financialYear, '2026-27');
+
+  const pApos2 = normalizeGstrPeriod("Aug'26");
+  assert.ok(pApos2, "Aug'26 must be parsed");
+  assert.equal(pApos2.periodKey, '2026-08');
+  assert.equal(pApos2.displayPeriod, 'August 2026');
+  assert.equal(pApos2.financialYear, '2026-27');
+
   // Test Standard Indian Financial Year Months (April to March)
   const fyMonths = getMonthsForFinancialYear('2026-27');
   assert.equal(fyMonths.length, 12, 'Must have 12 months');
@@ -274,4 +287,21 @@ test('8. Excel and Monthly Summary Export generation produces valid buffers', ()
   assert.ok(Buffer.isBuffer(sumBuffer), 'Monthly summary export must produce a Buffer');
   assert.ok(sumBuffer.length > 500, 'Summary Excel buffer must contain valid workbook bytes');
 });
+
+test('9. User Uploaded B2B Workbook (B2B_Data_AI_Studio_fedf686a.csv) parses all 1,251 rows with zero errors', async () => {
+  const fs = await import('fs');
+  const path = await import('path');
+  const filePath = path.join(process.cwd(), 'public/assets/aistudio/B2B_Data_AI_Studio_fedf686a.csv');
+  if (fs.existsSync(filePath)) {
+    const buf = fs.readFileSync(filePath);
+    const preview = previewB2bWorkbook(buf, 'B2B_Data_AI_Studio_fedf686a.csv');
+    assert.equal(preview.totalRows, 1251, 'Must detect 1,251 data rows');
+    assert.equal(preview.validRows, 1251, 'All 1,251 rows must be valid');
+    assert.equal(preview.invalidRows, 0, 'Must have 0 invalid rows');
+    assert.equal(preview.errors.length, 0, 'Must have 0 errors');
+    assert.ok(preview.allParsedRecords && preview.allParsedRecords.length === 1251, 'allParsedRecords must contain all 1,251 rows');
+    assert.ok(preview.periodDistribution.length >= 2, 'Must have periods for June, July, August 2026');
+  }
+});
+
 

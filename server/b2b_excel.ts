@@ -21,14 +21,14 @@ const FIELD_ALIASES: Record<string, string[]> = {
   invoiceDate: ['invoice date', 'inv date', 'date', 'invoice_date', 'doc date'],
   invoiceValue: ['invoice value', 'inv value', 'total value', 'invoice_value', 'value', 'inv amount'],
   placeOfSupply: ['place of supply', 'pos', 'place_of_supply', 'state code'],
-  reverseCharge: ['reverse charge', 'rcm', 'reverse_charge', 'rev charge'],
+  reverseCharge: ['supply attract reverse charge', 'supply attracts reverse charge', 'reverse charge', 'rcm', 'reverse_charge', 'rev charge'],
   taxableValue: ['taxable value', 'taxable amount', 'taxable_value', 'taxable val'],
   integratedTax: ['integrated tax', 'igst', 'integrated_tax', 'igst amount', 'igst (inr)', 'integrated tax amount'],
   centralTax: ['central tax', 'cgst', 'central_tax', 'cgst amount', 'cgst (inr)', 'central tax amount'],
   stateUtTax: ['state/ut tax', 'state ut tax', 'sgst', 'sgst/utgst', 'sgst/ut tax', 'state_ut_tax', 'sgst amount', 'sgst (inr)'],
   cess: ['cess', 'cess amount', 'cess (inr)', 'cess tax'],
-  gstrPeriod: ['gstr period', 'period', 'return period', 'gstr_period', 'gstr-2b period', 'gstr2b period', 'month'],
-  filingDate: ['filing date', 'gstr-1 filing date', 'filing_date', 'supplier filing date'],
+  gstrPeriod: ['gstr-1/iff/gstr-5 period', 'gstr 1/iff/gstr 5 period', 'gstr-1 period', 'gstr1 period', 'gstr period', 'period', 'return period', 'gstr_period', 'gstr-2b period', 'gstr2b period', 'month'],
+  filingDate: ['gstr-1/iff/gstr-5 filing date', 'gstr 1/iff/gstr 5 filing date', 'filing date', 'gstr-1 filing date', 'filing_date', 'supplier filing date'],
   itcAvailability: ['itc availability', 'itc available', 'itc_availability', 'itc eligibility', 'itc'],
   reason: ['reason', 'itc reason', 'ineligibility reason', 'remarks'],
   applicableTaxRate: ['applicable % of tax rate', 'applicable tax rate', 'tax rate %', 'rate %', 'rate', 'applicable_tax_rate'],
@@ -65,6 +65,15 @@ export function parseDateCell(val: any): string | null {
     const year = ddmmyyyy[3];
     return `${year}-${month}-${day}`;
   }
+  // Format DD-MM-YY or DD/MM/YY
+  const ddmmyy = str.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{2})$/);
+  if (ddmmyy) {
+    const day = ddmmyy[1].padStart(2, '0');
+    const month = ddmmyy[2].padStart(2, '0');
+    let y = parseInt(ddmmyy[3], 10);
+    if (y < 100) y += 2000;
+    return `${y}-${month}-${day}`;
+  }
   // Format YYYY-MM-DD
   const yyyymmdd = str.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
   if (yyyymmdd) {
@@ -94,14 +103,33 @@ export function previewB2bWorkbook(
   // Detect B2B worksheet
   let b2bSheetName = wb.SheetNames.find((s) => s.trim().toUpperCase() === 'B2B');
   if (!b2bSheetName) {
+    b2bSheetName = wb.SheetNames.find((s) => s.trim().toUpperCase().includes('B2B'));
+  }
+  if (!b2bSheetName) {
     // If only one sheet in workbook or CSV, allow it as B2B
     if (wb.SheetNames.length === 1) {
       b2bSheetName = wb.SheetNames[0];
     } else {
-      throw new Error(
-        `No "B2B" worksheet detected in workbook. Found sheets: [${wb.SheetNames.join(', ')}]. The system processes only the B2B inward purchase sheet.`
-      );
+      // Search all sheets for rows containing GSTIN and invoice keywords
+      for (const sName of wb.SheetNames) {
+        const testWs = wb.Sheets[sName];
+        if (!testWs) continue;
+        const testRows: any[][] = XLSX.utils.sheet_to_json(testWs, { header: 1, defval: '' });
+        for (let i = 0; i < Math.min(testRows.length, 10); i++) {
+          const rowStr = (testRows[i] || []).map((c) => String(c).toLowerCase()).join(' ');
+          if (rowStr.includes('gstin') && (rowStr.includes('invoice') || rowStr.includes('inv') || rowStr.includes('supplier'))) {
+            b2bSheetName = sName;
+            break;
+          }
+        }
+        if (b2bSheetName) break;
+      }
     }
+  }
+
+  // Fallback to first sheet if still not matched
+  if (!b2bSheetName) {
+    b2bSheetName = wb.SheetNames[0];
   }
 
   const ws = wb.Sheets[b2bSheetName];
@@ -111,26 +139,81 @@ export function previewB2bWorkbook(
     throw new Error(`The "${b2bSheetName}" worksheet is empty.`);
   }
 
-  // Find header row by looking for "GSTIN" or "Invoice"
-  let headerRowIndex = 0;
+  // Find candidate header row indices in the first 12 rows
+  let maxColCount = 0;
+  for (let i = 0; i < Math.min(rawRows.length, 12); i++) {
+    if (rawRows[i] && rawRows[i].length > maxColCount) maxColCount = rawRows[i].length;
+  }
+
+  const candidateHeaderRows: number[] = [];
   for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
-    const rowStr = rawRows[i].map((c) => String(c).toLowerCase()).join(' ');
-    if (rowStr.includes('gstin') && (rowStr.includes('invoice') || rowStr.includes('inv'))) {
-      headerRowIndex = i;
+    const row = rawRows[i] || [];
+    // If any cell in this row matches an actual 15-character GSTIN pattern, this is a data row!
+    const hasGstinData = row.some((c: any) => {
+      const val = String(c || '').trim();
+      return /^\d{2}[A-Z]{5}\d{4}[A-Z0-9]{4}$/i.test(val) || /^\d{2}[A-Z]{5}\d{4}/i.test(val);
+    });
+    if (hasGstinData) {
       break;
+    }
+
+    const rowStr = row.map((c: any) => String(c).toLowerCase()).join(' ');
+    const isHeaderCandidate =
+      rowStr.includes('gstin of supplier') ||
+      rowStr.includes('supplier gstin') ||
+      rowStr.includes('gstin') ||
+      rowStr.includes('trade/legal') ||
+      rowStr.includes('trade name') ||
+      rowStr.includes('legal name') ||
+      rowStr.includes('invoice number') ||
+      rowStr.includes('invoice details') ||
+      rowStr.includes('invoice no') ||
+      rowStr.includes('invoice date') ||
+      rowStr.includes('taxable value') ||
+      rowStr.includes('integrated tax') ||
+      rowStr.includes('central tax') ||
+      rowStr.includes('state/ut tax');
+
+    if (isHeaderCandidate) {
+      candidateHeaderRows.push(i);
     }
   }
 
-  const rawHeaders: string[] = rawRows[headerRowIndex].map((h) => String(h).trim());
-  const headerMap: Record<string, number> = {}; // normalizedField -> colIndex
+  if (candidateHeaderRows.length === 0) {
+    candidateHeaderRows.push(0);
+  }
 
-  // Map each alias to column index
+  const headerMap: Record<string, number> = {}; // canonicalField -> colIndex
+
+  // Map each alias to column index, checking individual candidate rows and merged multi-tier rows
   for (const [canonicalField, aliases] of Object.entries(FIELD_ALIASES)) {
-    for (let colIdx = 0; colIdx < rawHeaders.length; colIdx++) {
-      const colHeaderNorm = normalizeHeader(rawHeaders[colIdx]);
-      if (aliases.some((a) => a === colHeaderNorm || colHeaderNorm.includes(a))) {
-        headerMap[canonicalField] = colIdx;
-        break;
+    // 1. Check individual candidate rows
+    for (const rIdx of candidateHeaderRows) {
+      const row = rawRows[rIdx] || [];
+      for (let colIdx = 0; colIdx < maxColCount; colIdx++) {
+        const colHeaderNorm = normalizeHeader(row[colIdx]);
+        if (aliases.some((a) => a === colHeaderNorm || colHeaderNorm.includes(a))) {
+          if (headerMap[canonicalField] === undefined) {
+            headerMap[canonicalField] = colIdx;
+            break;
+          }
+        }
+      }
+      if (headerMap[canonicalField] !== undefined) break;
+    }
+
+    // 2. Check merged multi-tier headers across candidate rows (e.g. Row 4 "Invoice details" + Row 5 "Invoice number")
+    if (headerMap[canonicalField] === undefined && candidateHeaderRows.length > 1) {
+      for (let colIdx = 0; colIdx < maxColCount; colIdx++) {
+        const mergedColStr = candidateHeaderRows
+          .map((rIdx) => String((rawRows[rIdx] || [])[colIdx] || '').trim())
+          .filter(Boolean)
+          .join(' ');
+        const colHeaderNorm = normalizeHeader(mergedColStr);
+        if (aliases.some((a) => a === colHeaderNorm || colHeaderNorm.includes(a))) {
+          headerMap[canonicalField] = colIdx;
+          break;
+        }
       }
     }
   }
@@ -162,11 +245,27 @@ export function previewB2bWorkbook(
   let newSuppliersFound = new Set<string>();
   let existingSuppliersMatched = new Set<string>();
 
-  // Process rows starting after header
-  for (let r = headerRowIndex + 1; r < rawRows.length; r++) {
+  // Determine starting row for data (after the last header row)
+  const lastHeaderRowIndex = Math.max(...candidateHeaderRows);
+  const dataStartRowIndex = lastHeaderRowIndex + 1;
+
+  // Process rows starting after headers
+  for (let r = dataStartRowIndex; r < rawRows.length; r++) {
     const row = rawRows[r];
     // Skip empty rows
     if (!row || row.every((c: any) => c === '' || c === undefined || c === null)) {
+      continue;
+    }
+
+    // Skip summary/total/blank rows
+    const firstCell = String(row[0] || '').trim().toUpperCase();
+    const secondCell = String(row[1] || '').trim().toUpperCase();
+    if (
+      firstCell.includes('TOTAL') ||
+      secondCell.includes('TOTAL') ||
+      firstCell.startsWith('SUMMARY') ||
+      firstCell === 'GRAND TOTAL'
+    ) {
       continue;
     }
 
@@ -199,7 +298,9 @@ export function previewB2bWorkbook(
     else if (rawItc.toLowerCase() === 'n' || rawItc.toLowerCase() === 'no') rawItc = 'No';
 
     const rawReason = String(getVal('reason') || '').trim() || undefined;
-    const rawTaxRate = getVal('applicableTaxRate') ? Number(getVal('applicableTaxRate')) : undefined;
+    const rawTaxRateVal = getVal('applicableTaxRate');
+    const cleanTaxRateStr = rawTaxRateVal !== undefined && rawTaxRateVal !== null ? String(rawTaxRateVal).replace(/%/g, '').trim() : '';
+    const rawTaxRate = cleanTaxRateStr && !isNaN(Number(cleanTaxRateStr)) ? Number(cleanTaxRateStr) : undefined;
     const rawSource = String(getVal('source') || 'GSTR-1').trim() || 'GSTR-1';
     const rawIrn = String(getVal('irn') || '').trim() || undefined;
     const rawIrnDate = parseDateCell(getVal('irnDate')) || undefined;
@@ -290,7 +391,7 @@ export function previewB2bWorkbook(
       stateUtTax: round2(rawSgst),
       cess: round2(rawCess),
       totalGst,
-      gstrPeriod: String(rawGstrPeriod).trim(),
+      gstrPeriod: normPeriod.displayPeriod,
       periodKey: normPeriod.periodKey,
       financialYear: normPeriod.financialYear,
       filingDate: rawFilingDate || undefined,
@@ -361,7 +462,7 @@ export function previewB2bWorkbook(
   return {
     fileName,
     worksheetDetected: b2bSheetName,
-    totalRows: rawRows.length - (headerRowIndex + 1),
+    totalRows: rawRows.length - dataStartRowIndex,
     validRows: parsedRecords.length - duplicates.length,
     invalidRows: errors.length,
     duplicateRows: duplicates.length,

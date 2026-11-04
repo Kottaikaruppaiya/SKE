@@ -165,11 +165,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* B2B GST Management (GSTR-2B) */}
+      {/* B2B GST Management */}
       <div>
-        <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-teal-400 flex items-center justify-between">
-          <span>B2B GST Management</span>
-          <span className="text-[9px] px-1.5 py-0.5 bg-teal-950 text-teal-300 rounded font-mono font-bold">GSTR-2B</span>
+        <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          B2B GST Management
         </div>
         <div className="space-y-1">
           <NavItem

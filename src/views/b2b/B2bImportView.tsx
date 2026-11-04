@@ -309,6 +309,34 @@ export const B2bImportView: React.FC<B2bImportViewProps> = ({ userRole, onNaviga
             </div>
           )}
 
+          {/* Errors / Invalid Rows Warning (if any) */}
+          {preview.errors && preview.errors.length > 0 && (
+            <div className="bg-rose-50/70 border border-rose-200 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-rose-900 font-bold text-xs">
+                <XCircle className="w-4 h-4 text-rose-600" />
+                <span>Invalid Rows Detected ({preview.errors.length})</span>
+              </div>
+              <p className="text-xs text-rose-800">
+                The following rows could not be parsed and will be skipped during import:
+              </p>
+              <div className="max-h-40 overflow-y-auto space-y-1 text-[11px] font-mono text-rose-950 bg-white p-2.5 rounded-lg border border-rose-200">
+                {preview.errors.slice(0, 50).map((err, idx) => (
+                  <div key={idx} className="py-0.5 border-b border-rose-100 last:border-0 flex items-center justify-between">
+                    <span>
+                      Row #{err.rowNumber}: {err.invoiceNumber ? `Inv ${err.invoiceNumber} ` : ''}{err.issue}
+                    </span>
+                    {err.supplierGstin && <span className="text-slate-500 font-normal">({err.supplierGstin})</span>}
+                  </div>
+                ))}
+                {preview.errors.length > 50 && (
+                  <div className="text-slate-500 italic pt-1">
+                    ...and {preview.errors.length - 50} more invalid rows.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Step 4: Mode Selection & Commit */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
             <h3 className="font-bold text-sm text-slate-900">Step 3: Duplicate Resolution & Commit Mode</h3>
@@ -368,6 +396,13 @@ export const B2bImportView: React.FC<B2bImportViewProps> = ({ userRole, onNaviga
               </label>
             </div>
 
+            {preview.validRows === 0 && preview.duplicateRows === 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>No valid invoice rows detected in this workbook. Please review the errors above.</span>
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
               <button
                 onClick={() => setPreview(null)}
@@ -377,8 +412,12 @@ export const B2bImportView: React.FC<B2bImportViewProps> = ({ userRole, onNaviga
               </button>
               <button
                 onClick={handleCommit}
-                disabled={committing}
-                className="px-6 py-2 text-xs font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+                disabled={committing || (preview.validRows === 0 && preview.duplicateRows === 0)}
+                className={`px-6 py-2 text-xs font-bold text-white rounded-lg transition-colors flex items-center gap-2 cursor-pointer shadow-sm ${
+                  committing || (preview.validRows === 0 && preview.duplicateRows === 0)
+                    ? 'bg-slate-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
                 {committing ? (
                   <>
@@ -397,33 +436,83 @@ export const B2bImportView: React.FC<B2bImportViewProps> = ({ userRole, onNaviga
         </div>
       )}
 
-      {/* Step 5: Success Commit Banner */}
+      {/* Step 5: Success / Notice Commit Banner */}
       {commitResult && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 space-y-3">
+        <div
+          className={`rounded-xl p-6 space-y-3 border ${
+            commitResult.inserted + commitResult.updated > 0
+              ? 'bg-emerald-50 border-emerald-200'
+              : commitResult.skipped > 0
+              ? 'bg-amber-50 border-amber-200'
+              : 'bg-rose-50 border-rose-200'
+          }`}
+        >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-600 text-white rounded-lg">
-              <CheckCircle className="w-5 h-5" />
+            <div
+              className={`p-2 rounded-lg text-white ${
+                commitResult.inserted + commitResult.updated > 0
+                  ? 'bg-emerald-600'
+                  : commitResult.skipped > 0
+                  ? 'bg-amber-600'
+                  : 'bg-rose-600'
+              }`}
+            >
+              {commitResult.inserted + commitResult.updated > 0 ? (
+                <CheckCircle className="w-5 h-5" />
+              ) : (
+                <AlertTriangle className="w-5 h-5" />
+              )}
             </div>
             <div>
-              <h3 className="text-base font-bold text-emerald-950">Import Completed Successfully!</h3>
-              <p className="text-xs text-emerald-700 font-mono">Batch ID: {commitResult.batchId}</p>
+              <h3
+                className={`text-base font-bold ${
+                  commitResult.inserted + commitResult.updated > 0
+                    ? 'text-emerald-950'
+                    : commitResult.skipped > 0
+                    ? 'text-amber-950'
+                    : 'text-rose-950'
+                }`}
+              >
+                {commitResult.inserted + commitResult.updated > 0
+                  ? 'Import Completed Successfully!'
+                  : commitResult.skipped > 0
+                  ? 'Import Finished — All Invoices Already Exist'
+                  : 'Import Finished — 0 Invoices Processed'}
+              </h3>
+              <p
+                className={`text-xs font-mono ${
+                  commitResult.inserted + commitResult.updated > 0
+                    ? 'text-emerald-700'
+                    : commitResult.skipped > 0
+                    ? 'text-amber-700'
+                    : 'text-rose-700'
+                }`}
+              >
+                Batch ID: {commitResult.batchId}
+              </p>
             </div>
           </div>
 
+          {commitResult.inserted === 0 && commitResult.updated === 0 && commitResult.skipped > 0 && (
+            <p className="text-xs text-amber-800 bg-amber-100/60 p-2.5 rounded-lg border border-amber-200">
+              <strong>Notice:</strong> All {commitResult.skipped} invoices in this file were identified as duplicates of records already in your database. Under <em>"Skip Duplicates"</em> mode, existing records are safely preserved without changes. If you intended to update them with newly uploaded figures, choose <strong>"Overwrite Existing"</strong> mode above and click Commit again.
+            </p>
+          )}
+
           <div className="grid grid-cols-4 gap-4 pt-2">
-            <div className="bg-white p-3 rounded-lg border border-emerald-200 text-xs">
+            <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
               <span className="text-slate-500 block">Total Invoices</span>
               <span className="text-base font-bold text-slate-900">{commitResult.totalProcessed}</span>
             </div>
-            <div className="bg-white p-3 rounded-lg border border-emerald-200 text-xs">
+            <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
               <span className="text-slate-500 block">Newly Inserted</span>
               <span className="text-base font-bold text-emerald-700">{commitResult.inserted}</span>
             </div>
-            <div className="bg-white p-3 rounded-lg border border-emerald-200 text-xs">
+            <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
               <span className="text-slate-500 block">Updated</span>
               <span className="text-base font-bold text-blue-700">{commitResult.updated}</span>
             </div>
-            <div className="bg-white p-3 rounded-lg border border-emerald-200 text-xs">
+            <div className="bg-white p-3 rounded-lg border border-slate-200 text-xs">
               <span className="text-slate-500 block">Skipped</span>
               <span className="text-base font-bold text-slate-600">{commitResult.skipped}</span>
             </div>
@@ -432,13 +521,13 @@ export const B2bImportView: React.FC<B2bImportViewProps> = ({ userRole, onNaviga
           <div className="flex justify-end gap-3 pt-2">
             <button
               onClick={() => onNavigateTab('b2b-monthly')}
-              className="px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-lg cursor-pointer"
+              className="px-4 py-2 text-xs font-semibold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg cursor-pointer"
             >
               View Monthly Entries
             </button>
             <button
               onClick={() => onNavigateTab('b2b-register')}
-              className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg cursor-pointer"
+              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg cursor-pointer"
             >
               Open Invoice Register
             </button>

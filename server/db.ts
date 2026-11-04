@@ -2859,7 +2859,7 @@ class DatabaseService {
       }
 
       try {
-        const parsedPeriod = parseGstrPeriod(row.gstrPeriod);
+        const parsedPeriod = (row.periodKey ? parseGstrPeriod(row.periodKey) : null) || parseGstrPeriod(row.gstrPeriod);
         if (!parsedPeriod) {
           skipped++;
           continue;
@@ -2935,7 +2935,7 @@ class DatabaseService {
       fileSizeBytes: batchMeta.fileSizeBytes,
       uploadedAt: new Date().toISOString(),
       uploadedBy: userId,
-      totalRows: (previewData.sampleRows || []).length,
+      totalRows: rowsToProcess.length,
       successfulRows: inserted + updated,
       failedRows: (previewData.errors || []).length,
       duplicateRows: (previewData.duplicates || []).length,
@@ -2949,7 +2949,7 @@ class DatabaseService {
     this.save();
     return {
       batchId,
-      totalProcessed: (previewData.sampleRows || []).length,
+      totalProcessed: rowsToProcess.length,
       inserted,
       updated,
       skipped,

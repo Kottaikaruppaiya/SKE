@@ -194,8 +194,7 @@ test('Module 3.2: GST Calculation — Example 1: GAIN (Difference > 0)', () => {
       sgst: 2000,
       refundEligible: 20000,
       remarks: 'Test GAIN calculation',
-    },
-    admin.id
+    }
   );
 
   assert.equal(entry.totalGst, 14000, 'Total GST must equal IGST + CGST + SGST (14000)');
@@ -203,7 +202,7 @@ test('Module 3.2: GST Calculation — Example 1: GAIN (Difference > 0)', () => {
   assert.equal(entry.result, 'GAIN', 'Result must be GAIN when difference > 0');
   assert.equal(entry.consigneeId, c.id);
   assert.equal(entry.consigneeName, c.name);
-  assert.ok(entry.entryNumber.startsWith('GST-'), 'Entry number must be auto-generated format');
+  assert.ok(entry.id.startsWith('GST-'), 'Entry number must be auto-generated format');
 });
 
 test('Module 3.2: GST Calculation — Example 2: LOSS (Difference < 0)', () => {
@@ -222,8 +221,7 @@ test('Module 3.2: GST Calculation — Example 2: LOSS (Difference < 0)', () => {
       sgst: 2000,
       refundEligible: 12000,
       remarks: 'Test LOSS calculation',
-    },
-    admin.id
+    }
   );
 
   assert.equal(entry.totalGst, 14000, 'Total GST must equal 14000');
@@ -247,8 +245,7 @@ test('Module 3.2: GST Calculation — Example 3: NIL (Difference == 0)', () => {
       sgst: 2000,
       refundEligible: 14000,
       remarks: 'Test NIL calculation',
-    },
-    admin.id
+    }
   );
 
   assert.equal(entry.totalGst, 14000, 'Total GST must equal 14000');
@@ -271,8 +268,7 @@ test('Module 3.3: GST Financial Precision & Negative Value Rejection', () => {
       sgst: 300.12,
       refundEligible: 700.0,
       remarks: 'Decimal precision test',
-    },
-    admin.id
+    }
   );
 
   assert.equal(entry.totalGst, 601.0);
@@ -284,13 +280,13 @@ test('Module 3.3: GST Financial Precision & Negative Value Rejection', () => {
     () => {
       db.createGstEntry(
         {
+          entryDate: '2026-11-03',
           consigneeId: c.id,
           igst: -500,
           cgst: 100,
           sgst: 100,
           refundEligible: 500,
-        },
-        admin.id
+        }
       );
     },
     /cannot be negative/i,
@@ -301,13 +297,13 @@ test('Module 3.3: GST Financial Precision & Negative Value Rejection', () => {
     () => {
       db.createGstEntry(
         {
+          entryDate: '2026-11-03',
           consigneeId: c.id,
           igst: 100,
           cgst: 100,
           sgst: 100,
           refundEligible: -100,
-        },
-        admin.id
+        }
       );
     },
     /cannot be negative/i,
@@ -319,16 +315,16 @@ test('Module 3.3: GST Financial Precision & Negative Value Rejection', () => {
     () => {
       db.createGstEntry(
         {
+          entryDate: '2026-11-03',
           consigneeId: 'non-existent-consignee-uuid',
           igst: 100,
           cgst: 100,
           sgst: 100,
           refundEligible: 500,
-        },
-        admin.id
+        }
       );
     },
-    /Consignee Master/i,
+    /Consignee/i,
     'Must reject invalid foreign key consignee'
   );
 });
@@ -348,8 +344,7 @@ test('Module 3.5: GST Entry CRUD: Update recalculates backend values; Delete pre
       sgst: 0,
       refundEligible: 5000,
       remarks: 'Initial before edit',
-    },
-    admin.id
+    }
   );
   assert.equal(created.result, 'NIL');
 
@@ -359,8 +354,7 @@ test('Module 3.5: GST Entry CRUD: Update recalculates backend values; Delete pre
     {
       refundEligible: 8000,
       remarks: 'Updated to GAIN',
-    },
-    admin.id
+    }
   );
   assert.equal(updated.totalGst, 5000);
   assert.equal(updated.refundEligible, 8000);
@@ -369,13 +363,13 @@ test('Module 3.5: GST Entry CRUD: Update recalculates backend values; Delete pre
   assert.equal(updated.remarks, 'Updated to GAIN');
 
   // 3. Delete entry
-  const initialGstCount = db.getGstEntries().length;
+  const initialGstCount = db.getGstEntries().entries.length;
   const initialConsigneeCount = db.getConsignees().length;
   const initialShipmentCount = db.getShipments().length;
 
-  const delRes = db.deleteGstEntry(created.id, admin.id);
-  assert.equal(delRes.success, true);
-  assert.equal(db.getGstEntries().length, initialGstCount - 1);
+  const delRes = db.deleteGstEntry(created.id);
+  assert.equal(delRes, true);
+  assert.equal(db.getGstEntries().entries.length, initialGstCount - 1);
 
   // Consignee and shipments must be completely preserved
   assert.equal(db.getConsignees().length, initialConsigneeCount, 'Consignee records must not be deleted');
@@ -411,10 +405,10 @@ test('Module 3.7: GST Excel Export: Generates valid workbook buffer with totals 
   const jsonRows = XLSX.utils.sheet_to_json<any>(ws);
   assert.ok(jsonRows.length >= 4, 'Must contain entries plus totals row');
 
-  // Check last row is TOTALS row
+  // Check last row is TOTAL row
   const totalsRow = jsonRows[jsonRows.length - 1];
-  assert.equal(totalsRow['Entry ID'], 'TOTALS');
-  assert.ok(typeof totalsRow['Total GST'] === 'number', 'Total GST cell in Excel must be numeric');
-  assert.ok(typeof totalsRow['Refund Eligible'] === 'number', 'Refund Eligible in Excel must be numeric');
-  assert.ok(typeof totalsRow['Difference'] === 'number', 'Difference in Excel must be numeric');
+  assert.equal(totalsRow['Entry ID'], 'TOTAL');
+  assert.ok(typeof totalsRow['Total GST (INR)'] === 'number', 'Total GST cell in Excel must be numeric');
+  assert.ok(typeof totalsRow['Refund Eligible (INR)'] === 'number', 'Refund Eligible in Excel must be numeric');
+  assert.ok(typeof totalsRow['Difference (INR)'] === 'number', 'Difference in Excel must be numeric');
 });
