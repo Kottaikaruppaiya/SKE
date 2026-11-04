@@ -35,12 +35,22 @@ import { GstEntryView } from './views/GstEntryView.tsx';
 import { UserManagementView } from './views/UserManagementView.tsx';
 import { SettingsView } from './views/SettingsView.tsx';
 
+// B2B GST Management Views
+import { B2bDashboardView } from './views/b2b/B2bDashboardView.tsx';
+import { B2bMonthlyView } from './views/b2b/B2bMonthlyView.tsx';
+import { B2bMonthlyDetailView } from './views/b2b/B2bMonthlyDetailView.tsx';
+import { B2bInvoiceRegisterView } from './views/b2b/B2bInvoiceRegisterView.tsx';
+import { B2bSupplierMasterView } from './views/b2b/B2bSupplierMasterView.tsx';
+import { B2bImportView } from './views/b2b/B2bImportView.tsx';
+import { B2bReportsView } from './views/b2b/B2bReportsView.tsx';
+
 import { User, FinancialYear, ConsigneeMaster, BankMaster, Shipment, Role } from './types/index.ts';
 import { api } from './api/client.ts';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentTab, setCurrentTab] = useState<NavItemKey>('dashboard');
+  const [selectedB2bPeriodKey, setSelectedB2bPeriodKey] = useState<string>('2026-08');
   const [financialYears, setFinancialYears] = useState<FinancialYear[]>([]);
   const [selectedFyId, setSelectedFyId] = useState<string>('fy-2026-27');
   const [consignees, setConsignees] = useState<ConsigneeMaster[]>([]);
@@ -353,12 +363,63 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'gst-entry' && (
-            <GstEntryView
-              consignees={consignees}
+          {currentTab === 'gst-entry' && <GstEntryView userRole={currentUser.role} />}
+
+          {/* B2B GST Management Views */}
+          {currentTab === 'b2b-dashboard' && (
+            <B2bDashboardView
               userRole={currentUser.role}
-              refreshKey={refreshKey}
+              onNavigateTab={(tab, param) => {
+                if (param) setSelectedB2bPeriodKey(param);
+                setCurrentTab(tab as NavItemKey);
+              }}
             />
+          )}
+
+          {currentTab === 'b2b-monthly' && (
+            <B2bMonthlyView
+              userRole={currentUser.role}
+              onOpenMonth={(periodKey) => {
+                setSelectedB2bPeriodKey(periodKey);
+                setCurrentTab('b2b-monthly-detail');
+              }}
+            />
+          )}
+
+          {currentTab === 'b2b-monthly-detail' && (
+            <B2bMonthlyDetailView
+              periodKey={selectedB2bPeriodKey}
+              userRole={currentUser.role}
+              onBack={() => setCurrentTab('b2b-monthly')}
+            />
+          )}
+
+          {currentTab === 'b2b-register' && (
+            <B2bInvoiceRegisterView userRole={currentUser.role} />
+          )}
+
+          {currentTab === 'b2b-suppliers' && (
+            <B2bSupplierMasterView
+              userRole={currentUser.role}
+              onNavigateTab={(tab, param) => {
+                if (param) setSelectedB2bPeriodKey(param);
+                setCurrentTab(tab as NavItemKey);
+              }}
+            />
+          )}
+
+          {currentTab === 'b2b-import' && (
+            <B2bImportView
+              userRole={currentUser.role}
+              onNavigateTab={(tab, param) => {
+                if (param) setSelectedB2bPeriodKey(param);
+                setCurrentTab(tab as NavItemKey);
+              }}
+            />
+          )}
+
+          {currentTab === 'b2b-reports' && (
+            <B2bReportsView userRole={currentUser.role} />
           )}
 
           {currentTab === 'users' && <UserManagementView />}

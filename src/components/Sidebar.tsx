@@ -23,6 +23,7 @@ import {
   BarChart3,
   UsersRound,
   X,
+  Calendar,
 } from 'lucide-react';
 import { Role } from '../types/index.ts';
 
@@ -47,6 +48,13 @@ export type NavItemKey =
   | 'bank-master'
   | 'excel'
   | 'gst-entry'
+  | 'b2b-dashboard'
+  | 'b2b-monthly'
+  | 'b2b-monthly-detail'
+  | 'b2b-register'
+  | 'b2b-suppliers'
+  | 'b2b-import'
+  | 'b2b-reports'
   | 'users'
   | 'settings';
 
@@ -149,16 +157,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => handleItemClick('incentives')}
           />
           <NavItem
-            icon={<Receipt size={16} />}
-            label="GST Entry"
-            active={currentTab === 'gst-entry'}
-            onClick={() => handleItemClick('gst-entry')}
-          />
-          <NavItem
             icon={<FileText size={16} />}
             label="Document Review & Vault"
             active={currentTab === 'documents'}
             onClick={() => handleItemClick('documents')}
+          />
+        </div>
+      </div>
+
+      {/* B2B GST Management (GSTR-2B) */}
+      <div>
+        <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-teal-400 flex items-center justify-between">
+          <span>B2B GST Management</span>
+          <span className="text-[9px] px-1.5 py-0.5 bg-teal-950 text-teal-300 rounded font-mono font-bold">GSTR-2B</span>
+        </div>
+        <div className="space-y-1">
+          <NavItem
+            icon={<LayoutDashboard size={16} className="text-teal-400" />}
+            label="B2B Dashboard"
+            active={currentTab === 'b2b-dashboard'}
+            onClick={() => handleItemClick('b2b-dashboard')}
+          />
+          <NavItem
+            icon={<Calendar size={16} className="text-blue-400" />}
+            label="Monthly GST Entries"
+            active={currentTab === 'b2b-monthly' || currentTab === 'b2b-monthly-detail'}
+            onClick={() => handleItemClick('b2b-monthly')}
+          />
+          <NavItem
+            icon={<FileText size={16} className="text-indigo-400" />}
+            label="B2B Invoice Register"
+            active={currentTab === 'b2b-register'}
+            onClick={() => handleItemClick('b2b-register')}
+          />
+          <NavItem
+            icon={<Building2 size={16} className="text-amber-400" />}
+            label="Supplier Master"
+            active={currentTab === 'b2b-suppliers'}
+            onClick={() => handleItemClick('b2b-suppliers')}
+          />
+          <NavItem
+            icon={<FileDown size={16} className="text-emerald-400" />}
+            label="Excel / CSV Import"
+            active={currentTab === 'b2b-import'}
+            onClick={() => handleItemClick('b2b-import')}
+          />
+          <NavItem
+            icon={<Receipt size={16} className="text-purple-400" />}
+            label="GST Reports & Export"
+            active={currentTab === 'b2b-reports'}
+            onClick={() => handleItemClick('b2b-reports')}
           />
         </div>
       </div>

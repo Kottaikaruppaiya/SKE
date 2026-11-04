@@ -6,416 +6,413 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Receipt,
-  Plus,
+  PlusCircle,
   Search,
   Filter,
-  FileSpreadsheet,
+  Download,
+  Calendar,
+  Building2,
   Trash2,
-  Edit2,
+  Edit,
+  Eye,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  CheckCircle2,
+  AlertCircle,
+  HelpCircle,
+  RotateCcw,
   TrendingUp,
   TrendingDown,
-  Minus,
-  CheckCircle2,
-  X,
-  AlertCircle,
-  RefreshCw,
-  Building2,
-  Calendar,
-  FileText,
-  ChevronLeft,
-  ChevronRight,
+  MinusCircle,
 } from 'lucide-react';
-import { GstEntry, GstSummary, GstResult, ConsigneeMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
-import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
+import { GstEntry, GstSummary, GstResult, ConsigneeMaster, Role } from '../types/index.ts';
 
 interface GstEntryViewProps {
-  consignees: ConsigneeMaster[];
   userRole: Role;
-  refreshKey?: number;
 }
 
-export const GstEntryView: React.FC<GstEntryViewProps> = ({ consignees, userRole, refreshKey = 0 }) => {
+export const GstEntryView: React.FC<GstEntryViewProps> = ({ userRole }) => {
   const isViewer = userRole === 'VIEWER';
 
-  // Data states
+  // Data state
   const [entries, setEntries] = useState<GstEntry[]>([]);
-  const [summary, setSummary] = useState<GstSummary>({
-    totalEntries: 0,
-    totalIgst: 0,
-    totalCgst: 0,
-    totalSgst: 0,
-    totalGst: 0,
-    totalRefundEligible: 0,
-    netDifference: 0,
-    gainCount: 0,
-    lossCount: 0,
-    nilCount: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<GstSummary | null>(null);
+  const [consignees, setConsignees] = useState<ConsigneeMaster[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
 
-  // Filters & search
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterConsigneeId, setFilterConsigneeId] = useState('');
-  const [filterResult, setFilterResult] = useState<string>('ALL');
-  const [filterStartDate, setFilterStartDate] = useState('');
-  const [filterEndDate, setFilterEndDate] = useState('');
-  const [sortBy, setSortBy] = useState<'entryDate' | 'totalGst' | 'refundEligible' | 'difference'>('entryDate');
+  // Filters & Pagination
+  const [search, setSearch] = useState('');
+  const [selectedConsigneeId, setSelectedConsigneeId] = useState('ALL');
+  const [selectedResult, setSelectedResult] = useState<string>('ALL');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [sortBy, setSortBy] = useState<'entryDate' | 'consigneeName' | 'totalGst' | 'refundEligible' | 'difference'>('entryDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-
-  // Form modal (Create / Edit)
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  // Modals
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<GstEntry | null>(null);
+  const [viewingEntry, setViewingEntry] = useState<GstEntry | null>(null);
+  const [deleteConfirmEntry, setDeleteConfirmEntry] = useState<GstEntry | null>(null);
+
+  // Form state (for create and edit)
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
-  const [formConsigneeId, setFormConsigneeId] = useState(consignees[0]?.id || '');
+  const [formConsigneeId, setFormConsigneeId] = useState('');
   const [formIgst, setFormIgst] = useState<string>('0');
   const [formCgst, setFormCgst] = useState<string>('0');
   const [formSgst, setFormSgst] = useState<string>('0');
   const [formRefundEligible, setFormRefundEligible] = useState<string>('0');
   const [formRemarks, setFormRemarks] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Delete modal
-  const [deletingEntry, setDeletingEntry] = useState<GstEntry | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  // Load data
-  const loadGstData = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const res = await api.getGstEntries({
-        consigneeId: filterConsigneeId || undefined,
-        result: filterResult !== 'ALL' ? filterResult : undefined,
-        startDate: filterStartDate || undefined,
-        endDate: filterEndDate || undefined,
-        search: searchTerm || undefined,
-        sortBy,
-        sortOrder,
-      });
-      setEntries(res.entries);
-      setSummary(res.summary);
-    } catch (err: any) {
-      console.error('Failed to load GST entries:', err);
-      setError(err.message || 'Error fetching GST entries from server.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadGstData();
-  }, [filterConsigneeId, filterResult, filterStartDate, filterEndDate, sortBy, sortOrder, refreshKey]);
-
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadGstData();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  // Live calculation for form
+  // Computed values in form for real-time preview
   const numIgst = Math.max(0, parseFloat(formIgst) || 0);
   const numCgst = Math.max(0, parseFloat(formCgst) || 0);
   const numSgst = Math.max(0, parseFloat(formSgst) || 0);
   const numRefund = Math.max(0, parseFloat(formRefundEligible) || 0);
+  const computedTotalGst = Math.round((numIgst + numCgst + numSgst) * 100) / 100;
+  const computedDifference = Math.round((numRefund - computedTotalGst) * 100) / 100;
+  const computedResult: GstResult = computedDifference > 0 ? 'GAIN' : computedDifference < 0 ? 'LOSS' : 'NIL';
 
-  const formCalculatedTotalGst = Math.round((numIgst + numCgst + numSgst) * 100) / 100;
-  const formCalculatedDiffCents = Math.round(numRefund * 100) - Math.round(formCalculatedTotalGst * 100);
-  const formCalculatedDiff = formCalculatedDiffCents / 100;
-  const formCalculatedResult: GstResult =
-    formCalculatedDiffCents > 0 ? 'GAIN' : formCalculatedDiffCents < 0 ? 'LOSS' : 'NIL';
+  // Load consignees once
+  useEffect(() => {
+    api.getConsignees().then(setConsignees).catch(console.error);
+  }, []);
 
-  const openNewEntryModal = () => {
-    setEditingEntry(null);
+  // Fetch entries
+  const fetchEntries = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getGstEntries({
+        consigneeId: selectedConsigneeId !== 'ALL' ? selectedConsigneeId : undefined,
+        result: selectedResult !== 'ALL' ? selectedResult : undefined,
+        search: search.trim() || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        page,
+        limit: pageSize,
+        sortBy,
+        sortOrder,
+      });
+      setEntries(data.entries);
+      setTotalCount(data.total);
+      setSummary(data.summary);
+    } catch (err: any) {
+      console.error('Failed to load GST entries:', err);
+      setNotification({ message: err.message || 'Failed to load GST entries.', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchEntries();
+  }, [selectedConsigneeId, selectedResult, search, startDate, endDate, page, pageSize, sortBy, sortOrder]);
+
+  const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  // Open Create Modal
+  const handleOpenCreate = () => {
     setFormDate(new Date().toISOString().split('T')[0]);
-    setFormConsigneeId(consignees[0]?.id || '');
+    setFormConsigneeId(consignees.length > 0 ? consignees[0].id : '');
     setFormIgst('0');
     setFormCgst('0');
     setFormSgst('0');
     setFormRefundEligible('0');
     setFormRemarks('');
     setFormError(null);
-    setIsFormOpen(true);
+    setIsCreateOpen(true);
   };
 
-  const openEditEntryModal = (entry: GstEntry) => {
+  // Open Edit Modal
+  const handleOpenEdit = (entry: GstEntry) => {
     setEditingEntry(entry);
     setFormDate(entry.entryDate);
     setFormConsigneeId(entry.consigneeId);
-    setFormIgst(entry.igst.toString());
-    setFormCgst(entry.cgst.toString());
-    setFormSgst(entry.sgst.toString());
-    setFormRefundEligible(entry.refundEligible.toString());
+    setFormIgst(String(entry.igst));
+    setFormCgst(String(entry.cgst));
+    setFormSgst(String(entry.sgst));
+    setFormRefundEligible(String(entry.refundEligible));
     setFormRemarks(entry.remarks || '');
     setFormError(null);
-    setIsFormOpen(true);
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  // Submit Create
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError(null);
-
+    if (!formDate) {
+      setFormError('Please select a valid entry date.');
+      return;
+    }
     if (!formConsigneeId) {
-      setFormError('Please select a consignee from Consignee Master.');
+      setFormError('Please select a consignee from master records.');
       return;
     }
 
     if (numIgst < 0 || numCgst < 0 || numSgst < 0 || numRefund < 0) {
-      setFormError('GST amounts and Refund Eligible cannot be negative values.');
+      setFormError('Amounts cannot be negative.');
       return;
     }
 
-    setIsSubmitting(true);
+    setFormSubmitting(true);
+    setFormError(null);
     try {
-      if (editingEntry) {
-        await api.updateGstEntry(editingEntry.id, {
-          entryDate: formDate,
-          consigneeId: formConsigneeId,
-          igst: numIgst,
-          cgst: numCgst,
-          sgst: numSgst,
-          refundEligible: numRefund,
-          remarks: formRemarks,
-        });
-      } else {
-        await api.createGstEntry({
-          entryDate: formDate,
-          consigneeId: formConsigneeId,
-          igst: numIgst,
-          cgst: numCgst,
-          sgst: numSgst,
-          refundEligible: numRefund,
-          remarks: formRemarks,
-        });
-      }
-      setIsFormOpen(false);
-      await loadGstData();
+      await api.createGstEntry({
+        entryDate: formDate,
+        consigneeId: formConsigneeId,
+        igst: numIgst,
+        cgst: numCgst,
+        sgst: numSgst,
+        refundEligible: numRefund,
+        remarks: formRemarks.trim() || undefined,
+      });
+      setIsCreateOpen(false);
+      showNotification('GST entry created successfully.');
+      fetchEntries();
     } catch (err: any) {
-      setFormError(err.message || 'Failed to save GST entry.');
+      setFormError(err.message || 'Failed to create GST entry.');
     } finally {
-      setIsSubmitting(false);
+      setFormSubmitting(false);
     }
   };
 
-  const handleDeleteEntry = async () => {
-    if (!deletingEntry) return;
-    setIsDeleting(true);
-    setDeleteError(null);
+  // Submit Edit
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry) return;
+
+    if (!formDate) {
+      setFormError('Please select a valid entry date.');
+      return;
+    }
+    if (!formConsigneeId) {
+      setFormError('Please select a consignee.');
+      return;
+    }
+
+    setFormSubmitting(true);
+    setFormError(null);
     try {
-      await api.deleteGstEntry(deletingEntry.id);
-      setDeletingEntry(null);
-      await loadGstData();
+      await api.updateGstEntry(editingEntry.id, {
+        entryDate: formDate,
+        consigneeId: formConsigneeId,
+        igst: numIgst,
+        cgst: numCgst,
+        sgst: numSgst,
+        refundEligible: numRefund,
+        remarks: formRemarks.trim() || undefined,
+      });
+      setEditingEntry(null);
+      showNotification(`GST entry ${editingEntry.id} updated successfully.`);
+      fetchEntries();
     } catch (err: any) {
-      setDeleteError(err.message || 'Failed to delete GST entry.');
+      setFormError(err.message || 'Failed to update GST entry.');
     } finally {
-      setIsDeleting(false);
+      setFormSubmitting(false);
     }
   };
 
-  const handleExcelExport = () => {
-    const url = api.getGstExportUrl({
-      consigneeId: filterConsigneeId || undefined,
-      result: filterResult !== 'ALL' ? filterResult : undefined,
-      startDate: filterStartDate || undefined,
-      endDate: filterEndDate || undefined,
-      search: searchTerm || undefined,
-    });
-    window.open(url, '_blank');
+  // Delete Entry
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmEntry) return;
+    try {
+      await api.deleteGstEntry(deleteConfirmEntry.id);
+      showNotification(`GST entry ${deleteConfirmEntry.id} deleted successfully.`);
+      setDeleteConfirmEntry(null);
+      fetchEntries();
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to delete GST entry.', 'error');
+    }
   };
 
-  const formatCurrency = (val: number) => {
-    const isNegative = val < 0;
-    const formatted = Math.abs(val).toLocaleString('en-IN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-    return `${isNegative ? '-' : ''}₹ ${formatted}`;
+  // Sorting helper
+  const handleSort = (column: typeof sortBy) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('desc');
+    }
   };
 
-  // Pagination slice
-  const paginatedEntries = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return entries.slice(start, start + pageSize);
-  }, [entries, currentPage]);
-
-  const totalPages = Math.max(1, Math.ceil(entries.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top Banner Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+    <div className="space-y-6">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold">
-              <Receipt size={22} />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">GST Entry & Refund Tracker</h1>
-              <p className="text-xs text-slate-500">
-                Consignee-wise statutory GST ledger & automated Refund Eligible reconciliation (GAIN / LOSS / NIL)
-              </p>
-            </div>
-          </div>
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Receipt className="text-teal-600" size={24} />
+            <span>GST Entry & Realisation Tracker</span>
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Record consignee-wise GST compliance, input tax credit claims, and calculate GAIN/LOSS differentials.
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={handleExcelExport}
-            className="h-9 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs inline-flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Download GST records as Excel workbook"
+        <div className="flex items-center gap-2.5">
+          <a
+            href={api.getGstExportUrl({
+              consigneeId: selectedConsigneeId,
+              result: selectedResult,
+              search,
+              startDate,
+              endDate,
+            })}
+            target="_blank"
+            rel="noreferrer"
+            className="h-9 px-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg shadow-2xs flex items-center gap-2 transition-colors"
           >
-            <FileSpreadsheet size={15} className="text-emerald-700" />
-            <span>Export Excel</span>
-          </button>
+            <Download size={14} className="text-teal-600" />
+            <span>Export Excel (.xlsx)</span>
+          </a>
 
           {!isViewer && (
             <button
-              onClick={openNewEntryModal}
-              className="h-9 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs inline-flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              onClick={handleOpenCreate}
+              className="h-9 px-4 bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs rounded-lg shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
             >
-              <Plus size={16} />
-              <span>New GST Entry</span>
+              <PlusCircle size={15} />
+              <span>Record GST Entry</span>
             </button>
           )}
+        </div>
+      </div>
 
-          <button
-            onClick={loadGstData}
-            className="h-9 w-9 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
-            title="Refresh table"
-          >
-            <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
+      {/* Notification toast */}
+      {notification && (
+        <div
+          className={`p-3.5 rounded-lg text-xs font-semibold flex items-center justify-between ${
+            notification.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border border-rose-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {notification.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+            <span>{notification.message}</span>
+          </div>
+          <button onClick={() => setNotification(null)} className="text-xs font-bold hover:underline cursor-pointer">
+            Dismiss
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Summary Cards Top Section */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        {/* 1. Total GST Entries */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Entries</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{summary.totalEntries}</div>
-          <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-            <span>Filtered count: {entries.length}</span>
+      {/* Summary KPI Cards */}
+      {summary && (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total Entries</span>
+            <span className="text-lg font-bold text-slate-900 font-mono mt-1 block">{summary.totalEntries}</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Recorded claims</span>
+          </div>
+
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total IGST</span>
+            <span className="text-base font-bold text-slate-800 font-mono mt-1 block">₹{summary.totalIgst.toLocaleString()}</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Integrated tax</span>
+          </div>
+
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total CGST</span>
+            <span className="text-base font-bold text-slate-800 font-mono mt-1 block">₹{summary.totalCgst.toLocaleString()}</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Central tax</span>
+          </div>
+
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total SGST</span>
+            <span className="text-base font-bold text-slate-800 font-mono mt-1 block">₹{summary.totalSgst.toLocaleString()}</span>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">State tax</span>
+          </div>
+
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider block">Total GST</span>
+            <span className="text-base font-bold text-indigo-700 font-mono mt-1 block">₹{summary.totalGst.toLocaleString()}</span>
+            <span className="text-[10px] text-indigo-400 mt-0.5 block">IGST + CGST + SGST</span>
+          </div>
+
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">Refund Eligible</span>
+            <span className="text-base font-bold text-emerald-700 font-mono mt-1 block">₹{summary.totalRefundEligible.toLocaleString()}</span>
+            <span className="text-[10px] text-emerald-500 mt-0.5 block">Sanction eligible</span>
+          </div>
+
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Net Difference</span>
+            <span
+              className={`text-base font-bold font-mono mt-1 block ${
+                summary.netDifference > 0
+                  ? 'text-emerald-700'
+                  : summary.netDifference < 0
+                  ? 'text-rose-700'
+                  : 'text-slate-700'
+              }`}
+            >
+              ₹{summary.netDifference >= 0 ? '+' : ''}{summary.netDifference.toLocaleString()}
+            </span>
+            <span className="text-[10px] font-bold mt-0.5 block">
+              {summary.netDifference > 0 ? (
+                <span className="text-emerald-600 font-bold">GAIN Overall</span>
+              ) : summary.netDifference < 0 ? (
+                <span className="text-rose-600 font-bold">LOSS Overall</span>
+              ) : (
+                <span className="text-slate-500 font-bold">NIL Variance</span>
+              )}
+            </span>
+          </div>
+
+          <div className="p-3.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex flex-col justify-between">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Outcomes</span>
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold font-mono">
+              <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded">{summary.gainCount}G</span>
+              <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded">{summary.lossCount}L</span>
+              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded">{summary.nilCount}N</span>
+            </div>
+            <span className="text-[10px] text-slate-400 mt-0.5 block">Gain / Loss / Nil</span>
           </div>
         </div>
-
-        {/* 2. Total IGST */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total IGST</div>
-          <div className="text-lg sm:text-xl font-black text-slate-900 mt-1">{formatCurrency(summary.totalIgst)}</div>
-          <div className="text-[10px] text-slate-400 mt-1">Inter-state / Export</div>
-        </div>
-
-        {/* 3. Total CGST */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total CGST</div>
-          <div className="text-lg sm:text-xl font-black text-slate-900 mt-1">{formatCurrency(summary.totalCgst)}</div>
-          <div className="text-[10px] text-slate-400 mt-1">Central Tax</div>
-        </div>
-
-        {/* 4. Total SGST */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total SGST</div>
-          <div className="text-lg sm:text-xl font-black text-slate-900 mt-1">{formatCurrency(summary.totalSgst)}</div>
-          <div className="text-[10px] text-slate-400 mt-1">State / UT Tax</div>
-        </div>
-
-        {/* 5. Combined Total GST */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">Total GST (Gross)</div>
-          <div className="text-lg sm:text-xl font-black text-blue-900 mt-1">{formatCurrency(summary.totalGst)}</div>
-          <div className="text-[10px] text-blue-600/80 mt-1">IGST + CGST + SGST</div>
-        </div>
-
-        {/* 6. Refund Eligible */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-          <div className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">Refund Eligible</div>
-          <div className="text-lg sm:text-xl font-black text-purple-900 mt-1">{formatCurrency(summary.totalRefundEligible)}</div>
-          <div className="text-[10px] text-purple-600/80 mt-1">Statutory refund basis</div>
-        </div>
-
-        {/* 7. Net Difference */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Net Difference</div>
-          <div
-            className={`text-lg sm:text-xl font-black mt-1 ${
-              summary.netDifference > 0
-                ? 'text-emerald-700'
-                : summary.netDifference < 0
-                ? 'text-rose-700'
-                : 'text-slate-700'
-            }`}
-          >
-            {formatCurrency(summary.netDifference)}
-          </div>
-          <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-            {summary.netDifference > 0 ? 'NET REFUND GAIN' : summary.netDifference < 0 ? 'NET REFUND LOSS' : 'NIL VARIANCE'}
-          </div>
-        </div>
-
-        {/* 8. GAIN Count */}
-        <div className="bg-emerald-50/80 border border-emerald-200 p-4 rounded-xl shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">GAIN Entries</span>
-            <TrendingUp size={16} className="text-emerald-600" />
-          </div>
-          <div className="text-2xl font-black text-emerald-900 mt-1">{summary.gainCount}</div>
-          <div className="text-[10px] text-emerald-700 mt-1 font-medium">Refund &gt; Total GST</div>
-        </div>
-
-        {/* 9. LOSS Count */}
-        <div className="bg-rose-50/80 border border-rose-200 p-4 rounded-xl shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">LOSS Entries</span>
-            <TrendingDown size={16} className="text-rose-600" />
-          </div>
-          <div className="text-2xl font-black text-rose-900 mt-1">{summary.lossCount}</div>
-          <div className="text-[10px] text-rose-700 mt-1 font-medium">Refund &lt; Total GST</div>
-        </div>
-
-        {/* 10. NIL Count */}
-        <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">NIL Entries</span>
-            <Minus size={16} className="text-slate-500" />
-          </div>
-          <div className="text-2xl font-black text-slate-800 mt-1">{summary.nilCount}</div>
-          <div className="text-[10px] text-slate-600 mt-1 font-medium">Refund == Total GST</div>
-        </div>
-      </div>
+      )}
 
       {/* Filter and Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          {/* Search */}
-          <div className="relative lg:col-span-2">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          {/* Search Box */}
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={15} />
             <input
               type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search Consignee, Remarks, Entry ID..."
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-900 focus:bg-white focus:ring-1 focus:ring-blue-500"
+              placeholder="Search Entry ID, buyer, remarks..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:bg-white focus:outline-teal-500 font-medium"
             />
           </div>
 
           {/* Consignee Filter */}
           <div>
             <select
-              value={filterConsigneeId}
-              onChange={(e) => setFilterConsigneeId(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500"
+              value={selectedConsigneeId}
+              onChange={(e) => {
+                setSelectedConsigneeId(e.target.value);
+                setPage(1);
+              }}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:outline-teal-500"
             >
-              <option value="">All Consignees</option>
+              <option value="ALL">All Consignees (Buyers)</option>
               {consignees.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -427,279 +424,312 @@ export const GstEntryView: React.FC<GstEntryViewProps> = ({ consignees, userRole
           {/* Result Filter */}
           <div>
             <select
-              value={filterResult}
-              onChange={(e) => setFilterResult(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="ALL">All Results (GAIN / LOSS / NIL)</option>
-              <option value="GAIN">GAIN Only</option>
-              <option value="LOSS">LOSS Only</option>
-              <option value="NIL">NIL Only</option>
-            </select>
-          </div>
-
-          {/* Date range From */}
-          <div>
-            <input
-              type="date"
-              value={filterStartDate}
-              onChange={(e) => setFilterStartDate(e.target.value)}
-              placeholder="From Date"
-              title="From Entry Date"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Date range To */}
-          <div>
-            <input
-              type="date"
-              value={filterEndDate}
-              onChange={(e) => setFilterEndDate(e.target.value)}
-              placeholder="To Date"
-              title="To Entry Date"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:bg-white focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        </div>
-
-        {/* Sorting & Reset Actions */}
-        <div className="flex flex-wrap items-center justify-between text-xs pt-1 border-t border-slate-100 gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-medium">Sort by:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-transparent font-bold text-slate-700 py-1 text-xs cursor-pointer focus:outline-none"
-            >
-              <option value="entryDate">Entry Date</option>
-              <option value="totalGst">Total GST</option>
-              <option value="refundEligible">Refund Eligible</option>
-              <option value="difference">Difference</option>
-            </select>
-            <button
-              onClick={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
-              className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] cursor-pointer"
-            >
-              {sortOrder === 'asc' ? 'ASC ↑' : 'DESC ↓'}
-            </button>
-          </div>
-
-          {(searchTerm || filterConsigneeId || filterResult !== 'ALL' || filterStartDate || filterEndDate) && (
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilterConsigneeId('');
-                setFilterResult('ALL');
-                setFilterStartDate('');
-                setFilterEndDate('');
+              value={selectedResult}
+              onChange={(e) => {
+                setSelectedResult(e.target.value);
+                setPage(1);
               }}
-              className="text-blue-600 hover:text-blue-800 font-semibold text-xs cursor-pointer"
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium focus:bg-white focus:outline-teal-500"
             >
-              Clear All Filters
-            </button>
-          )}
+              <option value="ALL">All Results (GAIN/LOSS/NIL)</option>
+              <option value="GAIN">GAIN (Refund &gt; Total GST)</option>
+              <option value="LOSS">LOSS (Refund &lt; Total GST)</option>
+              <option value="NIL">NIL (Difference == 0)</option>
+            </select>
+          </div>
+
+          {/* Date Range Start */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1">
+            <span className="text-[10px] text-slate-400 font-semibold uppercase">From</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setPage(1);
+              }}
+              className="bg-transparent text-xs w-full focus:outline-hidden"
+            />
+          </div>
+
+          {/* Date Range End & Reset */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 flex-1">
+              <span className="text-[10px] text-slate-400 font-semibold uppercase">To</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-transparent text-xs w-full focus:outline-hidden"
+              />
+            </div>
+            {(search || selectedConsigneeId !== 'ALL' || selectedResult !== 'ALL' || startDate || endDate) && (
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setSelectedConsigneeId('ALL');
+                  setSelectedResult('ALL');
+                  setStartDate('');
+                  setEndDate('');
+                  setPage(1);
+                }}
+                title="Reset all filters"
+                className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                <RotateCcw size={15} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Main Records Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+      {/* GST Entries Table */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs whitespace-nowrap">
-            <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px]">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-900 text-white font-semibold uppercase tracking-wider text-[11px]">
               <tr>
-                <th className="p-3.5">Entry ID</th>
-                <th className="p-3.5">Entry Date</th>
-                <th className="p-3.5">Consignee</th>
-                <th className="p-3.5 text-right">IGST (₹)</th>
-                <th className="p-3.5 text-right">CGST (₹)</th>
-                <th className="p-3.5 text-right">SGST (₹)</th>
-                <th className="p-3.5 text-right">Total GST (₹)</th>
-                <th className="p-3.5 text-right">Refund Eligible (₹)</th>
-                <th className="p-3.5 text-right">Difference (₹)</th>
-                <th className="p-3.5 text-center">Result</th>
-                <th className="p-3.5">Remarks</th>
-                {!isViewer && <th className="p-3.5 text-center">Actions</th>}
+                <th className="p-3 w-28 cursor-pointer hover:bg-slate-800" onClick={() => handleSort('entryDate')}>
+                  <div className="flex items-center gap-1">
+                    <span>Entry Date</span>
+                    {sortBy === 'entryDate' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th className="p-3 w-32">Entry ID</th>
+                <th className="p-3 cursor-pointer hover:bg-slate-800" onClick={() => handleSort('consigneeName')}>
+                  <div className="flex items-center gap-1">
+                    <span>Consignee (Buyer)</span>
+                    {sortBy === 'consigneeName' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th className="p-3 text-right">IGST (₹)</th>
+                <th className="p-3 text-right">CGST (₹)</th>
+                <th className="p-3 text-right">SGST (₹)</th>
+                <th className="p-3 text-right cursor-pointer hover:bg-slate-800" onClick={() => handleSort('totalGst')}>
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Total GST (₹)</span>
+                    {sortBy === 'totalGst' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th className="p-3 text-right cursor-pointer hover:bg-slate-800" onClick={() => handleSort('refundEligible')}>
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Refund Eligible (₹)</span>
+                    {sortBy === 'refundEligible' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th className="p-3 text-right cursor-pointer hover:bg-slate-800" onClick={() => handleSort('difference')}>
+                  <div className="flex items-center justify-end gap-1">
+                    <span>Difference (₹)</span>
+                    {sortBy === 'difference' ? (
+                      sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                    ) : (
+                      <ArrowUpDown size={12} className="opacity-40" />
+                    )}
+                  </div>
+                </th>
+                <th className="p-3 text-center w-20">Result</th>
+                <th className="p-3 max-w-xs">Remarks</th>
+                <th className="p-3 text-right w-24">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
+              {loading && (
                 <tr>
-                  <td colSpan={isViewer ? 11 : 12} className="p-10 text-center text-slate-400">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw size={16} className="animate-spin text-blue-600" />
-                      <span>Loading GST records...</span>
+                  <td colSpan={12} className="p-12 text-center text-slate-400 font-medium">
+                    Loading GST records...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && entries.length === 0 && (
+                <tr>
+                  <td colSpan={12} className="p-12 text-center text-slate-400">
+                    <div className="max-w-xs mx-auto space-y-2">
+                      <Receipt size={32} className="mx-auto text-slate-300" />
+                      <p className="font-semibold text-slate-600">No GST entries found</p>
+                      <p className="text-[11px] text-slate-400">
+                        Try adjusting your search query, consignee filters, or date range.
+                      </p>
                     </div>
                   </td>
                 </tr>
-              ) : paginatedEntries.length === 0 ? (
-                <tr>
-                  <td colSpan={isViewer ? 11 : 12} className="p-12 text-center text-slate-400">
-                    <Receipt size={32} className="mx-auto text-slate-300 mb-2" />
-                    <div className="font-bold text-slate-700 text-sm">No GST entries found</div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {searchTerm || filterConsigneeId || filterResult !== 'ALL'
-                        ? 'Try clearing active search or filters to see all records.'
-                        : isViewer
-                        ? 'No GST records have been entered into the system yet.'
-                        : 'Click "New GST Entry" above to record consignee-wise GST amounts.'}
-                    </p>
-                  </td>
-                </tr>
-              ) : (
-                paginatedEntries.map((e) => {
-                  const isGain = e.result === 'GAIN';
-                  const isLoss = e.result === 'LOSS';
+              )}
 
-                  return (
-                    <tr key={e.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3.5 font-mono font-bold text-slate-900">{e.entryNumber}</td>
-                      <td className="p-3.5 text-slate-700">{e.entryDate}</td>
-                      <td className="p-3.5 font-medium text-slate-900 max-w-xs truncate" title={e.consigneeName}>
-                        {e.consigneeName}
-                      </td>
-                      <td className="p-3.5 text-right font-mono text-slate-700">{formatCurrency(e.igst)}</td>
-                      <td className="p-3.5 text-right font-mono text-slate-700">{formatCurrency(e.cgst)}</td>
-                      <td className="p-3.5 text-right font-mono text-slate-700">{formatCurrency(e.sgst)}</td>
-                      <td className="p-3.5 text-right font-mono font-bold text-blue-900 bg-blue-50/40">
-                        {formatCurrency(e.totalGst)}
-                      </td>
-                      <td className="p-3.5 text-right font-mono font-bold text-purple-900 bg-purple-50/40">
-                        {formatCurrency(e.refundEligible)}
-                      </td>
-                      <td
-                        className={`p-3.5 text-right font-mono font-bold ${
-                          isGain ? 'text-emerald-700 bg-emerald-50/40' : isLoss ? 'text-rose-700 bg-rose-50/40' : 'text-slate-700 bg-slate-50/50'
+              {!loading &&
+                entries.map((e) => (
+                  <tr key={e.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-3 font-mono text-slate-700 whitespace-nowrap">{e.entryDate}</td>
+                    <td className="p-3 font-mono font-bold text-teal-700 whitespace-nowrap">{e.id}</td>
+                    <td className="p-3 font-semibold text-slate-900">{e.consigneeName}</td>
+                    <td className="p-3 text-right font-mono text-slate-700">₹{e.igst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3 text-right font-mono text-slate-700">₹{e.cgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3 text-right font-mono text-slate-700">₹{e.sgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="p-3 text-right font-mono font-bold text-slate-900">
+                      ₹{e.totalGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="p-3 text-right font-mono font-bold text-emerald-700">
+                      ₹{e.refundEligible.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="p-3 text-right font-mono font-bold">
+                      <span className={e.difference > 0 ? 'text-emerald-700' : e.difference < 0 ? 'text-rose-700' : 'text-slate-600'}>
+                        {e.difference >= 0 ? '+' : ''}
+                        ₹{e.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          e.result === 'GAIN'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : e.result === 'LOSS'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-slate-200 text-slate-700'
                         }`}
                       >
-                        {formatCurrency(e.difference)}
-                      </td>
-                      <td className="p-3.5 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                            isGain
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : isLoss
-                              ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                              : 'bg-slate-100 text-slate-700 border border-slate-300'
-                          }`}
+                        {e.result === 'GAIN' && <TrendingUp size={11} />}
+                        {e.result === 'LOSS' && <TrendingDown size={11} />}
+                        {e.result === 'NIL' && <MinusCircle size={11} />}
+                        <span>{e.result}</span>
+                      </span>
+                    </td>
+                    <td className="p-3 text-slate-500 max-w-xs truncate" title={e.remarks || ''}>
+                      {e.remarks || '—'}
+                    </td>
+                    <td className="p-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setViewingEntry(e)}
+                          title="View Details"
+                          className="w-7 h-7 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                         >
-                          {isGain && <TrendingUp size={11} />}
-                          {isLoss && <TrendingDown size={11} />}
-                          {e.result === 'NIL' && <Minus size={11} />}
-                          <span>{e.result}</span>
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-slate-500 max-w-xs truncate" title={e.remarks || ''}>
-                        {e.remarks || '—'}
-                      </td>
-                      {!isViewer && (
-                        <td className="p-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
+                          <Eye size={14} />
+                        </button>
+
+                        {!isViewer && (
+                          <>
                             <button
-                              onClick={() => openEditEntryModal(e)}
-                              className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors cursor-pointer"
-                              title="Edit GST entry"
+                              onClick={() => handleOpenEdit(e)}
+                              title="Edit Entry"
+                              className="w-7 h-7 flex items-center justify-center text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                             >
-                              <Edit2 size={13} />
+                              <Edit size={14} />
                             </button>
                             <button
-                              onClick={() => setDeletingEntry(e)}
-                              className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                              title="Delete GST entry"
+                              onClick={() => setDeleteConfirmEntry(e)}
+                              title="Delete Entry"
+                              className="w-7 h-7 flex items-center justify-center text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={14} />
                             </button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
 
-        {/* Pagination & Footer */}
-        <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-3">
-          <div>
-            Showing <span className="font-bold text-slate-800">{entries.length > 0 ? (currentPage - 1) * pageSize + 1 : 0}</span> to{' '}
-            <span className="font-bold text-slate-800">{Math.min(currentPage * pageSize, entries.length)}</span> of{' '}
-            <span className="font-bold text-slate-800">{entries.length}</span> total entries
+        {/* Pagination footer */}
+        <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-600">
+          <div className="flex items-center gap-3">
+            <span>
+              Showing {entries.length > 0 ? (page - 1) * pageSize + 1 : 0} to{' '}
+              {Math.min(page * pageSize, totalCount)} of {totalCount} records
+            </span>
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className="text-[11px] text-slate-400">Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="bg-white border border-slate-200 rounded px-2 py-0.5 text-xs font-semibold"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 self-end sm:self-auto">
             <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-              className="px-2.5 py-1 rounded border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-2.5 py-1 bg-white border border-slate-300 rounded text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
             >
-              <ChevronLeft size={14} />
+              Previous
             </button>
-            <span className="px-3 py-1 font-semibold text-slate-700">
-              Page {currentPage} of {totalPages}
+            <span className="px-2 font-mono font-bold text-slate-800">
+              Page {page} of {totalPages}
             </span>
             <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-2.5 py-1 rounded border border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-2.5 py-1 bg-white border border-slate-300 rounded text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
             >
-              <ChevronRight size={14} />
+              Next
             </button>
           </div>
         </div>
       </div>
 
-      {/* Modal: Create / Edit GST Entry */}
-      {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-xl w-full border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold">
-                  <Receipt size={18} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm tracking-tight">
-                    {editingEntry ? `Edit GST Entry — ${editingEntry.entryNumber}` : 'New GST Entry & Refund Calculation'}
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Calculates Difference = Refund Eligible - Total GST and determines statutory Result
-                  </p>
-                </div>
-              </div>
+      {/* Create / Edit Modal */}
+      {(isCreateOpen || editingEntry) && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <Receipt size={17} className="text-teal-400" />
+                <span>{editingEntry ? `Edit GST Entry — ${editingEntry.id}` : 'Record New GST Entry'}</span>
+              </h3>
               <button
-                onClick={() => setIsFormOpen(false)}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
+                onClick={() => {
+                  setIsCreateOpen(false);
+                  setEditingEntry(null);
+                }}
+                className="text-slate-400 hover:text-white cursor-pointer font-bold"
               >
-                <X size={18} />
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4 text-xs">
+            <form
+              onSubmit={editingEntry ? handleEditSubmit : handleCreateSubmit}
+              className="p-6 overflow-y-auto space-y-4 text-xs"
+            >
               {formError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg flex items-center gap-2 font-medium">
-                  <AlertCircle size={15} className="shrink-0 text-rose-600" />
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg flex items-center gap-2">
+                  <AlertCircle size={15} />
                   <span>{formError}</span>
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Entry ID */}
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Entry ID</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={editingEntry ? editingEntry.entryNumber : 'Auto-generated on Save (e.g. GST-26-27-XXX)'}
-                    className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg font-mono text-slate-500 font-semibold"
-                  />
-                </div>
-
-                {/* Entry Date */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="font-semibold text-slate-700 block mb-1">
                     Entry Date <span className="text-rose-500">*</span>
                   </label>
                   <input
@@ -707,155 +737,152 @@ export const GstEntryView: React.FC<GstEntryViewProps> = ({ consignees, userRole
                     required
                     value={formDate}
                     onChange={(e) => setFormDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-medium focus:ring-1 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-teal-500 font-medium"
                   />
                 </div>
-              </div>
 
-              {/* Consignee */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Consignee (from Consignee Master) <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  required
-                  value={formConsigneeId}
-                  onChange={(e) => setFormConsigneeId(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-medium focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="" disabled>
-                    -- Select Consignee --
-                  </option>
-                  {consignees.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.country})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* GST Amounts Row: IGST, CGST, SGST */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                <div className="text-[11px] font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
-                  <span>Goods &amp; Services Tax Components</span>
-                  <span className="text-blue-700 font-mono font-bold">
-                    Total GST: {formatCurrency(formCalculatedTotalGst)}
-                  </span>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">
+                    Consignee (Buyer) <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={formConsigneeId}
+                    onChange={(e) => setFormConsigneeId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-teal-500 font-medium"
+                  >
+                    <option value="" disabled>Select consignee...</option>
+                    {consignees.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Tax components */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                  Tax Components (INR, 2 decimals)
+                </span>
+                <div className="grid grid-cols-3 gap-2.5">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">IGST (₹)</label>
+                    <label className="font-semibold text-slate-600 block mb-1">IGST (₹)</label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       value={formIgst}
                       onChange={(e) => setFormIgst(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-mono font-semibold focus:ring-1 focus:ring-blue-500 bg-white"
-                      placeholder="0.00"
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md font-mono bg-white text-right focus:outline-teal-500"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">CGST (₹)</label>
+                    <label className="font-semibold text-slate-600 block mb-1">CGST (₹)</label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       value={formCgst}
                       onChange={(e) => setFormCgst(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-mono font-semibold focus:ring-1 focus:ring-blue-500 bg-white"
-                      placeholder="0.00"
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md font-mono bg-white text-right focus:outline-teal-500"
                     />
                   </div>
-
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">SGST (₹)</label>
+                    <label className="font-semibold text-slate-600 block mb-1">SGST (₹)</label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
                       value={formSgst}
                       onChange={(e) => setFormSgst(e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 font-mono font-semibold focus:ring-1 focus:ring-blue-500 bg-white"
-                      placeholder="0.00"
+                      className="w-full px-2.5 py-1.5 border border-slate-300 rounded-md font-mono bg-white text-right focus:outline-teal-500"
                     />
                   </div>
                 </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                  <span className="font-bold text-slate-700">Total GST (Auto Calculated):</span>
+                  <span className="text-sm font-bold font-mono text-indigo-700">
+                    ₹{computedTotalGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
               </div>
 
-              {/* Refund Eligible & Difference Calculation Card */}
-              <div className="p-4 bg-purple-50/60 border border-purple-200 rounded-xl space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-                  <div>
-                    <label className="block text-[11px] font-bold text-purple-950 mb-1">
-                      Refund Eligible Amount (₹) <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      required
-                      value={formRefundEligible}
-                      onChange={(e) => setFormRefundEligible(e.target.value)}
-                      className="w-full px-3 py-2 border border-purple-300 rounded-lg text-purple-950 font-mono font-bold bg-white focus:ring-1 focus:ring-purple-500"
-                      placeholder="0.00"
-                    />
-                  </div>
+              {/* Refund and Differential */}
+              <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-lg space-y-3">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
+                  Refund & Difference Assessment
+                </span>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">
+                    Refund Eligible (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={formRefundEligible}
+                    onChange={(e) => setFormRefundEligible(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono bg-white text-right focus:outline-teal-500 font-bold text-emerald-700"
+                  />
+                </div>
 
-                  <div className="space-y-1 bg-white p-3 rounded-lg border border-purple-200">
-                    <div className="text-[10px] text-slate-500 font-semibold uppercase">Reconciliation Outcome</div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold text-slate-800">
-                        Diff: {formatCurrency(formCalculatedDiff)}
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                          formCalculatedResult === 'GAIN'
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : formCalculatedResult === 'LOSS'
-                            ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                            : 'bg-slate-100 text-slate-700 border border-slate-300'
-                        }`}
-                      >
-                        {formCalculatedResult === 'GAIN' && <TrendingUp size={11} />}
-                        {formCalculatedResult === 'LOSS' && <TrendingDown size={11} />}
-                        {formCalculatedResult === 'NIL' && <Minus size={11} />}
-                        <span>{formCalculatedResult}</span>
-                      </span>
-                    </div>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-emerald-100">
+                  <div>
+                    <span className="text-[11px] text-slate-600 block">Difference (Refund - GST):</span>
+                    <span className="text-sm font-bold font-mono text-slate-900 block mt-0.5">
+                      {computedDifference >= 0 ? '+' : ''}₹{computedDifference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] text-slate-600 block">Assessed Result:</span>
+                    <span
+                      className={`inline-block px-2.5 py-0.5 rounded text-xs font-bold mt-0.5 ${
+                        computedResult === 'GAIN'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : computedResult === 'LOSS'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {computedResult}
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* Remarks */}
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks (Optional)</label>
+                <label className="font-semibold text-slate-700 block mb-1">Remarks (Optional)</label>
                 <textarea
                   rows={2}
                   value={formRemarks}
                   onChange={(e) => setFormRemarks(e.target.value)}
-                  placeholder="Additional notes, statutory refund application references..."
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 focus:ring-1 focus:ring-blue-500"
+                  placeholder="e.g. GSTN portal claim reference, sanction order details..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-teal-500 text-xs"
                 />
               </div>
 
-              {/* Actions */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setIsFormOpen(false)}
-                  className="px-4 py-2 text-slate-600 hover:text-slate-800 font-semibold cursor-pointer"
+                  onClick={() => {
+                    setIsCreateOpen(false);
+                    setEditingEntry(null);
+                  }}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                  disabled={formSubmitting}
+                  className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-lg cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Saving...' : editingEntry ? 'Update Entry' : 'Create GST Entry'}
+                  {formSubmitting ? 'Saving...' : editingEntry ? 'Save Changes' : 'Create Entry'}
                 </button>
               </div>
             </form>
@@ -863,22 +890,139 @@ export const GstEntryView: React.FC<GstEntryViewProps> = ({ consignees, userRole
         </div>
       )}
 
-      {/* Confirmation Modal: Delete Entry */}
-      {deletingEntry && (
-        <ConfirmationModal
-          isOpen={true}
-          title="Delete GST Entry"
-          itemName={deletingEntry.entryNumber}
-          itemType={`GST Entry (${deletingEntry.consigneeName})`}
-          isArchiveOnly={false}
-          isLoading={isDeleting}
-          errorMessage={deleteError}
-          onConfirm={handleDeleteEntry}
-          onClose={() => {
-            setDeletingEntry(null);
-            setDeleteError(null);
-          }}
-        />
+      {/* View Details Modal */}
+      {viewingEntry && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <Receipt size={17} className="text-teal-400" />
+                <span>GST Entry Details — {viewingEntry.id}</span>
+              </h3>
+              <button onClick={() => setViewingEntry(null)} className="text-slate-400 hover:text-white cursor-pointer font-bold">
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Entry ID</span>
+                  <span className="font-mono font-bold text-slate-900 text-sm mt-0.5 block">{viewingEntry.id}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Entry Date</span>
+                  <span className="font-mono font-bold text-slate-900 text-sm mt-0.5 block">{viewingEntry.entryDate}</span>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-bold block">Consignee (Buyer)</span>
+                <span className="font-semibold text-slate-900 text-sm mt-0.5 block">{viewingEntry.consigneeName}</span>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">IGST Amount:</span>
+                  <span className="font-mono font-bold">₹{viewingEntry.igst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">CGST Amount:</span>
+                  <span className="font-mono font-bold">₹{viewingEntry.cgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-600">SGST Amount:</span>
+                  <span className="font-mono font-bold">₹{viewingEntry.sgst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-slate-200">
+                  <span className="font-bold text-slate-800">Total GST:</span>
+                  <span className="font-mono font-bold text-indigo-700">₹{viewingEntry.totalGst.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Refund Eligible:</span>
+                  <span className="font-mono font-bold text-emerald-700">₹{viewingEntry.refundEligible.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-emerald-100">
+                  <span className="font-bold text-slate-800">Calculated Difference:</span>
+                  <span className="font-mono font-bold">
+                    {viewingEntry.difference >= 0 ? '+' : ''}₹{viewingEntry.difference.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <span className="font-bold text-slate-800">Assessed Outcome:</span>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      viewingEntry.result === 'GAIN'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : viewingEntry.result === 'LOSS'
+                        ? 'bg-rose-100 text-rose-800'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {viewingEntry.result}
+                  </span>
+                </div>
+              </div>
+
+              {viewingEntry.remarks && (
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">Remarks</span>
+                  <p className="p-2.5 bg-slate-50 border border-slate-200 rounded text-slate-700 italic">
+                    {viewingEntry.remarks}
+                  </p>
+                </div>
+              )}
+
+              <div className="text-[10px] text-slate-400 font-mono space-y-0.5 pt-2 border-t border-slate-100">
+                <div>Created: {new Date(viewingEntry.createdAt).toLocaleString()}</div>
+                <div>Updated: {new Date(viewingEntry.updatedAt).toLocaleString()}</div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setViewingEntry(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmEntry && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl border border-slate-200 p-6 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <AlertCircle size={24} />
+              <h3 className="font-bold text-sm text-slate-900">Delete GST Entry</h3>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to permanently delete GST entry{' '}
+              <strong className="font-mono text-slate-900">{deleteConfirmEntry.id}</strong> for{' '}
+              <strong>{deleteConfirmEntry.consigneeName}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setDeleteConfirmEntry(null)}
+                className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Delete Record
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

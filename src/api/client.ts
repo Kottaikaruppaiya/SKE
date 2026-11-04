@@ -14,12 +14,19 @@ import {
   IncentiveRecord,
   BrcRecord,
   DocumentRecord,
+  GstEntry,
+  GstSummary,
+  GstResult,
   AppSettings,
   DashboardMetrics,
   Role,
   OcrJob,
-  GstEntry,
-  GstSummary,
+  Supplier,
+  B2bInvoice,
+  B2bMonthlySummary,
+  B2bDashboardMetrics,
+  ImportBatch,
+  B2bImportPreview,
 } from '../types/index.ts';
 
 const TOKEN_KEY = 'ske_auth_token';
@@ -414,54 +421,70 @@ export const api = {
     });
   },
 
-  // GST Entry Module
-  async getGstEntries(filters?: {
+  // GST Entries
+  async getGstEntries(params?: {
     consigneeId?: string;
-    result?: string;
+    result?: GstResult | string;
+    search?: string;
     startDate?: string;
     endDate?: string;
-    search?: string;
-    sortBy?: string;
-    sortOrder?: string;
     page?: number;
     limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
   }): Promise<{ entries: GstEntry[]; total: number; summary: GstSummary }> {
     const q = new URLSearchParams();
-    if (filters?.consigneeId) q.append('consigneeId', filters.consigneeId);
-    if (filters?.result) q.append('result', filters.result);
-    if (filters?.startDate) q.append('startDate', filters.startDate);
-    if (filters?.endDate) q.append('endDate', filters.endDate);
-    if (filters?.search) q.append('search', filters.search);
-    if (filters?.sortBy) q.append('sortBy', filters.sortBy);
-    if (filters?.sortOrder) q.append('sortOrder', filters.sortOrder);
-    if (filters?.page) q.append('page', String(filters.page));
-    if (filters?.limit) q.append('limit', String(filters.limit));
-    return this.request<{ entries: GstEntry[]; total: number; summary: GstSummary }>(`/gst-entries?${q.toString()}`);
+    if (params?.consigneeId) q.set('consigneeId', params.consigneeId);
+    if (params?.result) q.set('result', params.result);
+    if (params?.search) q.set('search', params.search);
+    if (params?.startDate) q.set('startDate', params.startDate);
+    if (params?.endDate) q.set('endDate', params.endDate);
+    if (params?.page) q.set('page', String(params.page));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.sortBy) q.set('sortBy', params.sortBy);
+    if (params?.sortOrder) q.set('sortOrder', params.sortOrder);
+
+    const queryString = q.toString();
+    return this.request<{ entries: GstEntry[]; total: number; summary: GstSummary }>(
+      `/gst-entries${queryString ? `?${queryString}` : ''}`
+    );
   },
 
-  async getGstSummary(filters?: {
+  async getGstSummary(params?: { consigneeId?: string; startDate?: string; endDate?: string }): Promise<GstSummary> {
+    const q = new URLSearchParams();
+    if (params?.consigneeId) q.set('consigneeId', params.consigneeId);
+    if (params?.startDate) q.set('startDate', params.startDate);
+    if (params?.endDate) q.set('endDate', params.endDate);
+    const queryString = q.toString();
+    return this.request<GstSummary>(`/gst-entries/summary${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getGstExportUrl(params?: {
     consigneeId?: string;
     result?: string;
+    search?: string;
     startDate?: string;
     endDate?: string;
-    search?: string;
-  }): Promise<GstSummary> {
+  }): string {
     const q = new URLSearchParams();
-    if (filters?.consigneeId) q.append('consigneeId', filters.consigneeId);
-    if (filters?.result) q.append('result', filters.result);
-    if (filters?.startDate) q.append('startDate', filters.startDate);
-    if (filters?.endDate) q.append('endDate', filters.endDate);
-    if (filters?.search) q.append('search', filters.search);
-    return this.request<GstSummary>(`/gst-entries/summary?${q.toString()}`);
+    if (params?.consigneeId && params.consigneeId !== 'ALL') q.set('consigneeId', params.consigneeId);
+    if (params?.result && params.result !== 'ALL') q.set('result', params.result);
+    if (params?.search) q.set('search', params.search);
+    if (params?.startDate) q.set('startDate', params.startDate);
+    if (params?.endDate) q.set('endDate', params.endDate);
+    const token = this.getToken();
+    if (token) q.set('token', token);
+    const queryString = q.toString();
+    return `/api/gst-entries/export${queryString ? `?${queryString}` : ''}`;
   },
 
   async createGstEntry(data: {
-    entryDate?: string;
+    entryDate: string;
     consigneeId: string;
-    igst?: number;
-    cgst?: number;
-    sgst?: number;
-    refundEligible?: number;
+    igst: number;
+    cgst: number;
+    sgst: number;
+    refundEligible: number;
     remarks?: string;
   }): Promise<GstEntry> {
     return this.request<GstEntry>('/gst-entries', {
@@ -479,7 +502,7 @@ export const api = {
       cgst: number;
       sgst: number;
       refundEligible: number;
-      remarks: string;
+      remarks?: string;
     }>
   ): Promise<GstEntry> {
     return this.request<GstEntry>(`/gst-entries/${id}`, {
@@ -494,22 +517,166 @@ export const api = {
     });
   },
 
-  getGstExportUrl(filters?: {
-    consigneeId?: string;
-    result?: string;
-    startDate?: string;
-    endDate?: string;
+  // --- B2B GST Management Module ---
+  async getB2bDashboard(financialYear?: string): Promise<B2bDashboardMetrics> {
+    const query = financialYear ? `?financialYear=${encodeURIComponent(financialYear)}` : '';
+    return this.request<B2bDashboardMetrics>(`/b2b/dashboard${query}`);
+  },
+
+  async getB2bMonthlySummaries(financialYear?: string): Promise<B2bMonthlySummary[]> {
+    const query = financialYear ? `?financialYear=${encodeURIComponent(financialYear)}` : '';
+    return this.request<B2bMonthlySummary[]>(`/b2b/monthly${query}`);
+  },
+
+  async getB2bMonthDetail(periodKey: string): Promise<{
+    summary: B2bMonthlySummary;
+    invoices: B2bInvoice[];
+    topSuppliers: Array<{
+      gstin: string;
+      name: string;
+      invoiceCount: number;
+      invoiceValue: number;
+      taxableValue: number;
+      totalGst: number;
+    }>;
+  }> {
+    return this.request(`/b2b/monthly/${encodeURIComponent(periodKey)}`);
+  },
+
+  async getB2bInvoices(filters?: {
+    periodKey?: string;
+    financialYear?: string;
+    supplierGstin?: string;
+    invoiceType?: string;
+    reverseCharge?: string;
+    itcAvailability?: string;
     search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<{
+    data: B2bInvoice[];
+    total: number;
+    page: number;
+    limit: number;
+    totalTaxableValue: number;
+    totalGst: number;
+    totalInvoiceValue: number;
+  }> {
+    const params = new URLSearchParams();
+    if (filters?.periodKey && filters.periodKey !== 'ALL') params.set('periodKey', filters.periodKey);
+    if (filters?.financialYear && filters.financialYear !== 'ALL') params.set('financialYear', filters.financialYear);
+    if (filters?.supplierGstin && filters.supplierGstin !== 'ALL') params.set('supplierGstin', filters.supplierGstin);
+    if (filters?.invoiceType && filters.invoiceType !== 'ALL') params.set('invoiceType', filters.invoiceType);
+    if (filters?.reverseCharge && filters.reverseCharge !== 'ALL') params.set('reverseCharge', filters.reverseCharge);
+    if (filters?.itcAvailability && filters.itcAvailability !== 'ALL') params.set('itcAvailability', filters.itcAvailability);
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.page) params.set('page', String(filters.page));
+    if (filters?.limit !== undefined) params.set('limit', String(filters.limit));
+    if (filters?.sortBy) params.set('sortBy', filters.sortBy);
+    if (filters?.sortOrder) params.set('sortOrder', filters.sortOrder);
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request(`/b2b/invoices${qs}`);
+  },
+
+  async getB2bInvoiceById(id: string): Promise<B2bInvoice> {
+    return this.request<B2bInvoice>(`/b2b/invoices/${id}`);
+  },
+
+  async createB2bInvoice(data: any): Promise<B2bInvoice> {
+    return this.request<B2bInvoice>('/b2b/invoices', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateB2bInvoice(id: string, data: any): Promise<B2bInvoice> {
+    return this.request<B2bInvoice>(`/b2b/invoices/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteB2bInvoice(id: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(`/b2b/invoices/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getB2bSuppliers(search?: string): Promise<Supplier[]> {
+    const query = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.request<Supplier[]>(`/b2b/suppliers${query}`);
+  },
+
+  async getB2bSupplierById(id: string): Promise<Supplier> {
+    return this.request<Supplier>(`/b2b/suppliers/${id}`);
+  },
+
+  async createB2bSupplier(data: {
+    gstin: string;
+    legalName: string;
+    tradeName?: string;
+    address?: string;
+    state?: string;
+  }): Promise<Supplier> {
+    return this.request<Supplier>('/b2b/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateB2bSupplier(id: string, data: Partial<Supplier>): Promise<Supplier> {
+    return this.request<Supplier>(`/b2b/suppliers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteB2bSupplier(id: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(`/b2b/suppliers/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async previewB2bImport(file: File): Promise<B2bImportPreview> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<B2bImportPreview>('/b2b/import/preview', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  async commitB2bImport(
+    previewData: B2bImportPreview,
+    mode: 'SKIP_EXISTING' | 'OVERWRITE_EXISTING' | 'INSERT_ALL',
+    fileName: string,
+    fileSizeBytes?: number
+  ): Promise<{ batchId: string; totalProcessed: number; inserted: number; updated: number; skipped: number }> {
+    return this.request('/b2b/import/commit', {
+      method: 'POST',
+      body: JSON.stringify({ previewData, mode, fileName, fileSizeBytes }),
+    });
+  },
+
+  async getB2bImportBatches(): Promise<ImportBatch[]> {
+    return this.request<ImportBatch[]>('/b2b/import/batches');
+  },
+
+  getB2bExportUrl(params?: {
+    reportType?: string;
+    periodKey?: string;
+    financialYear?: string;
+    supplierGstin?: string;
   }): string {
-    const token = this.getToken();
-    const q = new URLSearchParams();
-    if (filters?.consigneeId) q.append('consigneeId', filters.consigneeId);
-    if (filters?.result) q.append('result', filters.result);
-    if (filters?.startDate) q.append('startDate', filters.startDate);
-    if (filters?.endDate) q.append('endDate', filters.endDate);
-    if (filters?.search) q.append('search', filters.search);
-    if (token) q.append('token', token);
-    return `/api/gst-entries/export?${q.toString()}`;
+    const qs = new URLSearchParams();
+    if (params?.reportType) qs.set('reportType', params.reportType);
+    if (params?.periodKey && params.periodKey !== 'ALL') qs.set('periodKey', params.periodKey);
+    if (params?.financialYear && params.financialYear !== 'ALL') qs.set('financialYear', params.financialYear);
+    if (params?.supplierGstin && params.supplierGstin !== 'ALL') qs.set('supplierGstin', params.supplierGstin);
+    return `/api/b2b/export?${qs.toString()}`;
   },
 
   // Users (Super Admin)

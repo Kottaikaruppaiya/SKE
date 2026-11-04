@@ -11,12 +11,13 @@ import {
   CheckCircle,
   FileCheck2,
   Award,
-  Receipt,
+  Clock,
   ArrowUpRight,
   PlusCircle,
   FileSpreadsheet,
   Download,
   Search,
+  Receipt,
 } from 'lucide-react';
 import { DashboardMetrics, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
@@ -242,30 +243,56 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* GST Entry & Refund Quick Card */}
+        {/* GST Entry & Realisation Overview */}
         <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-              <Receipt size={18} className="text-blue-600" />
-              <span>GST Entry &amp; Statutory Refund Tracker</span>
+              <Receipt size={18} className="text-emerald-600" />
+              <span>Consignee GST Refund & Compliance</span>
             </h3>
             <button
               onClick={() => onNavigate('gst-entry')}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
+              className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
             >
-              <span>View GST Module</span>
+              <span>Open GST Entry</span>
               <ArrowUpRight size={13} />
             </button>
           </div>
 
-          <div className="p-3.5 bg-blue-50/60 border border-blue-200/80 rounded-xl space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-700">Consignee-wise GST Ledger</span>
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">Section 54</span>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="text-[11px] text-slate-500 block">Total GST Claimed</span>
+              <span className="text-sm font-bold text-slate-900 font-mono mt-0.5 block">
+                ₹{metrics.gstSummary?.totalGst?.toLocaleString() || '0'}
+              </span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Calculate Difference = Refund Eligible - Total GST (IGST + CGST + SGST) with automated GAIN, LOSS, and NIL statutory classification.
-            </p>
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="text-[11px] text-slate-500 block">Refund Eligible</span>
+              <span className="text-sm font-bold text-emerald-700 font-mono mt-0.5 block">
+                ₹{metrics.gstSummary?.totalRefundEligible?.toLocaleString() || '0'}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-emerald-50/60 rounded-lg border border-emerald-100 flex items-center justify-between text-xs">
+            <div>
+              <span className="text-[11px] text-slate-600">Net Refund Differential:</span>
+              <span className="font-bold font-mono ml-1.5 text-slate-900">
+                ₹{(metrics.gstSummary?.netDifference || 0) >= 0 ? '+' : ''}
+                {metrics.gstSummary?.netDifference?.toLocaleString() || '0'}
+              </span>
+            </div>
+            <span
+              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                (metrics.gstSummary?.netDifference || 0) > 0
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : (metrics.gstSummary?.netDifference || 0) < 0
+                  ? 'bg-rose-100 text-rose-800'
+                  : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {(metrics.gstSummary?.netDifference || 0) > 0 ? 'GAIN' : (metrics.gstSummary?.netDifference || 0) < 0 ? 'LOSS' : 'NIL'}
+            </span>
           </div>
         </div>
       </div>

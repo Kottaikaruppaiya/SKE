@@ -18,17 +18,24 @@ import type {
   PaymentAllocation,
   IncentiveRecord,
   BrcRecord,
+  GstEntry,
+  GstSummary,
+  GstResult,
   AppSettings,
   DashboardMetrics,
   OcrJob,
   OcrJobStatus,
   MergedShipmentDraft,
   DocumentCategory,
-  GstEntry,
-  GstSummary,
-  GstResult,
+  Supplier,
+  B2bInvoice,
+  B2bMonthlySummary,
+  B2bDashboardMetrics,
+  ImportBatch,
+  B2bImportPreview,
 } from '../src/types/index.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
+import { parseGstrPeriod, getMonthsForFinancialYear } from './gstr_period.ts';
 
 const STORAGE_DIR = process.env.STORAGE_ROOT ? path.resolve(process.env.STORAGE_ROOT) : path.resolve('storage');
 const DATA_DIR = path.resolve(STORAGE_DIR, 'data');
@@ -58,6 +65,9 @@ interface DatabaseState {
   incentives: IncentiveRecord[];
   brcRecords: BrcRecord[];
   gstEntries: GstEntry[];
+  suppliers: Supplier[];
+  b2bInvoices: B2bInvoice[];
+  importBatches: ImportBatch[];
   settings: AppSettings;
   ocrJobs: OcrJob[];
   revokedTokens: RevokedToken[];
@@ -88,23 +98,32 @@ class DatabaseService {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (parsed.shipments && parsed.shipments.length > 0 && parsed.consignees?.some((c: any) => c.name.includes('S K Global'))) {
-          let needsSave = false;
-          if ('auditLogs' in parsed) {
-            delete parsed.auditLogs;
-            needsSave = true;
-          }
-          if (!Array.isArray(parsed.gstEntries)) {
-            parsed.gstEntries = this.getDefaultGstEntries(parsed.consignees || []);
-            needsSave = true;
-          }
           if (!Array.isArray(parsed.ocrJobs)) {
             parsed.ocrJobs = [];
           }
           if (!Array.isArray(parsed.revokedTokens)) {
             parsed.revokedTokens = [];
           }
-          if (needsSave) {
-            this.persist(parsed);
+          if (!Array.isArray(parsed.gstEntries)) {
+            parsed.gstEntries = [];
+          }
+          if (!Array.isArray(parsed.suppliers)) {
+            parsed.suppliers = [];
+          }
+          if (!Array.isArray(parsed.b2bInvoices)) {
+            parsed.b2bInvoices = [];
+          }
+          if (!Array.isArray(parsed.importBatches)) {
+            parsed.importBatches = [];
+          }
+          if (parsed.auditLogs) {
+            delete parsed.auditLogs;
+          }
+          if (parsed.b2bInvoices.length === 0) {
+            const seed = this.getInitialSeedState();
+            parsed.suppliers = seed.suppliers;
+            parsed.b2bInvoices = seed.b2bInvoices;
+            parsed.importBatches = seed.importBatches;
           }
           return parsed;
         }
@@ -120,8 +139,7 @@ class DatabaseService {
 
   public reseedWithDefaults(actorUserId?: string) {
     this.state = this.getInitialSeedState();
-    if (actorUserId) {
-    }
+
     this.save();
     return { success: true, count: this.state.shipments.length };
   }
@@ -139,8 +157,6 @@ class DatabaseService {
   public reloadFromDisk() {
     this.state = this.loadOrInitialize();
   }
-
-  
 
   // --- Users & Auth ---
   public getUsers(): User[] {
@@ -1841,330 +1857,6 @@ class DatabaseService {
     return { shipment: targetShipment, payment: targetPayment, job };
   }
 
-  // --- GST Entry Module ---
-  public getDefaultGstEntries(consignees: ConsigneeMaster[]): GstEntry[] {
-    const c1 = consignees.find((c) => c.name.includes('S K GLOBAL')) || consignees[0];
-    const c2 = consignees.find((c) => c.name.includes('SHASVANTH')) || consignees[1] || c1;
-    const c3 = consignees.find((c) => c.name.includes('PRECISION')) || consignees[2] || c1;
-
-    return [
-      {
-        id: 'gst-init-1',
-        entryNumber: 'GST-26-27-001',
-        entryDate: '2026-04-10',
-        consigneeId: c1?.id || 'c-sk-global-lk',
-        consigneeName: c1?.name || 'S K GLOBAL VENTURES PRIVATE LIMITED',
-        igst: 10000.0,
-        cgst: 2000.0,
-        sgst: 2000.0,
-        totalGst: 14000.0,
-        refundEligible: 20000.0,
-        difference: 6000.0,
-        result: 'GAIN',
-        remarks: 'LUT export refund eligible exceeds total input credit. Net refund claim filed under Section 54.',
-        createdAt: '2026-04-10T10:00:00.000Z',
-        updatedAt: '2026-04-10T10:00:00.000Z',
-      },
-      {
-        id: 'gst-init-2',
-        entryNumber: 'GST-26-27-002',
-        entryDate: '2026-04-20',
-        consigneeId: c2?.id || 'c-shasvanth-lk',
-        consigneeName: c2?.name || 'SHASVANTH IMPEX PRIVATE LIMITED',
-        igst: 10000.0,
-        cgst: 2000.0,
-        sgst: 2000.0,
-        totalGst: 14000.0,
-        refundEligible: 12000.0,
-        difference: -2000.0,
-        result: 'LOSS',
-        remarks: 'Apparel export consignment with lower refund eligibility due to inverted duty schedule.',
-        createdAt: '2026-04-20T11:00:00.000Z',
-        updatedAt: '2026-04-20T11:00:00.000Z',
-      },
-      {
-        id: 'gst-init-3',
-        entryNumber: 'GST-26-27-003',
-        entryDate: '2026-05-05',
-        consigneeId: c3?.id || 'c-precision-lk',
-        consigneeName: c3?.name || 'PRECISION TEX LANKA PVT LTD',
-        igst: 10000.0,
-        cgst: 2000.0,
-        sgst: 2000.0,
-        totalGst: 14000.0,
-        refundEligible: 14000.0,
-        difference: 0.0,
-        result: 'NIL',
-        remarks: 'Exact balanced refund credit parity with zero net difference.',
-        createdAt: '2026-05-05T09:30:00.000Z',
-        updatedAt: '2026-05-05T09:30:00.000Z',
-      },
-    ];
-  }
-
-  public getGstEntries(filters?: {
-    consigneeId?: string;
-    result?: GstResult;
-    startDate?: string;
-    endDate?: string;
-    search?: string;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  }): GstEntry[] {
-    let list = [...this.state.gstEntries];
-
-    if (filters?.consigneeId) {
-      list = list.filter((e) => e.consigneeId === filters.consigneeId);
-    }
-
-    if (filters?.result) {
-      list = list.filter((e) => e.result === filters.result);
-    }
-
-    if (filters?.startDate) {
-      list = list.filter((e) => e.entryDate >= filters.startDate!);
-    }
-
-    if (filters?.endDate) {
-      list = list.filter((e) => e.entryDate <= filters.endDate!);
-    }
-
-    if (filters?.search && filters.search.trim()) {
-      const q = filters.search.trim().toLowerCase();
-      list = list.filter(
-        (e) =>
-          e.entryNumber.toLowerCase().includes(q) ||
-          (e.consigneeName && e.consigneeName.toLowerCase().includes(q)) ||
-          (e.remarks && e.remarks.toLowerCase().includes(q))
-      );
-    }
-
-    const sortBy = filters?.sortBy || 'entryDate';
-    const sortOrder = filters?.sortOrder || 'desc';
-
-    list.sort((a, b) => {
-      let valA: any = (a as any)[sortBy];
-      let valB: any = (b as any)[sortBy];
-      if (typeof valA === 'string') {
-        const cmp = valA.localeCompare(valB);
-        return sortOrder === 'asc' ? cmp : -cmp;
-      }
-      valA = Number(valA || 0);
-      valB = Number(valB || 0);
-      return sortOrder === 'asc' ? valA - valB : valB - valA;
-    });
-
-    return list;
-  }
-
-  public getGstEntryById(id: string): GstEntry | undefined {
-    return this.state.gstEntries.find((e) => e.id === id);
-  }
-
-  public createGstEntry(
-    data: {
-      entryDate?: string;
-      consigneeId: string;
-      igst?: number;
-      cgst?: number;
-      sgst?: number;
-      refundEligible?: number;
-      remarks?: string;
-    },
-    actorUserId: string
-  ): GstEntry {
-    const consignee = this.state.consignees.find((c) => c.id === data.consigneeId);
-    if (!consignee) {
-      throw new Error('Selected consignee does not exist in Consignee Master.');
-    }
-
-    const rawIgst = Number(data.igst ?? 0);
-    const rawCgst = Number(data.cgst ?? 0);
-    const rawSgst = Number(data.sgst ?? 0);
-    const rawRefund = Number(data.refundEligible ?? 0);
-
-    if (isNaN(rawIgst) || isNaN(rawCgst) || isNaN(rawSgst) || isNaN(rawRefund)) {
-      throw new Error('Invalid numeric input: GST and refund eligible amounts must be valid numbers.');
-    }
-
-    if (rawIgst < 0 || rawCgst < 0 || rawSgst < 0 || rawRefund < 0) {
-      throw new Error('GST amounts and Refund Eligible values cannot be negative.');
-    }
-
-    const igst = Math.round(rawIgst * 100) / 100;
-    const cgst = Math.round(rawCgst * 100) / 100;
-    const sgst = Math.round(rawSgst * 100) / 100;
-    const refundEligible = Math.round(rawRefund * 100) / 100;
-
-    const totalGstCents = Math.round(igst * 100) + Math.round(cgst * 100) + Math.round(sgst * 100);
-    const totalGst = totalGstCents / 100;
-
-    const refundCents = Math.round(refundEligible * 100);
-    const diffCents = refundCents - totalGstCents;
-    const difference = diffCents / 100;
-
-    const result: GstResult = diffCents > 0 ? 'GAIN' : diffCents < 0 ? 'LOSS' : 'NIL';
-
-    const nextSeq = this.state.gstEntries.length + 1;
-    let entryNumber = `GST-26-27-${String(nextSeq).padStart(3, '0')}`;
-    let counter = nextSeq;
-    while (this.state.gstEntries.some((e) => e.entryNumber === entryNumber)) {
-      counter++;
-      entryNumber = `GST-26-27-${String(counter).padStart(3, '0')}`;
-    }
-
-    const newEntry: GstEntry = {
-      id: crypto.randomUUID(),
-      entryNumber,
-      entryDate: data.entryDate || new Date().toISOString().split('T')[0],
-      consigneeId: consignee.id,
-      consigneeName: consignee.name,
-      igst,
-      cgst,
-      sgst,
-      totalGst,
-      refundEligible,
-      difference,
-      result,
-      remarks: data.remarks?.trim() || undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    this.state.gstEntries.unshift(newEntry);
-    this.save();
-    return newEntry;
-  }
-
-  public updateGstEntry(
-    id: string,
-    updates: Partial<{
-      entryDate: string;
-      consigneeId: string;
-      igst: number;
-      cgst: number;
-      sgst: number;
-      refundEligible: number;
-      remarks: string;
-    }>,
-    actorUserId: string
-  ): GstEntry {
-    const idx = this.state.gstEntries.findIndex((e) => e.id === id);
-    if (idx === -1) throw new Error('GST Entry not found.');
-
-    const current = this.state.gstEntries[idx];
-    let consigneeId = current.consigneeId;
-    let consigneeName = current.consigneeName;
-
-    if (updates.consigneeId && updates.consigneeId !== current.consigneeId) {
-      const consignee = this.state.consignees.find((c) => c.id === updates.consigneeId);
-      if (!consignee) throw new Error('Selected consignee does not exist in Consignee Master.');
-      consigneeId = consignee.id;
-      consigneeName = consignee.name;
-    }
-
-    const rawIgst = updates.igst !== undefined ? Number(updates.igst) : current.igst;
-    const rawCgst = updates.cgst !== undefined ? Number(updates.cgst) : current.cgst;
-    const rawSgst = updates.sgst !== undefined ? Number(updates.sgst) : current.sgst;
-    const rawRefund = updates.refundEligible !== undefined ? Number(updates.refundEligible) : current.refundEligible;
-
-    if (isNaN(rawIgst) || isNaN(rawCgst) || isNaN(rawSgst) || isNaN(rawRefund)) {
-      throw new Error('Invalid numeric input: GST and refund eligible amounts must be valid numbers.');
-    }
-
-    if (rawIgst < 0 || rawCgst < 0 || rawSgst < 0 || rawRefund < 0) {
-      throw new Error('GST amounts and Refund Eligible values cannot be negative.');
-    }
-
-    const igst = Math.round(rawIgst * 100) / 100;
-    const cgst = Math.round(rawCgst * 100) / 100;
-    const sgst = Math.round(rawSgst * 100) / 100;
-    const refundEligible = Math.round(rawRefund * 100) / 100;
-
-    const totalGstCents = Math.round(igst * 100) + Math.round(cgst * 100) + Math.round(sgst * 100);
-    const totalGst = totalGstCents / 100;
-
-    const refundCents = Math.round(refundEligible * 100);
-    const diffCents = refundCents - totalGstCents;
-    const difference = diffCents / 100;
-
-    const result: GstResult = diffCents > 0 ? 'GAIN' : diffCents < 0 ? 'LOSS' : 'NIL';
-
-    const updated: GstEntry = {
-      ...current,
-      entryDate: updates.entryDate || current.entryDate,
-      consigneeId,
-      consigneeName,
-      igst,
-      cgst,
-      sgst,
-      totalGst,
-      refundEligible,
-      difference,
-      result,
-      remarks: updates.remarks !== undefined ? updates.remarks.trim() || undefined : current.remarks,
-      updatedAt: new Date().toISOString(),
-    };
-
-    this.state.gstEntries[idx] = updated;
-    this.save();
-    return updated;
-  }
-
-  public deleteGstEntry(id: string, actorUserId: string): { success: boolean } {
-    const idx = this.state.gstEntries.findIndex((e) => e.id === id);
-    if (idx === -1) throw new Error('GST Entry not found.');
-
-    this.state.gstEntries.splice(idx, 1);
-    this.save();
-    return { success: true };
-  }
-
-  public getGstSummary(filters?: {
-    consigneeId?: string;
-    result?: GstResult;
-    startDate?: string;
-    endDate?: string;
-    search?: string;
-  }): GstSummary {
-    const entries = this.getGstEntries(filters);
-
-    let totalIgstCents = 0;
-    let totalCgstCents = 0;
-    let totalSgstCents = 0;
-    let totalGstCents = 0;
-    let totalRefundEligibleCents = 0;
-    let gainCount = 0;
-    let lossCount = 0;
-    let nilCount = 0;
-
-    for (const e of entries) {
-      totalIgstCents += Math.round(e.igst * 100);
-      totalCgstCents += Math.round(e.cgst * 100);
-      totalSgstCents += Math.round(e.sgst * 100);
-      totalGstCents += Math.round(e.totalGst * 100);
-      totalRefundEligibleCents += Math.round(e.refundEligible * 100);
-
-      if (e.result === 'GAIN') gainCount++;
-      else if (e.result === 'LOSS') lossCount++;
-      else nilCount++;
-    }
-
-    const netDiffCents = totalRefundEligibleCents - totalGstCents;
-
-    return {
-      totalEntries: entries.length,
-      totalIgst: totalIgstCents / 100,
-      totalCgst: totalCgstCents / 100,
-      totalSgst: totalSgstCents / 100,
-      totalGst: totalGstCents / 100,
-      totalRefundEligible: totalRefundEligibleCents / 100,
-      netDifference: netDiffCents / 100,
-      gainCount,
-      lossCount,
-      nilCount,
-    };
-  }
 
   // --- Settings ---
   public getSettings(): AppSettings {
@@ -2215,6 +1907,1057 @@ class DatabaseService {
 
     this.save();
     return { success: true, cleared: countSummary };
+  }
+
+  // --- GST Entries ---
+  public getGstEntries(filters?: {
+    consigneeId?: string;
+    result?: GstResult;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: 'entryDate' | 'consigneeName' | 'totalGst' | 'refundEligible' | 'difference';
+    sortOrder?: 'asc' | 'desc';
+  }): { entries: GstEntry[]; total: number; summary: GstSummary } {
+    let list = [...this.state.gstEntries];
+
+    if (filters?.consigneeId && filters.consigneeId !== 'ALL') {
+      list = list.filter((e) => e.consigneeId === filters.consigneeId);
+    }
+
+    if (filters?.result && filters.result !== ('ALL' as any)) {
+      list = list.filter((e) => e.result === filters.result);
+    }
+
+    if (filters?.startDate) {
+      list = list.filter((e) => e.entryDate >= filters.startDate!);
+    }
+
+    if (filters?.endDate) {
+      list = list.filter((e) => e.entryDate <= filters.endDate!);
+    }
+
+    if (filters?.search && filters.search.trim()) {
+      const q = filters.search.trim().toLowerCase();
+      list = list.filter(
+        (e) =>
+          e.id.toLowerCase().includes(q) ||
+          e.consigneeName.toLowerCase().includes(q) ||
+          (e.remarks && e.remarks.toLowerCase().includes(q))
+      );
+    }
+
+    const summary = this.calculateGstSummary(list);
+
+    const sortBy = filters?.sortBy || 'entryDate';
+    const sortOrder = filters?.sortOrder || 'desc';
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'entryDate') cmp = a.entryDate.localeCompare(b.entryDate);
+      else if (sortBy === 'consigneeName') cmp = a.consigneeName.localeCompare(b.consigneeName);
+      else if (sortBy === 'totalGst') cmp = a.totalGst - b.totalGst;
+      else if (sortBy === 'refundEligible') cmp = a.refundEligible - b.refundEligible;
+      else if (sortBy === 'difference') cmp = a.difference - b.difference;
+      return sortOrder === 'desc' ? -cmp : cmp;
+    });
+
+    const total = list.length;
+    const page = Math.max(1, filters?.page || 1);
+    const limit = filters?.limit ? Math.max(1, filters.limit) : total;
+    const startIndex = (page - 1) * limit;
+    const paginated = list.slice(startIndex, startIndex + limit);
+
+    return { entries: paginated, total, summary };
+  }
+
+  public calculateGstSummary(entries?: GstEntry[]): GstSummary {
+    const list = entries || this.state.gstEntries;
+    let totalIgst = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalGst = 0;
+    let totalRefundEligible = 0;
+    let gainCount = 0;
+    let lossCount = 0;
+    let nilCount = 0;
+
+    for (const e of list) {
+      totalIgst += Number(e.igst || 0);
+      totalCgst += Number(e.cgst || 0);
+      totalSgst += Number(e.sgst || 0);
+      totalGst += Number(e.totalGst || 0);
+      totalRefundEligible += Number(e.refundEligible || 0);
+      if (e.result === 'GAIN') gainCount++;
+      else if (e.result === 'LOSS') lossCount++;
+      else nilCount++;
+    }
+
+    const round2 = (val: number) => Math.round(val * 100) / 100;
+
+    return {
+      totalEntries: list.length,
+      totalIgst: round2(totalIgst),
+      totalCgst: round2(totalCgst),
+      totalSgst: round2(totalSgst),
+      totalGst: round2(totalGst),
+      totalRefundEligible: round2(totalRefundEligible),
+      netDifference: round2(totalRefundEligible - totalGst),
+      overallResult: (round2(totalRefundEligible - totalGst) > 0 ? 'GAIN' : round2(totalRefundEligible - totalGst) < 0 ? 'LOSS' : 'NIL') as GstResult,
+      gainCount,
+      lossCount,
+      nilCount,
+    };
+  }
+
+  public getGstSummary(filters?: { consigneeId?: string; startDate?: string; endDate?: string }): GstSummary {
+    let list = [...this.state.gstEntries];
+    if (filters?.consigneeId && filters.consigneeId !== 'ALL') {
+      list = list.filter((e) => e.consigneeId === filters.consigneeId);
+    }
+    if (filters?.startDate) {
+      list = list.filter((e) => e.entryDate >= filters.startDate!);
+    }
+    if (filters?.endDate) {
+      list = list.filter((e) => e.entryDate <= filters.endDate!);
+    }
+    return this.calculateGstSummary(list);
+  }
+
+  public getGstEntryById(id: string): GstEntry | undefined {
+    return this.state.gstEntries.find((e) => e.id === id);
+  }
+
+  public createGstEntry(data: {
+    entryDate: string;
+    consigneeId: string;
+    igst: number;
+    cgst: number;
+    sgst: number;
+    refundEligible: number;
+    remarks?: string;
+  }): GstEntry {
+    if (!data.entryDate || isNaN(new Date(data.entryDate).getTime())) {
+      throw new Error('Valid entry date is required.');
+    }
+    const consignee = this.state.consignees.find((c) => c.id === data.consigneeId);
+    if (!consignee) {
+      throw new Error('Selected consignee does not exist in master records.');
+    }
+
+    const round2 = (val: number) => Math.round(val * 100) / 100;
+
+    const igst = round2(Number(data.igst || 0));
+    const cgst = round2(Number(data.cgst || 0));
+    const sgst = round2(Number(data.sgst || 0));
+    const refundEligible = round2(Number(data.refundEligible || 0));
+
+    if (igst < 0 || cgst < 0 || sgst < 0 || refundEligible < 0) {
+      throw new Error('GST amounts and refund eligible cannot be negative.');
+    }
+
+    const totalGst = round2(igst + cgst + sgst);
+    const difference = round2(refundEligible - totalGst);
+    const result: GstResult = difference > 0 ? 'GAIN' : difference < 0 ? 'LOSS' : 'NIL';
+
+    const year = new Date(data.entryDate).getFullYear();
+    const countForYear = this.state.gstEntries.filter((e) => e.entryDate.startsWith(String(year))).length + 1;
+    const readableId = 'GST-' + year + '-' + String(countForYear).padStart(3, '0');
+
+    const newEntry: GstEntry = {
+      id: readableId,
+      entryDate: data.entryDate,
+      consigneeId: consignee.id,
+      consigneeName: consignee.name,
+      igst,
+      cgst,
+      sgst,
+      totalGst,
+      refundEligible,
+      difference,
+      result,
+      remarks: data.remarks?.trim() || undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.state.gstEntries.unshift(newEntry);
+    this.save();
+    return newEntry;
+  }
+
+  public updateGstEntry(
+    id: string,
+    updates: Partial<{
+      entryDate: string;
+      consigneeId: string;
+      igst: number;
+      cgst: number;
+      sgst: number;
+      refundEligible: number;
+      remarks?: string;
+    }>
+  ): GstEntry {
+    const entry = this.state.gstEntries.find((e) => e.id === id);
+    if (!entry) throw new Error('GST entry not found.');
+
+    const round2 = (val: number) => Math.round(val * 100) / 100;
+
+    if (updates.entryDate !== undefined) {
+      if (!updates.entryDate || isNaN(new Date(updates.entryDate).getTime())) {
+        throw new Error('Valid entry date is required.');
+      }
+      entry.entryDate = updates.entryDate;
+    }
+
+    if (updates.consigneeId !== undefined) {
+      const consignee = this.state.consignees.find((c) => c.id === updates.consigneeId);
+      if (!consignee) throw new Error('Selected consignee does not exist in master records.');
+      entry.consigneeId = consignee.id;
+      entry.consigneeName = consignee.name;
+    }
+
+    if (updates.igst !== undefined) {
+      const v = round2(Number(updates.igst));
+      if (v < 0) throw new Error('IGST amount cannot be negative.');
+      entry.igst = v;
+    }
+
+    if (updates.cgst !== undefined) {
+      const v = round2(Number(updates.cgst));
+      if (v < 0) throw new Error('CGST amount cannot be negative.');
+      entry.cgst = v;
+    }
+
+    if (updates.sgst !== undefined) {
+      const v = round2(Number(updates.sgst));
+      if (v < 0) throw new Error('SGST amount cannot be negative.');
+      entry.sgst = v;
+    }
+
+    if (updates.refundEligible !== undefined) {
+      const v = round2(Number(updates.refundEligible));
+      if (v < 0) throw new Error('Refund eligible amount cannot be negative.');
+      entry.refundEligible = v;
+    }
+
+    if (updates.remarks !== undefined) {
+      entry.remarks = updates.remarks.trim() || undefined;
+    }
+
+    entry.totalGst = round2(entry.igst + entry.cgst + entry.sgst);
+    entry.difference = round2(entry.refundEligible - entry.totalGst);
+    entry.result = entry.difference > 0 ? 'GAIN' : entry.difference < 0 ? 'LOSS' : 'NIL';
+    entry.updatedAt = new Date().toISOString();
+
+    this.save();
+    return entry;
+  }
+
+  public deleteGstEntry(id: string): boolean {
+    const idx = this.state.gstEntries.findIndex((e) => e.id === id);
+    if (idx === -1) return false;
+    this.state.gstEntries.splice(idx, 1);
+    this.save();
+    return true;
+  }
+
+  // ==========================================
+  // --- B2B GST Management Module Methods ---
+  // ==========================================
+
+  public getSuppliers(search?: string): Supplier[] {
+    const invoices = this.state.b2bInvoices || [];
+    const searchLower = (search || '').trim().toLowerCase();
+
+    return (this.state.suppliers || [])
+      .map((sup) => {
+        const supInvoices = invoices.filter(
+          (inv) => inv.supplierId === sup.id || inv.supplierGstin.toUpperCase() === sup.gstin.toUpperCase()
+        );
+        const invoiceCount = supInvoices.length;
+        const totalInvoiceValue = Math.round(supInvoices.reduce((sum, inv) => sum + (inv.invoiceValue || 0), 0) * 100) / 100;
+        const totalTaxableValue = Math.round(supInvoices.reduce((sum, inv) => sum + (inv.taxableValue || 0), 0) * 100) / 100;
+        const totalGst = Math.round(supInvoices.reduce((sum, inv) => sum + (inv.totalGst || 0), 0) * 100) / 100;
+
+        let latestInvoiceDate: string | undefined = undefined;
+        if (supInvoices.length > 0) {
+          const sorted = [...supInvoices].sort((a, b) => b.invoiceDate.localeCompare(a.invoiceDate));
+          latestInvoiceDate = sorted[0].invoiceDate;
+        }
+
+        return {
+          ...sup,
+          invoiceCount,
+          totalInvoiceValue,
+          totalTaxableValue,
+          totalGst,
+          latestInvoiceDate,
+        };
+      })
+      .filter((sup) => {
+        if (!searchLower) return true;
+        return (
+          sup.legalName.toLowerCase().includes(searchLower) ||
+          sup.gstin.toLowerCase().includes(searchLower) ||
+          (sup.tradeName && sup.tradeName.toLowerCase().includes(searchLower)) ||
+          (sup.state && sup.state.toLowerCase().includes(searchLower))
+        );
+      })
+      .sort((a, b) => a.legalName.localeCompare(b.legalName));
+  }
+
+  public getSupplierById(id: string): Supplier | undefined {
+    const list = this.getSuppliers();
+    return list.find((s) => s.id === id);
+  }
+
+  public getSupplierByGstin(gstin: string): Supplier | undefined {
+    const cleanGstin = gstin.trim().toUpperCase();
+    return (this.state.suppliers || []).find((s) => s.gstin.toUpperCase() === cleanGstin);
+  }
+
+  public createSupplier(data: {
+    gstin: string;
+    legalName: string;
+    tradeName?: string;
+    address?: string;
+    state?: string;
+  }): Supplier {
+    const gstin = data.gstin.trim().toUpperCase();
+    if (!gstin || gstin.length !== 15) {
+      throw new Error('Valid 15-character GSTIN is required.');
+    }
+    const legalName = data.legalName.trim();
+    if (!legalName) {
+      throw new Error('Supplier legal name is required.');
+    }
+
+    const existing = this.getSupplierByGstin(gstin);
+    if (existing) {
+      throw new Error(`Supplier with GSTIN "${gstin}" already exists (${existing.legalName}).`);
+    }
+
+    const now = new Date().toISOString();
+    const newSupplier: Supplier = {
+      id: `sup-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      gstin,
+      legalName,
+      tradeName: data.tradeName?.trim() || undefined,
+      address: data.address?.trim() || undefined,
+      state: data.state?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (!this.state.suppliers) this.state.suppliers = [];
+    this.state.suppliers.push(newSupplier);
+    this.save();
+    return newSupplier;
+  }
+
+  public updateSupplier(
+    id: string,
+    updates: Partial<{
+      legalName: string;
+      tradeName?: string;
+      address?: string;
+      state?: string;
+    }>
+  ): Supplier {
+    const supplier = (this.state.suppliers || []).find((s) => s.id === id);
+    if (!supplier) throw new Error('Supplier not found.');
+
+    if (updates.legalName !== undefined) {
+      const name = updates.legalName.trim();
+      if (!name) throw new Error('Legal name cannot be empty.');
+      supplier.legalName = name;
+
+      // Update linked invoices
+      if (this.state.b2bInvoices) {
+        for (const inv of this.state.b2bInvoices) {
+          if (inv.supplierId === id || inv.supplierGstin.toUpperCase() === supplier.gstin.toUpperCase()) {
+            inv.supplierName = name;
+          }
+        }
+      }
+    }
+
+    if (updates.tradeName !== undefined) supplier.tradeName = updates.tradeName.trim() || undefined;
+    if (updates.address !== undefined) supplier.address = updates.address.trim() || undefined;
+    if (updates.state !== undefined) supplier.state = updates.state.trim() || undefined;
+
+    supplier.updatedAt = new Date().toISOString();
+    this.save();
+    return supplier;
+  }
+
+  public deleteSupplier(id: string): boolean {
+    const supplier = (this.state.suppliers || []).find((s) => s.id === id);
+    if (!supplier) return false;
+
+    const hasLinked = (this.state.b2bInvoices || []).some(
+      (inv) => inv.supplierId === id || inv.supplierGstin.toUpperCase() === supplier.gstin.toUpperCase()
+    );
+    if (hasLinked) {
+      throw new Error(`Cannot delete supplier "${supplier.legalName}" as it has linked B2B invoices.`);
+    }
+
+    const idx = this.state.suppliers.findIndex((s) => s.id === id);
+    if (idx !== -1) {
+      this.state.suppliers.splice(idx, 1);
+      this.save();
+      return true;
+    }
+    return false;
+  }
+
+  public getB2bInvoices(filters?: {
+    periodKey?: string;
+    financialYear?: string;
+    supplierGstin?: string;
+    invoiceType?: string;
+    reverseCharge?: string;
+    itcAvailability?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): {
+    data: B2bInvoice[];
+    total: number;
+    page: number;
+    limit: number;
+    totalTaxableValue: number;
+    totalGst: number;
+    totalInvoiceValue: number;
+  } {
+    let list = [...(this.state.b2bInvoices || [])];
+
+    if (filters?.periodKey && filters.periodKey !== 'ALL') {
+      list = list.filter((inv) => inv.periodKey === filters.periodKey);
+    }
+
+    if (filters?.financialYear && filters.financialYear !== 'ALL') {
+      list = list.filter((inv) => inv.financialYear === filters.financialYear);
+    }
+
+    if (filters?.supplierGstin && filters.supplierGstin !== 'ALL') {
+      const g = filters.supplierGstin.trim().toUpperCase();
+      list = list.filter((inv) => inv.supplierGstin.toUpperCase() === g);
+    }
+
+    if (filters?.invoiceType && filters.invoiceType !== 'ALL') {
+      list = list.filter((inv) => inv.invoiceType.toLowerCase() === filters.invoiceType!.toLowerCase());
+    }
+
+    if (filters?.reverseCharge && filters.reverseCharge !== 'ALL') {
+      list = list.filter((inv) => inv.reverseCharge.toUpperCase() === filters.reverseCharge!.toUpperCase());
+    }
+
+    if (filters?.itcAvailability && filters.itcAvailability !== 'ALL') {
+      list = list.filter((inv) => inv.itcAvailability.toLowerCase() === filters.itcAvailability!.toLowerCase());
+    }
+
+    if (filters?.search) {
+      const s = filters.search.trim().toLowerCase();
+      list = list.filter(
+        (inv) =>
+          inv.invoiceNumber.toLowerCase().includes(s) ||
+          inv.supplierName.toLowerCase().includes(s) ||
+          inv.supplierGstin.toLowerCase().includes(s) ||
+          (inv.irn && inv.irn.toLowerCase().includes(s))
+      );
+    }
+
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+    const totalTaxableValue = round2(list.reduce((sum, inv) => sum + (inv.taxableValue || 0), 0));
+    const totalGst = round2(list.reduce((sum, inv) => sum + (inv.totalGst || 0), 0));
+    const totalInvoiceValue = round2(list.reduce((sum, inv) => sum + (inv.invoiceValue || 0), 0));
+    const total = list.length;
+
+    // Sort
+    const sortBy = filters?.sortBy || 'invoiceDate';
+    const sortOrder = filters?.sortOrder || 'desc';
+
+    list.sort((a: any, b: any) => {
+      let valA = a[sortBy];
+      let valB = b[sortBy];
+      if (typeof valA === 'string') {
+        const cmp = valA.localeCompare(valB || '');
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      if (typeof valA === 'number') {
+        const cmp = (valA || 0) - (valB || 0);
+        return sortOrder === 'asc' ? cmp : -cmp;
+      }
+      return 0;
+    });
+
+    const page = Math.max(1, filters?.page || 1);
+    const limit = filters?.limit === 0 ? total : Math.max(1, filters?.limit || 50);
+    const start = (page - 1) * limit;
+    const paginated = list.slice(start, start + limit);
+
+    return {
+      data: paginated,
+      total,
+      page,
+      limit,
+      totalTaxableValue,
+      totalGst,
+      totalInvoiceValue,
+    };
+  }
+
+  public getB2bInvoiceById(id: string): B2bInvoice | undefined {
+    return (this.state.b2bInvoices || []).find((inv) => inv.id === id);
+  }
+
+  public createB2bInvoice(data: any, userId?: string): B2bInvoice {
+    const round2 = (v: number) => Math.round(Number(v || 0) * 100) / 100;
+
+    const supplierGstin = (data.supplierGstin || '').trim().toUpperCase();
+    if (!supplierGstin || supplierGstin.length !== 15) {
+      throw new Error('Valid 15-character Supplier GSTIN is required.');
+    }
+
+    const invoiceNumber = (data.invoiceNumber || '').trim();
+    if (!invoiceNumber) {
+      throw new Error('Invoice Number is required.');
+    }
+
+    const invoiceType = (data.invoiceType || 'Regular').trim();
+
+    // Check duplicate
+    const existing = (this.state.b2bInvoices || []).find(
+      (inv) =>
+        inv.supplierGstin.toUpperCase() === supplierGstin &&
+        inv.invoiceNumber.trim().toUpperCase() === invoiceNumber.toUpperCase() &&
+        inv.invoiceType.trim().toUpperCase() === invoiceType.toUpperCase()
+    );
+
+    if (existing) {
+      throw new Error(
+        `Duplicate invoice detected: Invoice "${invoiceNumber}" for supplier "${supplierGstin}" already exists in GSTR Period ${existing.gstrPeriod}.`
+      );
+    }
+
+    const parsedPeriod = parseGstrPeriod(data.gstrPeriod);
+    if (!parsedPeriod) {
+      throw new Error(
+        `Invalid GSTR Period: "${data.gstrPeriod}". Must be a valid period like "August 2026", "2026-08", or "08-2026".`
+      );
+    }
+
+    // Ensure supplier exists or auto-create
+    let supplier = this.getSupplierByGstin(supplierGstin);
+    if (!supplier) {
+      const supplierName = (data.supplierName || 'SUPPLIER ' + supplierGstin).trim();
+      const state = data.placeOfSupply?.replace(/^\d+-/, '').trim() || undefined;
+      supplier = this.createSupplier({
+        gstin: supplierGstin,
+        legalName: supplierName,
+        tradeName: supplierName,
+        state,
+      });
+    }
+
+    const taxableValue = round2(data.taxableValue);
+    const integratedTax = round2(data.integratedTax);
+    const centralTax = round2(data.centralTax);
+    const stateUtTax = round2(data.stateUtTax);
+    const cess = round2(data.cess);
+    const totalGst = round2(integratedTax + centralTax + stateUtTax + cess);
+
+    let invoiceValue = round2(data.invoiceValue);
+    if (!invoiceValue || invoiceValue === 0) {
+      invoiceValue = round2(taxableValue + totalGst);
+    }
+
+    const now = new Date().toISOString();
+    const newInvoice: B2bInvoice = {
+      id: `b2b-inv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      supplierId: supplier.id,
+      supplierGstin,
+      supplierName: supplier.legalName,
+      invoiceNumber,
+      invoiceType,
+      invoiceDate: data.invoiceDate,
+      invoiceValue,
+      placeOfSupply: data.placeOfSupply?.trim() || undefined,
+      reverseCharge: data.reverseCharge?.toUpperCase() === 'Y' ? 'Y' : 'N',
+      taxableValue,
+      integratedTax,
+      centralTax,
+      stateUtTax,
+      cess,
+      totalGst,
+      gstrPeriod: parsedPeriod.displayPeriod,
+      periodKey: parsedPeriod.periodKey,
+      financialYear: parsedPeriod.financialYear,
+      filingDate: data.filingDate || undefined,
+      itcAvailability: data.itcAvailability === 'No' ? 'No' : 'Yes',
+      reason: data.reason?.trim() || undefined,
+      applicableTaxRate: data.applicableTaxRate ? Number(data.applicableTaxRate) : 100,
+      source: data.source?.trim() || 'GSTR-1',
+      irn: data.irn?.trim() || undefined,
+      irnDate: data.irnDate || undefined,
+      importBatchId: data.importBatchId || undefined,
+      createdBy: userId || undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (!this.state.b2bInvoices) this.state.b2bInvoices = [];
+    this.state.b2bInvoices.unshift(newInvoice);
+    this.save();
+    return newInvoice;
+  }
+
+  public updateB2bInvoice(id: string, updates: any, userId?: string): B2bInvoice {
+    const invoice = (this.state.b2bInvoices || []).find((inv) => inv.id === id);
+    if (!invoice) throw new Error('B2B Invoice not found.');
+
+    const round2 = (v: number) => Math.round(Number(v || 0) * 100) / 100;
+
+    const newGstin = (updates.supplierGstin || invoice.supplierGstin).trim().toUpperCase();
+    const newInvoiceNumber = (updates.invoiceNumber || invoice.invoiceNumber).trim();
+    const newInvoiceType = (updates.invoiceType || invoice.invoiceType).trim();
+
+    // Check duplicate if key components changed
+    if (
+      newGstin !== invoice.supplierGstin ||
+      newInvoiceNumber.toUpperCase() !== invoice.invoiceNumber.toUpperCase() ||
+      newInvoiceType.toUpperCase() !== invoice.invoiceType.toUpperCase()
+    ) {
+      const dup = (this.state.b2bInvoices || []).find(
+        (inv) =>
+          inv.id !== id &&
+          inv.supplierGstin.toUpperCase() === newGstin &&
+          inv.invoiceNumber.trim().toUpperCase() === newInvoiceNumber.toUpperCase() &&
+          inv.invoiceType.trim().toUpperCase() === newInvoiceType.toUpperCase()
+      );
+      if (dup) {
+        throw new Error(
+          `Duplicate conflict: Another invoice with number "${newInvoiceNumber}" for supplier "${newGstin}" already exists.`
+        );
+      }
+    }
+
+    if (updates.gstrPeriod !== undefined) {
+      const parsed = parseGstrPeriod(updates.gstrPeriod);
+      if (!parsed) throw new Error(`Invalid GSTR Period: "${updates.gstrPeriod}"`);
+      invoice.gstrPeriod = parsed.displayPeriod;
+      invoice.periodKey = parsed.periodKey;
+      invoice.financialYear = parsed.financialYear;
+    }
+
+    if (updates.supplierGstin !== undefined) {
+      invoice.supplierGstin = newGstin;
+      let sup = this.getSupplierByGstin(newGstin);
+      if (!sup) {
+        sup = this.createSupplier({
+          gstin: newGstin,
+          legalName: updates.supplierName || 'SUPPLIER ' + newGstin,
+        });
+      }
+      invoice.supplierId = sup.id;
+      invoice.supplierName = updates.supplierName || sup.legalName;
+    } else if (updates.supplierName !== undefined) {
+      invoice.supplierName = updates.supplierName.trim();
+    }
+
+    if (updates.invoiceNumber !== undefined) invoice.invoiceNumber = newInvoiceNumber;
+    if (updates.invoiceType !== undefined) invoice.invoiceType = newInvoiceType;
+    if (updates.invoiceDate !== undefined) invoice.invoiceDate = updates.invoiceDate;
+    if (updates.placeOfSupply !== undefined) invoice.placeOfSupply = updates.placeOfSupply.trim() || undefined;
+    if (updates.reverseCharge !== undefined) invoice.reverseCharge = updates.reverseCharge.toUpperCase() === 'Y' ? 'Y' : 'N';
+    if (updates.taxableValue !== undefined) invoice.taxableValue = round2(updates.taxableValue);
+    if (updates.integratedTax !== undefined) invoice.integratedTax = round2(updates.integratedTax);
+    if (updates.centralTax !== undefined) invoice.centralTax = round2(updates.centralTax);
+    if (updates.stateUtTax !== undefined) invoice.stateUtTax = round2(updates.stateUtTax);
+    if (updates.cess !== undefined) invoice.cess = round2(updates.cess);
+
+    invoice.totalGst = round2(invoice.integratedTax + invoice.centralTax + invoice.stateUtTax + invoice.cess);
+
+    if (updates.invoiceValue !== undefined) {
+      invoice.invoiceValue = round2(updates.invoiceValue);
+    } else if (updates.taxableValue !== undefined || updates.integratedTax !== undefined) {
+      if (!invoice.invoiceValue) invoice.invoiceValue = round2(invoice.taxableValue + invoice.totalGst);
+    }
+
+    if (updates.filingDate !== undefined) invoice.filingDate = updates.filingDate || undefined;
+    if (updates.itcAvailability !== undefined) invoice.itcAvailability = updates.itcAvailability === 'No' ? 'No' : 'Yes';
+    if (updates.reason !== undefined) invoice.reason = updates.reason.trim() || undefined;
+    if (updates.applicableTaxRate !== undefined) invoice.applicableTaxRate = Number(updates.applicableTaxRate);
+    if (updates.source !== undefined) invoice.source = updates.source.trim() || undefined;
+    if (updates.irn !== undefined) invoice.irn = updates.irn.trim() || undefined;
+    if (updates.irnDate !== undefined) invoice.irnDate = updates.irnDate || undefined;
+
+    invoice.updatedBy = userId || undefined;
+    invoice.updatedAt = new Date().toISOString();
+
+    this.save();
+    return invoice;
+  }
+
+  public deleteB2bInvoice(id: string): boolean {
+    const idx = (this.state.b2bInvoices || []).findIndex((inv) => inv.id === id);
+    if (idx === -1) return false;
+    this.state.b2bInvoices.splice(idx, 1);
+    this.save();
+    return true;
+  }
+
+  public getB2bMonthlySummaries(financialYear?: string): B2bMonthlySummary[] {
+    const fy = financialYear && financialYear !== 'ALL' ? financialYear : '2026-27';
+    const standardMonths = getMonthsForFinancialYear(fy);
+    const invoices = (this.state.b2bInvoices || []).filter((inv) => inv.financialYear === fy);
+
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+
+    const summaries: B2bMonthlySummary[] = standardMonths.map((m) => {
+      const monthInvoices = invoices.filter((inv) => inv.periodKey === m.periodKey);
+      const uniqueSuppliers = new Set(monthInvoices.map((inv) => inv.supplierGstin.toUpperCase())).size;
+      const totalInvoiceValue = round2(monthInvoices.reduce((s, inv) => s + (inv.invoiceValue || 0), 0));
+      const totalTaxableValue = round2(monthInvoices.reduce((s, inv) => s + (inv.taxableValue || 0), 0));
+      const totalIgst = round2(monthInvoices.reduce((s, inv) => s + (inv.integratedTax || 0), 0));
+      const totalCgst = round2(monthInvoices.reduce((s, inv) => s + (inv.centralTax || 0), 0));
+      const totalSgst = round2(monthInvoices.reduce((s, inv) => s + (inv.stateUtTax || 0), 0));
+      const totalCess = round2(monthInvoices.reduce((s, inv) => s + (inv.cess || 0), 0));
+      const totalGst = round2(monthInvoices.reduce((s, inv) => s + (inv.totalGst || 0), 0));
+      const itcAvailableCount = monthInvoices.filter((inv) => inv.itcAvailability === 'Yes').length;
+      const reverseChargeCount = monthInvoices.filter((inv) => inv.reverseCharge === 'Y').length;
+
+      return {
+        periodKey: m.periodKey,
+        displayPeriod: m.displayPeriod,
+        financialYear: fy,
+        invoiceCount: monthInvoices.length,
+        uniqueSuppliers,
+        totalInvoiceValue,
+        totalTaxableValue,
+        totalIgst,
+        totalCgst,
+        totalSgst,
+        totalCess,
+        totalGst,
+        itcAvailableCount,
+        reverseChargeCount,
+      };
+    });
+
+    const existingKeys = new Set(summaries.map((s) => s.periodKey));
+    const extraPeriodKeys = Array.from(new Set(invoices.map((inv) => inv.periodKey))).filter((k) => !existingKeys.has(k));
+    for (const epk of extraPeriodKeys) {
+      const sample = invoices.find((inv) => inv.periodKey === epk)!;
+      const monthInvoices = invoices.filter((inv) => inv.periodKey === epk);
+      const uniqueSuppliers = new Set(monthInvoices.map((inv) => inv.supplierGstin.toUpperCase())).size;
+      summaries.push({
+        periodKey: epk,
+        displayPeriod: sample.gstrPeriod || epk,
+        financialYear: fy,
+        invoiceCount: monthInvoices.length,
+        uniqueSuppliers,
+        totalInvoiceValue: round2(monthInvoices.reduce((s, inv) => s + (inv.invoiceValue || 0), 0)),
+        totalTaxableValue: round2(monthInvoices.reduce((s, inv) => s + (inv.taxableValue || 0), 0)),
+        totalIgst: round2(monthInvoices.reduce((s, inv) => s + (inv.integratedTax || 0), 0)),
+        totalCgst: round2(monthInvoices.reduce((s, inv) => s + (inv.centralTax || 0), 0)),
+        totalSgst: round2(monthInvoices.reduce((s, inv) => s + (inv.stateUtTax || 0), 0)),
+        totalCess: round2(monthInvoices.reduce((s, inv) => s + (inv.cess || 0), 0)),
+        totalGst: round2(monthInvoices.reduce((s, inv) => s + (inv.totalGst || 0), 0)),
+        itcAvailableCount: monthInvoices.filter((inv) => inv.itcAvailability === 'Yes').length,
+        reverseChargeCount: monthInvoices.filter((inv) => inv.reverseCharge === 'Y').length,
+      });
+    }
+
+    return summaries;
+  }
+
+  public getB2bMonthDetail(periodKey: string): {
+    summary: B2bMonthlySummary;
+    invoices: B2bInvoice[];
+    topSuppliers: Array<{
+      gstin: string;
+      name: string;
+      invoiceCount: number;
+      invoiceValue: number;
+      taxableValue: number;
+      totalGst: number;
+    }>;
+  } {
+    const invoices = (this.state.b2bInvoices || []).filter((inv) => inv.periodKey === periodKey);
+    const parsed = parseGstrPeriod(periodKey);
+    const displayPeriod = parsed?.displayPeriod || periodKey;
+    const financialYear = parsed?.financialYear || '2026-27';
+
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+    const uniqueSuppliers = new Set(invoices.map((inv) => inv.supplierGstin.toUpperCase())).size;
+
+    const summary: B2bMonthlySummary = {
+      periodKey,
+      displayPeriod,
+      financialYear,
+      invoiceCount: invoices.length,
+      uniqueSuppliers,
+      totalInvoiceValue: round2(invoices.reduce((s, inv) => s + (inv.invoiceValue || 0), 0)),
+      totalTaxableValue: round2(invoices.reduce((s, inv) => s + (inv.taxableValue || 0), 0)),
+      totalIgst: round2(invoices.reduce((s, inv) => s + (inv.integratedTax || 0), 0)),
+      totalCgst: round2(invoices.reduce((s, inv) => s + (inv.centralTax || 0), 0)),
+      totalSgst: round2(invoices.reduce((s, inv) => s + (inv.stateUtTax || 0), 0)),
+      totalCess: round2(invoices.reduce((s, inv) => s + (inv.cess || 0), 0)),
+      totalGst: round2(invoices.reduce((s, inv) => s + (inv.totalGst || 0), 0)),
+      itcAvailableCount: invoices.filter((inv) => inv.itcAvailability === 'Yes').length,
+      reverseChargeCount: invoices.filter((inv) => inv.reverseCharge === 'Y').length,
+    };
+
+    const supMap = new Map<string, { gstin: string; name: string; invoiceCount: number; invoiceValue: number; taxableValue: number; totalGst: number }>();
+    for (const inv of invoices) {
+      const gstin = inv.supplierGstin.toUpperCase();
+      const existing = supMap.get(gstin) || {
+        gstin,
+        name: inv.supplierName,
+        invoiceCount: 0,
+        invoiceValue: 0,
+        taxableValue: 0,
+        totalGst: 0,
+      };
+      existing.invoiceCount += 1;
+      existing.invoiceValue = round2(existing.invoiceValue + (inv.invoiceValue || 0));
+      existing.taxableValue = round2(existing.taxableValue + (inv.taxableValue || 0));
+      existing.totalGst = round2(existing.totalGst + (inv.totalGst || 0));
+      supMap.set(gstin, existing);
+    }
+
+    const topSuppliers = Array.from(supMap.values()).sort((a, b) => b.taxableValue - a.taxableValue);
+
+    return {
+      summary,
+      invoices,
+      topSuppliers,
+    };
+  }
+
+  public getB2bDashboardMetrics(financialYear?: string): B2bDashboardMetrics {
+    const fy = financialYear && financialYear !== 'ALL' ? financialYear : '2026-27';
+    let invoices = [...(this.state.b2bInvoices || [])];
+    if (fy !== 'ALL') {
+      invoices = invoices.filter((inv) => inv.financialYear === fy);
+    }
+
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+    const uniqueSuppliers = new Set(invoices.map((inv) => inv.supplierGstin.toUpperCase())).size;
+
+    const monthlySummaries = this.getB2bMonthlySummaries(fy);
+    const monthlyTrends = monthlySummaries.map((m) => ({
+      periodKey: m.periodKey,
+      displayPeriod: m.displayPeriod,
+      invoiceCount: m.invoiceCount,
+      taxableValue: m.totalTaxableValue,
+      totalGst: m.totalGst,
+      invoiceValue: m.totalInvoiceValue,
+    }));
+
+    const supMap = new Map<string, { gstin: string; name: string; invoiceCount: number; invoiceValue: number; taxableValue: number; totalGst: number }>();
+    for (const inv of invoices) {
+      const gstin = inv.supplierGstin.toUpperCase();
+      const existing = supMap.get(gstin) || {
+        gstin,
+        name: inv.supplierName,
+        invoiceCount: 0,
+        invoiceValue: 0,
+        taxableValue: 0,
+        totalGst: 0,
+      };
+      existing.invoiceCount += 1;
+      existing.invoiceValue = round2(existing.invoiceValue + (inv.invoiceValue || 0));
+      existing.taxableValue = round2(existing.taxableValue + (inv.taxableValue || 0));
+      existing.totalGst = round2(existing.totalGst + (inv.totalGst || 0));
+      supMap.set(gstin, existing);
+    }
+
+    const topSuppliers = Array.from(supMap.values())
+      .sort((a, b) => b.totalGst - a.totalGst)
+      .slice(0, 10);
+
+    const recentInvoices = [...invoices]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 8);
+
+    return {
+      totalInvoices: invoices.length,
+      uniqueSuppliers,
+      totalInvoiceValue: round2(invoices.reduce((s, inv) => s + (inv.invoiceValue || 0), 0)),
+      totalTaxableValue: round2(invoices.reduce((s, inv) => s + (inv.taxableValue || 0), 0)),
+      totalIgst: round2(invoices.reduce((s, inv) => s + (inv.integratedTax || 0), 0)),
+      totalCgst: round2(invoices.reduce((s, inv) => s + (inv.centralTax || 0), 0)),
+      totalSgst: round2(invoices.reduce((s, inv) => s + (inv.stateUtTax || 0), 0)),
+      totalCess: round2(invoices.reduce((s, inv) => s + (inv.cess || 0), 0)),
+      totalGst: round2(invoices.reduce((s, inv) => s + (inv.totalGst || 0), 0)),
+      itcAvailableCount: invoices.filter((inv) => inv.itcAvailability === 'Yes').length,
+      reverseChargeCount: invoices.filter((inv) => inv.reverseCharge === 'Y').length,
+      monthlyTrends,
+      supplierSummaries: topSuppliers,
+      topSuppliers,
+      recentInvoices,
+    };
+  }
+
+  public commitB2bImport(
+    batchMeta: { fileName: string; fileSizeBytes?: number },
+    previewData: B2bImportPreview,
+    mode: 'SKIP_EXISTING' | 'OVERWRITE_EXISTING' | 'INSERT_ALL',
+    userId?: string
+  ): { batchId: string; totalProcessed: number; inserted: number; updated: number; skipped: number } {
+    const round2 = (v: number) => Math.round(Number(v || 0) * 100) / 100;
+    const batchId = `batch-${Date.now()}`;
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    const gstrPeriodSummary: Record<string, number> = {};
+    const rowsToProcess = previewData.allParsedRecords || previewData.sampleRows || [];
+
+    for (const row of rowsToProcess) {
+      const supplierGstin = (row.supplierGstin || '').trim().toUpperCase();
+      const invoiceNumber = (row.invoiceNumber || '').trim();
+      const invoiceType = (row.invoiceType || 'Regular').trim();
+
+      if (!supplierGstin || !invoiceNumber) {
+        skipped++;
+        continue;
+      }
+
+      const existingIndex = (this.state.b2bInvoices || []).findIndex(
+        (inv) =>
+          inv.supplierGstin.toUpperCase() === supplierGstin &&
+          inv.invoiceNumber.trim().toUpperCase() === invoiceNumber.toUpperCase() &&
+          inv.invoiceType.trim().toUpperCase() === invoiceType.toUpperCase()
+      );
+
+      if (existingIndex !== -1) {
+        if (mode === 'SKIP_EXISTING') {
+          skipped++;
+          continue;
+        } else if (mode === 'OVERWRITE_EXISTING') {
+          const existingInv = this.state.b2bInvoices[existingIndex];
+          this.updateB2bInvoice(
+            existingInv.id,
+            {
+              ...row,
+              importBatchId: batchId,
+            },
+            userId
+          );
+          updated++;
+          gstrPeriodSummary[row.periodKey] = (gstrPeriodSummary[row.periodKey] || 0) + 1;
+          continue;
+        }
+      }
+
+      try {
+        const parsedPeriod = parseGstrPeriod(row.gstrPeriod);
+        if (!parsedPeriod) {
+          skipped++;
+          continue;
+        }
+
+        let sup = this.getSupplierByGstin(supplierGstin);
+        if (!sup) {
+          sup = this.createSupplier({
+            gstin: supplierGstin,
+            legalName: row.supplierName || 'SUPPLIER ' + supplierGstin,
+            state: row.placeOfSupply?.replace(/^\d+-/, '').trim() || undefined,
+          });
+        }
+
+        const taxableValue = round2(row.taxableValue);
+        const integratedTax = round2(row.integratedTax);
+        const centralTax = round2(row.centralTax);
+        const stateUtTax = round2(row.stateUtTax);
+        const cess = round2(row.cess);
+        const totalGst = round2(integratedTax + centralTax + stateUtTax + cess);
+        let invoiceValue = round2(row.invoiceValue);
+        if (!invoiceValue || invoiceValue === 0) {
+          invoiceValue = round2(taxableValue + totalGst);
+        }
+
+        const now = new Date().toISOString();
+        const newInv: B2bInvoice = {
+          id: `b2b-inv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          supplierId: sup.id,
+          supplierGstin,
+          supplierName: sup.legalName,
+          invoiceNumber,
+          invoiceType,
+          invoiceDate: row.invoiceDate,
+          invoiceValue,
+          placeOfSupply: row.placeOfSupply?.trim() || undefined,
+          reverseCharge: row.reverseCharge === 'Y' ? 'Y' : 'N',
+          taxableValue,
+          integratedTax,
+          centralTax,
+          stateUtTax,
+          cess,
+          totalGst,
+          gstrPeriod: parsedPeriod.displayPeriod,
+          periodKey: parsedPeriod.periodKey,
+          financialYear: parsedPeriod.financialYear,
+          filingDate: row.filingDate || undefined,
+          itcAvailability: row.itcAvailability === 'No' ? 'No' : 'Yes',
+          reason: row.reason?.trim() || undefined,
+          applicableTaxRate: row.applicableTaxRate ? Number(row.applicableTaxRate) : 100,
+          source: row.source?.trim() || 'GSTR-1',
+          irn: row.irn?.trim() || undefined,
+          irnDate: row.irnDate || undefined,
+          importBatchId: batchId,
+          createdBy: userId || undefined,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        if (!this.state.b2bInvoices) this.state.b2bInvoices = [];
+        this.state.b2bInvoices.unshift(newInv);
+        inserted++;
+        gstrPeriodSummary[parsedPeriod.periodKey] = (gstrPeriodSummary[parsedPeriod.periodKey] || 0) + 1;
+      } catch (err) {
+        console.error('Error inserting row in commitB2bImport:', err);
+        skipped++;
+      }
+    }
+
+    const batchRecord: ImportBatch = {
+      id: batchId,
+      fileName: batchMeta.fileName,
+      fileSizeBytes: batchMeta.fileSizeBytes,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: userId,
+      totalRows: (previewData.sampleRows || []).length,
+      successfulRows: inserted + updated,
+      failedRows: (previewData.errors || []).length,
+      duplicateRows: (previewData.duplicates || []).length,
+      importStatus: inserted + updated > 0 ? 'COMPLETED' : 'FAILED',
+      gstrPeriodSummary,
+    };
+
+    if (!this.state.importBatches) this.state.importBatches = [];
+    this.state.importBatches.unshift(batchRecord);
+
+    this.save();
+    return {
+      batchId,
+      totalProcessed: (previewData.sampleRows || []).length,
+      inserted,
+      updated,
+      skipped,
+    };
+  }
+
+  public getImportBatches(): ImportBatch[] {
+    return this.state.importBatches || [];
   }
 
   // --- Dashboard Metrics ---
@@ -2282,7 +3025,7 @@ class DatabaseService {
       brcRealisedCount,
       brcOverdueCount,
       pendingReviewCount,
-      recentGstEntries: this.state.gstEntries.slice(0, 5),
+      gstSummary: this.getGstSummary(),
     };
   }
 
@@ -2841,11 +3584,88 @@ class DatabaseService {
           updatedAt: '2026-09-15T14:00:00.000Z',
         },
       ],
-      gstEntries: this.getDefaultGstEntries([
-        { id: consignee1Id, name: 'S K GLOBAL VENTURES PRIVATE LIMITED' } as any,
-        { id: consignee2Id, name: 'SHASVANTH IMPEX PRIVATE LIMITED' } as any,
-        { id: consignee3Id, name: 'PRECISION TEX LANKA PVT LTD' } as any,
-      ]),
+      gstEntries: [
+        {
+          id: 'GST-2026-001',
+          entryDate: '2026-04-10',
+          consigneeId: consignee1Id,
+          consigneeName: 'S K GLOBAL VENTURES PRIVATE LIMITED',
+          igst: 180000.0,
+          cgst: 0,
+          sgst: 0,
+          totalGst: 180000.0,
+          refundEligible: 195000.0,
+          difference: 15000.0,
+          result: 'GAIN',
+          remarks: 'FY26-27 Q1 export LUT refund claim processed via GSTN portal.',
+          createdAt: '2026-04-10T10:00:00.000Z',
+          updatedAt: '2026-04-10T10:00:00.000Z',
+        },
+        {
+          id: 'GST-2026-002',
+          entryDate: '2026-04-22',
+          consigneeId: consignee2Id,
+          consigneeName: 'SHASVANTH IMPEX PRIVATE LIMITED',
+          igst: 140000.0,
+          cgst: 0,
+          sgst: 0,
+          totalGst: 140000.0,
+          refundEligible: 128500.0,
+          difference: -11500.0,
+          result: 'LOSS',
+          remarks: 'Input tax credit reversal due to revised inland transport invoices.',
+          createdAt: '2026-04-22T11:30:00.000Z',
+          updatedAt: '2026-04-22T11:30:00.000Z',
+        },
+        {
+          id: 'GST-2026-003',
+          entryDate: '2026-05-05',
+          consigneeId: consignee3Id,
+          consigneeName: 'PRECISION TEX LANKA PVT LTD',
+          igst: 0,
+          cgst: 45000.0,
+          sgst: 45000.0,
+          totalGst: 90000.0,
+          refundEligible: 90000.0,
+          difference: 0,
+          result: 'NIL',
+          remarks: 'Job work processing charges balanced against refund sanction order.',
+          createdAt: '2026-05-05T09:15:00.000Z',
+          updatedAt: '2026-05-05T09:15:00.000Z',
+        },
+        {
+          id: 'GST-2026-004',
+          entryDate: '2026-05-18',
+          consigneeId: consignee4Id,
+          consigneeName: 'TEX FAB LANKA PRIVATE LIMITED',
+          igst: 220000.0,
+          cgst: 0,
+          sgst: 0,
+          totalGst: 220000.0,
+          refundEligible: 232000.0,
+          difference: 12000.0,
+          result: 'GAIN',
+          remarks: 'Apparel fabric export refund sanction with interest differential.',
+          createdAt: '2026-05-18T14:20:00.000Z',
+          updatedAt: '2026-05-18T14:20:00.000Z',
+        },
+        {
+          id: 'GST-2026-005',
+          entryDate: '2026-05-28',
+          consigneeId: consignee5Id,
+          consigneeName: 'WINFIELD MERCHANT AND GENERAL PVT LTD',
+          igst: 95000.0,
+          cgst: 0,
+          sgst: 0,
+          totalGst: 95000.0,
+          refundEligible: 90000.0,
+          difference: -5000.0,
+          result: 'LOSS',
+          remarks: 'Deduction under Section 54(3) on non-eligible packing materials.',
+          createdAt: '2026-05-28T16:00:00.000Z',
+          updatedAt: '2026-05-28T16:00:00.000Z',
+        },
+      ],
       settings: {
         statutoryBrcDays: 270,
         defaultPortCode: 'INNSA1',
@@ -2855,6 +3675,477 @@ class DatabaseService {
         iecNumber: '0308019921',
         panNumber: 'AAECS9812K',
       },
+      suppliers: [
+        {
+          id: 'sup-kothari',
+          gstin: '33AAACH2748P1ZP',
+          legalName: 'KOTHARI TEXTILE MILLS PRIVATE LIMITED',
+          tradeName: 'Kothari Textiles',
+          address: '42, Mill Road, Coimbatore, Tamil Nadu 641001',
+          state: 'Tamil Nadu',
+          createdAt: '2026-06-01T10:00:00.000Z',
+          updatedAt: '2026-06-01T10:00:00.000Z',
+        },
+        {
+          id: 'sup-balaji',
+          gstin: '33AABCS1429B1Z2',
+          legalName: 'SRI BALAJI COTTON SPINNERS',
+          tradeName: 'Sri Balaji Spinners',
+          address: '15, Spinning Mill Road, Tiruppur, Tamil Nadu 641604',
+          state: 'Tamil Nadu',
+          createdAt: '2026-06-01T10:00:00.000Z',
+          updatedAt: '2026-06-01T10:00:00.000Z',
+        },
+        {
+          id: 'sup-premier',
+          gstin: '27AAACP0124M1Z8',
+          legalName: 'PREMIER PACKAGING INDUSTRIES',
+          tradeName: 'Premier Packaging',
+          address: 'Plot 88, MIDC Industrial Area, Pune, Maharashtra 411018',
+          state: 'Maharashtra',
+          createdAt: '2026-06-01T10:00:00.000Z',
+          updatedAt: '2026-06-01T10:00:00.000Z',
+        },
+        {
+          id: 'sup-lakshmi',
+          gstin: '33AAACL1928K1ZR',
+          legalName: 'LAKSHMI CARD CLOTHING MFG CO',
+          tradeName: 'Lakshmi Card Clothing',
+          address: '1087, Avanashi Road, Coimbatore, Tamil Nadu 641037',
+          state: 'Tamil Nadu',
+          createdAt: '2026-07-01T10:00:00.000Z',
+          updatedAt: '2026-07-01T10:00:00.000Z',
+        },
+        {
+          id: 'sup-reliance',
+          gstin: '29AAACR3849D1Z4',
+          legalName: 'RELIANCE POLYESTERS KARNATAKA',
+          tradeName: 'Reliance Polyesters',
+          address: 'Industrial Suburb, Peenya, Bengaluru, Karnataka 560058',
+          state: 'Karnataka',
+          createdAt: '2026-07-01T10:00:00.000Z',
+          updatedAt: '2026-07-01T10:00:00.000Z',
+        },
+        {
+          id: 'sup-freight',
+          gstin: '33AABCT9941L1Z1',
+          legalName: 'TAMILNADU FREIGHT LOGISTICS',
+          tradeName: 'TN Freight',
+          address: 'Port Access Road, Tuticorin, Tamil Nadu 628004',
+          state: 'Tamil Nadu',
+          createdAt: '2026-07-01T10:00:00.000Z',
+          updatedAt: '2026-07-01T10:00:00.000Z',
+        },
+        {
+          id: 'sup-eastern',
+          gstin: '07AABCE4128N1Z5',
+          legalName: 'EASTERN CORRUGATED BOXES DELHI',
+          tradeName: 'Eastern Boxes',
+          address: 'Okhla Industrial Area Phase 2, New Delhi 110020',
+          state: 'Delhi',
+          createdAt: '2026-08-01T10:00:00.000Z',
+          updatedAt: '2026-08-01T10:00:00.000Z',
+        },
+        {
+          id: 'sup-global-threads',
+          gstin: '33AAACG3829F1Z3',
+          legalName: 'GLOBAL THREADS & ACCESSORIES',
+          tradeName: 'Global Threads',
+          address: '24, Main Bazaar, Erode, Tamil Nadu 638001',
+          state: 'Tamil Nadu',
+          createdAt: '2026-09-01T10:00:00.000Z',
+          updatedAt: '2026-09-01T10:00:00.000Z',
+        },
+      ],
+      b2bInvoices: [
+        {
+          id: 'b2b-inv-1',
+          supplierId: 'sup-kothari',
+          supplierGstin: '33AAACH2748P1ZP',
+          supplierName: 'KOTHARI TEXTILE MILLS PRIVATE LIMITED',
+          invoiceNumber: 'INV-2026-089',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-06-12',
+          invoiceValue: 118000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 100000.0,
+          integratedTax: 0.0,
+          centralTax: 9000.0,
+          stateUtTax: 9000.0,
+          cess: 0.0,
+          totalGst: 18000.0,
+          gstrPeriod: 'June 2026',
+          periodKey: '2026-06',
+          financialYear: '2026-27',
+          filingDate: '2026-07-10',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-07-10T10:00:00.000Z',
+          updatedAt: '2026-07-10T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-2',
+          supplierId: 'sup-balaji',
+          supplierGstin: '33AABCS1429B1Z2',
+          supplierName: 'SRI BALAJI COTTON SPINNERS',
+          invoiceNumber: 'SBCS/26/104',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-06-18',
+          invoiceValue: 236000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 200000.0,
+          integratedTax: 0.0,
+          centralTax: 18000.0,
+          stateUtTax: 18000.0,
+          cess: 0.0,
+          totalGst: 36000.0,
+          gstrPeriod: 'June 2026',
+          periodKey: '2026-06',
+          financialYear: '2026-27',
+          filingDate: '2026-07-11',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1/IFF',
+          createdAt: '2026-07-11T10:00:00.000Z',
+          updatedAt: '2026-07-11T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-3',
+          supplierId: 'sup-premier',
+          supplierGstin: '27AAACP0124M1Z8',
+          supplierName: 'PREMIER PACKAGING INDUSTRIES',
+          invoiceNumber: 'PPI/26-27/045',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-06-22',
+          invoiceValue: 59000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 50000.0,
+          integratedTax: 9000.0,
+          centralTax: 0.0,
+          stateUtTax: 0.0,
+          cess: 0.0,
+          totalGst: 9000.0,
+          gstrPeriod: 'June 2026',
+          periodKey: '2026-06',
+          financialYear: '2026-27',
+          filingDate: '2026-07-09',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          irn: '7b4d9a1f2c3e4b5a6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b',
+          irnDate: '2026-06-22',
+          createdAt: '2026-07-09T10:00:00.000Z',
+          updatedAt: '2026-07-09T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-4',
+          supplierId: 'sup-lakshmi',
+          supplierGstin: '33AAACL1928K1ZR',
+          supplierName: 'LAKSHMI CARD CLOTHING MFG CO',
+          invoiceNumber: 'LCC/6211',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-07-04',
+          invoiceValue: 354000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 300000.0,
+          integratedTax: 0.0,
+          centralTax: 27000.0,
+          stateUtTax: 27000.0,
+          cess: 0.0,
+          totalGst: 54000.0,
+          gstrPeriod: 'July 2026',
+          periodKey: '2026-07',
+          financialYear: '2026-27',
+          filingDate: '2026-08-10',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-08-10T10:00:00.000Z',
+          updatedAt: '2026-08-10T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-5',
+          supplierId: 'sup-reliance',
+          supplierGstin: '29AAACR3849D1Z4',
+          supplierName: 'RELIANCE POLYESTERS KARNATAKA',
+          invoiceNumber: 'RPK/26/892',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-07-15',
+          invoiceValue: 590000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 500000.0,
+          integratedTax: 90000.0,
+          centralTax: 0.0,
+          stateUtTax: 0.0,
+          cess: 0.0,
+          totalGst: 90000.0,
+          gstrPeriod: 'July 2026',
+          periodKey: '2026-07',
+          financialYear: '2026-27',
+          filingDate: '2026-08-11',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          irn: '3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d',
+          irnDate: '2026-07-15',
+          createdAt: '2026-08-11T10:00:00.000Z',
+          updatedAt: '2026-08-11T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-6',
+          supplierId: 'sup-freight',
+          supplierGstin: '33AABCT9941L1Z1',
+          supplierName: 'TAMILNADU FREIGHT LOGISTICS',
+          invoiceNumber: 'TFL/INV/552',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-07-28',
+          invoiceValue: 26250.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'Y',
+          taxableValue: 25000.0,
+          integratedTax: 0.0,
+          centralTax: 625.0,
+          stateUtTax: 625.0,
+          cess: 0.0,
+          totalGst: 1250.0,
+          gstrPeriod: 'July 2026',
+          periodKey: '2026-07',
+          financialYear: '2026-27',
+          filingDate: '2026-08-12',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-08-12T10:00:00.000Z',
+          updatedAt: '2026-08-12T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-7',
+          supplierId: 'sup-kothari',
+          supplierGstin: '33AAACH2748P1ZP',
+          supplierName: 'KOTHARI TEXTILE MILLS PRIVATE LIMITED',
+          invoiceNumber: 'INV-2026-142',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-08-05',
+          invoiceValue: 177000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 150000.0,
+          integratedTax: 0.0,
+          centralTax: 13500.0,
+          stateUtTax: 13500.0,
+          cess: 0.0,
+          totalGst: 27000.0,
+          gstrPeriod: 'August 2026',
+          periodKey: '2026-08',
+          financialYear: '2026-27',
+          filingDate: '2026-09-11',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-09-11T10:00:00.000Z',
+          updatedAt: '2026-09-11T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-8',
+          supplierId: 'sup-balaji',
+          supplierGstin: '33AABCS1429B1Z2',
+          supplierName: 'SRI BALAJI COTTON SPINNERS',
+          invoiceNumber: 'SBCS/26/218',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-08-19',
+          invoiceValue: 472000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 400000.0,
+          integratedTax: 0.0,
+          centralTax: 36000.0,
+          stateUtTax: 36000.0,
+          cess: 0.0,
+          totalGst: 72000.0,
+          gstrPeriod: 'August 2026',
+          periodKey: '2026-08',
+          financialYear: '2026-27',
+          filingDate: '2026-09-11',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-09-11T10:00:00.000Z',
+          updatedAt: '2026-09-11T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-9',
+          supplierId: 'sup-eastern',
+          supplierGstin: '07AABCE4128N1Z5',
+          supplierName: 'EASTERN CORRUGATED BOXES DELHI',
+          invoiceNumber: 'ECB/26-27/112',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-08-28',
+          invoiceValue: 88500.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 75000.0,
+          integratedTax: 13500.0,
+          centralTax: 0.0,
+          stateUtTax: 0.0,
+          cess: 0.0,
+          totalGst: 13500.0,
+          gstrPeriod: 'August 2026',
+          periodKey: '2026-08',
+          financialYear: '2026-27',
+          filingDate: '2026-09-10',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          irn: '8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b',
+          irnDate: '2026-08-28',
+          createdAt: '2026-09-10T10:00:00.000Z',
+          updatedAt: '2026-09-10T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-10',
+          supplierId: 'sup-global-threads',
+          supplierGstin: '33AAACG3829F1Z3',
+          supplierName: 'GLOBAL THREADS & ACCESSORIES',
+          invoiceNumber: 'GTA/26/401',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-09-03',
+          invoiceValue: 64900.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 55000.0,
+          integratedTax: 0.0,
+          centralTax: 4950.0,
+          stateUtTax: 4950.0,
+          cess: 0.0,
+          totalGst: 9900.0,
+          gstrPeriod: 'September 2026',
+          periodKey: '2026-09',
+          financialYear: '2026-27',
+          filingDate: '2026-10-11',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-10-11T10:00:00.000Z',
+          updatedAt: '2026-10-11T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-11',
+          supplierId: 'sup-premier',
+          supplierGstin: '27AAACP0124M1Z8',
+          supplierName: 'PREMIER PACKAGING INDUSTRIES',
+          invoiceNumber: 'PPI/26-27/098',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-09-14',
+          invoiceValue: 118000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 100000.0,
+          integratedTax: 18000.0,
+          centralTax: 0.0,
+          stateUtTax: 0.0,
+          cess: 0.0,
+          totalGst: 18000.0,
+          gstrPeriod: 'September 2026',
+          periodKey: '2026-09',
+          financialYear: '2026-27',
+          filingDate: '2026-10-09',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-10-09T10:00:00.000Z',
+          updatedAt: '2026-10-09T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-12',
+          supplierId: 'sup-freight',
+          supplierGstin: '33AABCT9941L1Z1',
+          supplierName: 'TAMILNADU FREIGHT LOGISTICS',
+          invoiceNumber: 'TFL/INV/780',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-09-25',
+          invoiceValue: 31500.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'Y',
+          taxableValue: 30000.0,
+          integratedTax: 0.0,
+          centralTax: 750.0,
+          stateUtTax: 750.0,
+          cess: 0.0,
+          totalGst: 1500.0,
+          gstrPeriod: 'September 2026',
+          periodKey: '2026-09',
+          financialYear: '2026-27',
+          filingDate: '2026-10-11',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-10-11T10:00:00.000Z',
+          updatedAt: '2026-10-11T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-13',
+          supplierId: 'sup-lakshmi',
+          supplierGstin: '33AAACL1928K1ZR',
+          supplierName: 'LAKSHMI CARD CLOTHING MFG CO',
+          invoiceNumber: 'LCC/7104',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-10-08',
+          invoiceValue: 295000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 250000.0,
+          integratedTax: 0.0,
+          centralTax: 22500.0,
+          stateUtTax: 22500.0,
+          cess: 0.0,
+          totalGst: 45000.0,
+          gstrPeriod: 'October 2026',
+          periodKey: '2026-10',
+          financialYear: '2026-27',
+          filingDate: '2026-11-11',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          createdAt: '2026-11-11T10:00:00.000Z',
+          updatedAt: '2026-11-11T10:00:00.000Z',
+        },
+        {
+          id: 'b2b-inv-14',
+          supplierId: 'sup-reliance',
+          supplierGstin: '29AAACR3849D1Z4',
+          supplierName: 'RELIANCE POLYESTERS KARNATAKA',
+          invoiceNumber: 'RPK/26/1102',
+          invoiceType: 'Regular',
+          invoiceDate: '2026-10-20',
+          invoiceValue: 708000.0,
+          placeOfSupply: '33-Tamil Nadu',
+          reverseCharge: 'N',
+          taxableValue: 600000.0,
+          integratedTax: 108000.0,
+          centralTax: 0.0,
+          stateUtTax: 0.0,
+          cess: 0.0,
+          totalGst: 108000.0,
+          gstrPeriod: 'October 2026',
+          periodKey: '2026-10',
+          financialYear: '2026-27',
+          filingDate: '2026-11-10',
+          itcAvailability: 'Yes',
+          applicableTaxRate: 100,
+          source: 'GSTR-1',
+          irn: '9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c',
+          irnDate: '2026-10-20',
+          createdAt: '2026-11-10T10:00:00.000Z',
+          updatedAt: '2026-11-10T10:00:00.000Z',
+        },
+      ],
+      importBatches: [],
       ocrJobs: [],
       revokedTokens: [],
     };

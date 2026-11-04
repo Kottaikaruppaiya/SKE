@@ -10,6 +10,7 @@ import {
   Trash2,
   Search,
   X,
+  Download,
 } from 'lucide-react';
 import { Payment, BankMaster, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';

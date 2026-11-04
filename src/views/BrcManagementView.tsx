@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { FileCheck2, Calendar, AlertTriangle, CheckCircle2, Clock, Upload, ArrowRight, Eye } from 'lucide-react';
+import { FileCheck2, Calendar, AlertTriangle, CheckCircle2, Clock, Upload, ArrowRight, Eye, Download } from 'lucide-react';
 import { Shipment, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
 import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
@@ -243,6 +243,17 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                                 </button>
                               )}
                             </>
+                          )}
+                          {s.documents?.find((d) => d.category.startsWith('BRC')) && (
+                            <a
+                              href={api.getDocumentDownloadUrl(s.documents.find((d) => d.category.startsWith('BRC'))!.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Download BRC Document"
+                              className="w-7 h-7 flex items-center justify-center text-teal-600 hover:text-teal-800 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                            >
+                              <Download size={14} />
+                            </a>
                           )}
                           <button
                             onClick={() => onSelectShipment(s.id)}

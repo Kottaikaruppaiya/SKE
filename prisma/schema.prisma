@@ -62,12 +62,6 @@ enum BrcStatus {
   OVERDUE
 }
 
-enum GstResult {
-  GAIN
-  LOSS
-  NIL
-}
-
 model User {
   id           String      @id @default(uuid())
   email        String      @unique
@@ -101,7 +95,6 @@ model ConsigneeMaster {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   shipments       Shipment[]
-  gstEntries      GstEntry[]
 }
 
 model BankMaster {
@@ -268,26 +261,77 @@ model Document {
   @@index([paymentId])
 }
 
-model GstEntry {
-  id             String          @id @default(uuid())
-  entryNumber    String          @unique
-  entryDate      DateTime
-  consigneeId    String
-  consignee      ConsigneeMaster @relation(fields: [consigneeId], references: [id], onDelete: Restrict)
-  igst           Decimal         @default(0.00) @db.Decimal(18, 2)
-  cgst           Decimal         @default(0.00) @db.Decimal(18, 2)
-  sgst           Decimal         @default(0.00) @db.Decimal(18, 2)
-  totalGst       Decimal         @default(0.00) @db.Decimal(18, 2)
-  refundEligible Decimal         @default(0.00) @db.Decimal(18, 2)
-  difference     Decimal         @default(0.00) @db.Decimal(18, 2)
-  result         GstResult
-  remarks        String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+model Supplier {
+  id        String       @id @default(uuid())
+  gstin     String       @unique
+  legalName String
+  tradeName String?
+  address   String?
+  state     String?
+  invoices  B2bInvoice[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
 
-  @@index([consigneeId])
-  @@index([entryDate])
-  @@index([result])
+  @@index([gstin])
+}
+
+model ImportBatch {
+  id                String       @id @default(uuid())
+  fileName          String
+  fileSizeBytes     BigInt?
+  uploadedAt        DateTime     @default(now())
+  uploadedBy        String?
+  totalRows         Int          @default(0)
+  successfulRows    Int          @default(0)
+  failedRows        Int          @default(0)
+  duplicateRows     Int          @default(0)
+  importStatus      String       @default("COMPLETED") // COMPLETED, FAILED, PARTIAL
+  gstrPeriodSummary Json?
+  invoices          B2bInvoice[]
+  createdAt         DateTime     @default(now())
+}
+
+model B2bInvoice {
+  id                String       @id @default(uuid())
+  supplierId        String
+  supplier          Supplier     @relation(fields: [supplierId], references: [id])
+  supplierGstin     String
+  supplierName      String
+  invoiceNumber     String
+  invoiceType       String       @default("Regular")
+  invoiceDate       DateTime
+  invoiceValue      Decimal      @db.Decimal(14, 2)
+  placeOfSupply     String?
+  reverseCharge     String       @default("N") // "Y" or "N" / "Yes" or "No"
+  taxableValue      Decimal      @db.Decimal(14, 2)
+  integratedTax     Decimal      @default(0) @db.Decimal(14, 2)
+  centralTax        Decimal      @default(0) @db.Decimal(14, 2)
+  stateUtTax        Decimal      @default(0) @db.Decimal(14, 2)
+  cess              Decimal      @default(0) @db.Decimal(14, 2)
+  totalGst          Decimal      @default(0) @db.Decimal(14, 2) // integratedTax + centralTax + stateUtTax + cess
+  gstrPeriod        String       // original text, e.g. "August 2026", "Aug-2026", "082026"
+  periodKey         String       // canonical "YYYY-MM", e.g. "2026-08"
+  financialYear     String       // e.g. "2026-27"
+  filingDate        DateTime?
+  itcAvailability   String       @default("Yes") // "Yes" or "No"
+  reason            String?
+  applicableTaxRate Decimal?     @db.Decimal(5, 2)
+  source            String?      @default("GSTR-1")
+  irn               String?
+  irnDate           DateTime?
+  importBatchId     String?
+  importBatch       ImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdBy         String?
+  updatedBy         String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([supplierGstin, invoiceNumber, invoiceType])
+  @@index([periodKey])
+  @@index([financialYear])
+  @@index([supplierGstin])
+  @@index([invoiceDate])
+  @@index([importBatchId])
 }
 
 model AppSetting {

@@ -12,9 +12,10 @@ import { db } from './db.ts';
 import { authenticate, requireRole, generateToken, type AuthenticatedRequest } from './auth.ts';
 import { extractDocumentData, mergeExtractedDocuments } from './extractor.ts';
 import { generateExportWorkbook, generateCsvExport, parseHistoricalExcelMigration, generateGstExcelExport } from './excel.ts';
+import { previewB2bWorkbook, generateB2bExcelExport, generateB2bMonthlySummaryExcel } from './b2b_excel.ts';
 import { normalizeInvoiceKey } from './normalizer.ts';
 import { ocrWorker } from './ocr_worker.ts';
-import type { DocumentCategory, GstResult } from '../src/types/index.ts';
+import type { DocumentCategory } from '../src/types/index.ts';
 
 export const apiRouter = express.Router();
 
@@ -46,7 +47,6 @@ apiRouter.post('/auth/login', (req, res) => {
 
   const { passwordHash, ...user } = userWithHash as any;
   const token = generateToken(user);
-
 
   res.json({ token, user });
 });
@@ -371,7 +371,6 @@ apiRouter.post(
         },
         req.user!.id
       );
-
 
       // Handle FIRC payment creation & allocation
       const finalIrm = fircIrmNumber || extractions.fircDoc?.fields?.irmNumber?.value;
@@ -912,7 +911,6 @@ apiRouter.get('/documents/:id/download', authenticate, (req: AuthenticatedReques
     return res.status(404).json({ error: 'Physical document file missing on server.' });
   }
 
-
   res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.originalFilename)}"`);
   res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
   fs.createReadStream(absolutePath).pipe(res);
@@ -1083,67 +1081,65 @@ apiRouter.post(
   }
 );
 
-
-// --- GST Entry Module ---
+// --- GST Entries ---
 apiRouter.get('/gst-entries', authenticate, (req: AuthenticatedRequest, res: Response) => {
-  const { consigneeId, result, startDate, endDate, search, sortBy, sortOrder, page, limit } = req.query as any;
+  const consigneeId = req.query.consigneeId ? String(req.query.consigneeId) : undefined;
+  const result = req.query.result ? (String(req.query.result) as any) : undefined;
+  const search = req.query.search ? String(req.query.search) : undefined;
+  const startDate = req.query.startDate ? String(req.query.startDate) : undefined;
+  const endDate = req.query.endDate ? String(req.query.endDate) : undefined;
+  const page = req.query.page ? parseInt(String(req.query.page), 10) : undefined;
+  const limit = req.query.limit ? parseInt(String(req.query.limit), 10) : undefined;
+  const sortBy = req.query.sortBy ? (String(req.query.sortBy) as any) : undefined;
+  const sortOrder = req.query.sortOrder ? (String(req.query.sortOrder) as any) : undefined;
 
-  const filtered = db.getGstEntries({
-    consigneeId: consigneeId || undefined,
-    result: (result && result !== 'ALL') ? (result as GstResult) : undefined,
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
-    search: search || undefined,
-    sortBy: sortBy || 'entryDate',
-    sortOrder: sortOrder || 'desc',
+  const resultData = db.getGstEntries({
+    consigneeId,
+    result,
+    search,
+    startDate,
+    endDate,
+    page,
+    limit,
+    sortBy,
+    sortOrder,
   });
 
-  const summary = db.getGstSummary({
-    consigneeId: consigneeId || undefined,
-    result: (result && result !== 'ALL') ? (result as GstResult) : undefined,
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
-    search: search || undefined,
-  });
-
-  const pageNum = parseInt(page || '1', 10);
-  const limitNum = parseInt(limit || '1000', 10);
-  const start = (pageNum - 1) * limitNum;
-  const paginated = limit ? filtered.slice(start, start + limitNum) : filtered;
-
-  res.json({
-    entries: paginated,
-    total: filtered.length,
-    summary,
-  });
+  res.json(resultData);
 });
 
 apiRouter.get('/gst-entries/summary', authenticate, (req: AuthenticatedRequest, res: Response) => {
-  const { consigneeId, result, startDate, endDate, search } = req.query as any;
-  const summary = db.getGstSummary({
-    consigneeId: consigneeId || undefined,
-    result: (result && result !== 'ALL') ? (result as GstResult) : undefined,
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
-    search: search || undefined,
-  });
+  const consigneeId = req.query.consigneeId ? String(req.query.consigneeId) : undefined;
+  const startDate = req.query.startDate ? String(req.query.startDate) : undefined;
+  const endDate = req.query.endDate ? String(req.query.endDate) : undefined;
+
+  const summary = db.getGstSummary({ consigneeId, startDate, endDate });
   res.json(summary);
 });
 
 apiRouter.get('/gst-entries/export', authenticate, (req: AuthenticatedRequest, res: Response) => {
-  const { consigneeId, result, startDate, endDate, search } = req.query as any;
-  const buffer = generateGstExcelExport({
-    consigneeId: consigneeId || undefined,
-    result: (result && result !== 'ALL') ? (result as GstResult) : undefined,
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
-    search: search || undefined,
-  });
+  try {
+    const consigneeId = req.query.consigneeId ? String(req.query.consigneeId) : undefined;
+    const result = req.query.result ? (String(req.query.result) as any) : undefined;
+    const search = req.query.search ? String(req.query.search) : undefined;
+    const startDate = req.query.startDate ? String(req.query.startDate) : undefined;
+    const endDate = req.query.endDate ? String(req.query.endDate) : undefined;
 
-  const filename = `SKE_GST_Entries_${new Date().toISOString().split('T')[0]}.xlsx`;
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.send(buffer);
+    const buffer = generateGstExcelExport({ consigneeId, result, search, startDate, endDate });
+    const filename = `SKE_GST_Entries_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to export GST entries.' });
+  }
+});
+
+apiRouter.get('/gst-entries/:id', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const entry = db.getGstEntryById(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'GST entry not found.' });
+  res.json(entry);
 });
 
 apiRouter.post(
@@ -1152,7 +1148,16 @@ apiRouter.post(
   requireRole(['SUPER_ADMIN', 'ADMIN']),
   (req: AuthenticatedRequest, res: Response) => {
     try {
-      const created = db.createGstEntry(req.body, req.user!.id);
+      const { entryDate, consigneeId, igst, cgst, sgst, refundEligible, remarks } = req.body;
+      const created = db.createGstEntry({
+        entryDate,
+        consigneeId,
+        igst: Number(igst || 0),
+        cgst: Number(cgst || 0),
+        sgst: Number(sgst || 0),
+        refundEligible: Number(refundEligible || 0),
+        remarks,
+      });
       res.status(201).json(created);
     } catch (err: any) {
       res.status(400).json({ error: err.message || 'Failed to create GST entry.' });
@@ -1166,7 +1171,7 @@ apiRouter.put(
   requireRole(['SUPER_ADMIN', 'ADMIN']),
   (req: AuthenticatedRequest, res: Response) => {
     try {
-      const updated = db.updateGstEntry(req.params.id, req.body, req.user!.id);
+      const updated = db.updateGstEntry(req.params.id, req.body);
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ error: err.message || 'Failed to update GST entry.' });
@@ -1179,14 +1184,251 @@ apiRouter.delete(
   authenticate,
   requireRole(['SUPER_ADMIN', 'ADMIN']),
   (req: AuthenticatedRequest, res: Response) => {
+    const success = db.deleteGstEntry(req.params.id);
+    if (!success) return res.status(404).json({ error: 'GST entry not found or already deleted.' });
+    res.json({ success: true, message: 'GST entry deleted successfully.' });
+  }
+);
+
+// --- B2B GST Management Module Routes ---
+
+apiRouter.get('/b2b/dashboard', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const financialYear = req.query.financialYear ? String(req.query.financialYear) : undefined;
+  const metrics = db.getB2bDashboardMetrics(financialYear);
+  res.json(metrics);
+});
+
+apiRouter.get('/b2b/monthly', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const financialYear = req.query.financialYear ? String(req.query.financialYear) : undefined;
+  const summaries = db.getB2bMonthlySummaries(financialYear);
+  res.json(summaries);
+});
+
+apiRouter.get('/b2b/monthly/:periodKey', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const detail = db.getB2bMonthDetail(req.params.periodKey);
+    res.json(detail);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to fetch month details.' });
+  }
+});
+
+apiRouter.get('/b2b/invoices', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const {
+    periodKey,
+    financialYear,
+    supplierGstin,
+    invoiceType,
+    reverseCharge,
+    itcAvailability,
+    search,
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+  } = req.query as any;
+
+  const result = db.getB2bInvoices({
+    periodKey,
+    financialYear,
+    supplierGstin,
+    invoiceType,
+    reverseCharge,
+    itcAvailability,
+    search,
+    page: page ? parseInt(String(page), 10) : undefined,
+    limit: limit !== undefined ? parseInt(String(limit), 10) : 50,
+    sortBy,
+    sortOrder,
+  });
+
+  res.json(result);
+});
+
+apiRouter.get('/b2b/invoices/:id', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const invoice = db.getB2bInvoiceById(req.params.id);
+  if (!invoice) return res.status(404).json({ error: 'B2B Invoice not found.' });
+  res.json(invoice);
+});
+
+apiRouter.post(
+  '/b2b/invoices',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
     try {
-      const result = db.deleteGstEntry(req.params.id, req.user!.id);
-      res.json(result);
+      const created = db.createB2bInvoice(req.body, req.user!.id);
+      res.status(201).json(created);
     } catch (err: any) {
-      res.status(400).json({ error: err.message || 'Failed to delete GST entry.' });
+      res.status(400).json({ error: err.message || 'Failed to create B2B invoice.' });
     }
   }
 );
+
+apiRouter.put(
+  '/b2b/invoices/:id',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const updated = db.updateB2bInvoice(req.params.id, req.body, req.user!.id);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to update B2B invoice.' });
+    }
+  }
+);
+
+apiRouter.delete(
+  '/b2b/invoices/:id',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    const success = db.deleteB2bInvoice(req.params.id);
+    if (!success) return res.status(404).json({ error: 'B2B invoice not found or already deleted.' });
+    res.json({ success: true, message: 'B2B invoice deleted successfully.' });
+  }
+);
+
+apiRouter.get('/b2b/suppliers', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const search = req.query.search ? String(req.query.search) : undefined;
+  const suppliers = db.getSuppliers(search);
+  res.json(suppliers);
+});
+
+apiRouter.get('/b2b/suppliers/:id', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const supplier = db.getSupplierById(req.params.id);
+  if (!supplier) return res.status(404).json({ error: 'Supplier not found.' });
+  res.json(supplier);
+});
+
+apiRouter.post(
+  '/b2b/suppliers',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const created = db.createSupplier(req.body);
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to create supplier.' });
+    }
+  }
+);
+
+apiRouter.put(
+  '/b2b/suppliers/:id',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const updated = db.updateSupplier(req.params.id, req.body);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to update supplier.' });
+    }
+  }
+);
+
+apiRouter.delete(
+  '/b2b/suppliers/:id',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const success = db.deleteSupplier(req.params.id);
+      if (!success) return res.status(404).json({ error: 'Supplier not found.' });
+      res.json({ success: true, message: 'Supplier deleted successfully.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to delete supplier.' });
+    }
+  }
+);
+
+apiRouter.post(
+  '/b2b/import/preview',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  upload.single('file'),
+  (req: AuthenticatedRequest, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please upload an Excel workbook (.xlsx, .xls) or CSV file (.csv).' });
+    }
+
+    try {
+      const existingInvoices = db.getB2bInvoices({ limit: 0 }).data;
+      const existingSuppliers = db.getSuppliers();
+      const preview = previewB2bWorkbook(req.file.buffer, req.file.originalname, existingInvoices, existingSuppliers);
+      res.json(preview);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Failed to parse B2B import file.' });
+    }
+  }
+);
+
+apiRouter.post(
+  '/b2b/import/commit',
+  authenticate,
+  requireRole(['SUPER_ADMIN', 'ADMIN']),
+  (req: AuthenticatedRequest, res: Response) => {
+    const { previewData, mode, fileName, fileSizeBytes } = req.body;
+    if (!previewData) {
+      return res.status(400).json({ error: 'Preview data is required for commit.' });
+    }
+    const importMode = mode || 'SKIP_EXISTING';
+
+    try {
+      const result = db.commitB2bImport(
+        { fileName: fileName || 'Imported_Workbook.xlsx', fileSizeBytes },
+        previewData,
+        importMode,
+        req.user!.id
+      );
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to commit B2B import.' });
+    }
+  }
+);
+
+apiRouter.get('/b2b/import/batches', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  res.json(db.getImportBatches());
+});
+
+apiRouter.get('/b2b/export', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { reportType, periodKey, financialYear, supplierGstin } = req.query as any;
+
+    if (reportType === 'monthly_summary') {
+      const fy = financialYear || '2026-27';
+      const summaries = db.getB2bMonthlySummaries(fy);
+      const buffer = generateB2bMonthlySummaryExcel(summaries, fy);
+      const filename = `SKE_B2B_Monthly_Summary_${fy}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.send(buffer);
+    }
+
+    // Default: B2B Invoice Register
+    const { data: invoices } = db.getB2bInvoices({
+      periodKey: periodKey !== 'ALL' ? periodKey : undefined,
+      financialYear: financialYear !== 'ALL' ? financialYear : undefined,
+      supplierGstin: supplierGstin !== 'ALL' ? supplierGstin : undefined,
+      limit: 0,
+    });
+
+    const title = periodKey && periodKey !== 'ALL' ? `B2B Invoices - ${periodKey}` : `B2B Invoices - Register`;
+    const buffer = generateB2bExcelExport(invoices, title);
+    const filename = `SKE_B2B_Register_${periodKey || financialYear || 'All'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to export B2B records.' });
+  }
+});
 
 // --- User Management (SUPER ADMIN ONLY) ---
 apiRouter.get('/users', authenticate, requireRole(['SUPER_ADMIN']), (req, res) => {

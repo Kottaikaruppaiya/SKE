@@ -580,59 +580,58 @@ function parseExcelDate(val: any): string | null {
 export function generateGstExcelExport(filters?: {
   consigneeId?: string;
   result?: any;
+  search?: string;
   startDate?: string;
   endDate?: string;
-  search?: string;
 }): Buffer {
   const wb = XLSX.utils.book_new();
-  const entries = db.getGstEntries(filters);
-  const summary = db.getGstSummary(filters);
+  const { entries, summary } = db.getGstEntries({ ...filters, limit: 10000 });
 
-  // Rows with precise numeric cells
-  const rows: any[] = entries.map((e) => ({
-    'Entry ID': e.entryNumber,
+  const rows = entries.map((e, idx) => ({
+    'S.No': idx + 1,
+    'Entry ID': e.id,
     'Entry Date': e.entryDate,
-    'Consignee': e.consigneeName || 'Unknown Consignee',
-    'IGST': Number(e.igst.toFixed(2)),
-    'CGST': Number(e.cgst.toFixed(2)),
-    'SGST': Number(e.sgst.toFixed(2)),
-    'Total GST': Number(e.totalGst.toFixed(2)),
-    'Refund Eligible': Number(e.refundEligible.toFixed(2)),
-    'Difference': Number(e.difference.toFixed(2)),
+    'Consignee Name': e.consigneeName,
+    'IGST (INR)': Number(e.igst.toFixed(2)),
+    'CGST (INR)': Number(e.cgst.toFixed(2)),
+    'SGST (INR)': Number(e.sgst.toFixed(2)),
+    'Total GST (INR)': Number(e.totalGst.toFixed(2)),
+    'Refund Eligible (INR)': Number(e.refundEligible.toFixed(2)),
+    'Difference (INR)': Number(e.difference.toFixed(2)),
     'Result': e.result,
-    'Remarks': e.remarks || '',
+    'Remarks': e.remarks || '—',
   }));
 
-  // Append empty spacer row and summary totals row
+  // Summary row at the bottom
   rows.push({
-    'Entry ID': 'TOTALS',
-    'Entry Date': '',
-    'Consignee': `Total Entries: ${summary.totalEntries}`,
-    'IGST': Number(summary.totalIgst.toFixed(2)),
-    'CGST': Number(summary.totalCgst.toFixed(2)),
-    'SGST': Number(summary.totalSgst.toFixed(2)),
-    'Total GST': Number(summary.totalGst.toFixed(2)),
-    'Refund Eligible': Number(summary.totalRefundEligible.toFixed(2)),
-    'Difference': Number(summary.netDifference.toFixed(2)),
-    'Result': summary.netDifference > 0 ? 'NET GAIN' : summary.netDifference < 0 ? 'NET LOSS' : 'NIL',
-    'Remarks': `GAIN: ${summary.gainCount} | LOSS: ${summary.lossCount} | NIL: ${summary.nilCount}`,
+    'S.No': '' as any,
+    'Entry ID': 'TOTAL',
+    'Entry Date': `${summary.totalEntries} Entries`,
+    'Consignee Name': '',
+    'IGST (INR)': summary.totalIgst,
+    'CGST (INR)': summary.totalCgst,
+    'SGST (INR)': summary.totalSgst,
+    'Total GST (INR)': summary.totalGst,
+    'Refund Eligible (INR)': summary.totalRefundEligible,
+    'Difference (INR)': summary.netDifference,
+    'Result': (summary.netDifference > 0 ? 'GAIN' : summary.netDifference < 0 ? 'LOSS' : 'NIL') as any,
+    'Remarks': `Gain: ${summary.gainCount} | Loss: ${summary.lossCount} | Nil: ${summary.nilCount}`,
   });
 
   const ws = XLSX.utils.json_to_sheet(rows);
-
-  // Set column widths
   ws['!cols'] = [
-    { wch: 16 }, // Entry ID
-    { wch: 14 }, // Entry Date
-    { wch: 40 }, // Consignee
-    { wch: 14 }, // IGST
-    { wch: 14 }, // CGST
-    { wch: 14 }, // SGST
-    { wch: 16 }, // Total GST
-    { wch: 18 }, // Refund Eligible
-    { wch: 16 }, // Difference
-    { wch: 12 }, // Result
-    { wch: 35 }, // Remarks
+    { wch: 6 },
+    { wch: 16 },
+    { wch: 12 },
+    { wch: 38 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 10 },
+    { wch: 45 },
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'GST Entries');

@@ -310,14 +310,82 @@ export interface Shipment {
   hasFircEvidence?: boolean;
 }
 
+// --- B2B GST Management Types ---
+export interface Supplier {
+  id: string;
+  gstin: string;
+  legalName: string;
+  tradeName?: string;
+  address?: string;
+  state?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Aggregated fields
+  invoiceCount?: number;
+  totalInvoiceValue?: number;
+  totalTaxableValue?: number;
+  totalGst?: number;
+  latestInvoiceDate?: string;
+}
+
+export interface B2bInvoice {
+  id: string;
+  supplierId: string;
+  supplierGstin: string;
+  supplierName: string;
+  invoiceNumber: string;
+  invoiceType: string;
+  invoiceDate: string; // YYYY-MM-DD
+  invoiceValue: number;
+  placeOfSupply?: string;
+  reverseCharge: string; // "Y" | "N"
+  taxableValue: number;
+  integratedTax: number;
+  centralTax: number;
+  stateUtTax: number;
+  cess: number;
+  totalGst: number; // integratedTax + centralTax + stateUtTax + cess
+  gstrPeriod: string; // e.g. "August 2026"
+  periodKey: string; // "YYYY-MM", e.g. "2026-08"
+  financialYear: string; // e.g. "2026-27"
+  filingDate?: string; // YYYY-MM-DD
+  itcAvailability: string; // "Yes" | "No"
+  reason?: string;
+  applicableTaxRate?: number;
+  source?: string;
+  irn?: string;
+  irnDate?: string;
+  importBatchId?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface B2bMonthlySummary {
+  periodKey: string; // "2026-08"
+  displayPeriod: string; // "August 2026"
+  financialYear: string; // "2026-27"
+  invoiceCount: number;
+  uniqueSuppliers: number;
+  totalInvoiceValue: number;
+  totalTaxableValue: number;
+  totalIgst: number;
+  totalCgst: number;
+  totalSgst: number;
+  totalCess: number;
+  totalGst: number;
+  itcAvailableCount: number;
+  reverseChargeCount: number;
+}
+
 export type GstResult = 'GAIN' | 'LOSS' | 'NIL';
 
 export interface GstEntry {
   id: string;
-  entryNumber: string;
-  entryDate: string; // YYYY-MM-DD
+  entryDate: string;
   consigneeId: string;
-  consigneeName?: string;
+  consigneeName: string;
   igst: number;
   cgst: number;
   sgst: number;
@@ -338,9 +406,100 @@ export interface GstSummary {
   totalGst: number;
   totalRefundEligible: number;
   netDifference: number;
+  overallResult: GstResult;
   gainCount: number;
   lossCount: number;
   nilCount: number;
+}
+
+export interface B2bDashboardMetrics {
+  totalInvoices: number;
+  uniqueSuppliers: number;
+  totalInvoiceValue: number;
+  totalTaxableValue: number;
+  totalIgst: number;
+  totalCgst: number;
+  totalSgst: number;
+  totalCess: number;
+  totalGst: number;
+  itcAvailableCount: number;
+  reverseChargeCount: number;
+  monthlyTrends: Array<{
+    periodKey: string;
+    displayPeriod: string;
+    invoiceCount: number;
+    taxableValue: number;
+    totalGst: number;
+    invoiceValue: number;
+  }>;
+  supplierSummaries: Array<{
+    gstin: string;
+    name: string;
+    invoiceCount: number;
+    invoiceValue: number;
+    taxableValue: number;
+    totalGst: number;
+  }>;
+  topSuppliers: Array<{
+    gstin: string;
+    name: string;
+    invoiceCount: number;
+    invoiceValue: number;
+    taxableValue: number;
+    totalGst: number;
+  }>;
+  recentInvoices: B2bInvoice[];
+}
+
+export interface ImportBatch {
+  id: string;
+  fileName: string;
+  fileSizeBytes?: number;
+  uploadedAt: string;
+  uploadedBy?: string;
+  totalRows: number;
+  successfulRows: number;
+  failedRows: number;
+  duplicateRows: number;
+  importStatus: 'COMPLETED' | 'FAILED' | 'PARTIAL';
+  gstrPeriodSummary?: Record<string, number>;
+}
+
+export interface B2bImportPreview {
+  fileName: string;
+  worksheetDetected: string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  duplicateRows: number;
+  newSuppliersCount: number;
+  existingSuppliersCount: number;
+  missingColumns: string[];
+  periodDistribution: Array<{
+    periodKey: string;
+    displayPeriod: string;
+    financialYear: string;
+    newInvoices: number;
+    existingInvoices: number;
+    invalidRows: number;
+  }>;
+  sampleRows: any[];
+  allParsedRecords?: any[];
+  errors: Array<{
+    rowNumber: number;
+    invoiceNumber?: string;
+    supplierGstin?: string;
+    issue: string;
+  }>;
+  duplicates: Array<{
+    rowNumber: number;
+    invoiceNumber: string;
+    supplierGstin: string;
+    invoiceType: string;
+    existingRecord: Partial<B2bInvoice>;
+    uploadedRecord: Partial<B2bInvoice>;
+    differingFields: string[];
+  }>;
 }
 
 export interface AppSettings {
@@ -370,7 +529,7 @@ export interface DashboardMetrics {
   brcRealisedCount: number;
   brcOverdueCount: number;
   pendingReviewCount: number;
-  recentGstEntries?: GstEntry[];
+  gstSummary?: GstSummary;
 }
 
 export interface ImportValidationReport {

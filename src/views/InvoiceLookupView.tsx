@@ -19,6 +19,7 @@ import {
   CreditCard,
   Building2,
   Calendar,
+  History,
   Info
 } from 'lucide-react';
 import { api } from '../api/client.ts';
@@ -898,6 +899,7 @@ export const InvoiceLookupView: React.FC<InvoiceLookupViewProps> = ({
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       ) : (
