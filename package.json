@@ -7,10 +7,10 @@
     "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.ts",
+    "start": "tsx server.ts",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --import ./test/setup.ts --test --test-concurrency=1 test/*.test.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
@@ -25,6 +25,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tesseract.js": "^7.0.0",
+    "tsx": "^4.21.0",
     "vite": "^8.3.0",
     "xlsx": "^0.18.5"
   },
@@ -39,7 +40,6 @@
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.21.0",
     "typescript": "^7.0.2"
   }
 }

@@ -59,6 +59,7 @@ export const CompanyLedgerView: React.FC<CompanyLedgerViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [activeSubTab, setActiveSubTab] = useState<LedgerSubTab>('shipments');
   const [loading, setLoading] = useState(true);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -205,19 +206,35 @@ export const CompanyLedgerView: React.FC<CompanyLedgerViewProps> = ({
   const brcRealisedCount = companyShipments.filter((s) => s.brcRecord?.status === 'REALISED').length;
   const brcPendingCount = companyShipments.filter((s) => s.brcRecord?.status !== 'REALISED').length;
 
-  const handleExportCompanyCsv = () => {
+  const handleExportCompanyCsv = async () => {
+    setExportError(null);
     const sheetName = selectedConsignee?.name || 'Export Tracker';
-    window.open(api.getExportCsvUrl(sheetName, selectedFyId), '_blank');
+    try {
+      await api.downloadExportCsv(sheetName, selectedFyId);
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export CSV statement.');
+    }
   };
 
-  const handleExportFullExcel = () => {
-    window.open(api.getExportUrl(selectedFyId), '_blank');
+  const handleExportFullExcel = async () => {
+    setExportError(null);
+    try {
+      await api.downloadExportExcel(selectedFyId);
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export full workbook.');
+    }
   };
 
   const isViewer = userRole === 'VIEWER';
 
   return (
     <div className="space-y-6">
+      {exportError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
+        </div>
+      )}
       {/* 1. Executive Company Header & Account Dossier */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200/90 overflow-hidden">
         {/* Main Header Bar */}

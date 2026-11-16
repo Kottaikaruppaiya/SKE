@@ -23,6 +23,7 @@ import {
 import { api } from '../../api/client.ts';
 import type { B2bInvoice, Role, Supplier } from '../../types/index.ts';
 import { B2bAddInvoiceModal } from './B2bAddInvoiceModal.tsx';
+import { ConfirmationModal } from '../../components/ConfirmationModal.tsx';
 
 interface B2bInvoiceRegisterViewProps {
   userRole: Role;
@@ -52,6 +53,8 @@ export const B2bInvoiceRegisterView: React.FC<B2bInvoiceRegisterViewProps> = ({ 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<B2bInvoice | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<B2bInvoice | null>(null);
+  const [confirmDeleteInvoice, setConfirmDeleteInvoice] = useState<B2bInvoice | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const isViewer = userRole === 'VIEWER';
 
@@ -106,20 +109,28 @@ export const B2bInvoiceRegisterView: React.FC<B2bInvoiceRegisterViewProps> = ({ 
     });
   };
 
-  const handleDelete = async (invoice: B2bInvoice) => {
-    if (isViewer) return;
-    if (
-      !confirm(
-        `Are you sure you want to delete invoice "${invoice.invoiceNumber}" for supplier ${invoice.supplierName}?`
-      )
-    ) {
-      return;
-    }
+  const executeDelete = async () => {
+    if (isViewer || !confirmDeleteInvoice) return;
+    setActionError(null);
     try {
-      await api.deleteB2bInvoice(invoice.id);
+      await api.deleteB2bInvoice(confirmDeleteInvoice.id);
       loadData();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete invoice.');
+      setActionError(err.message || 'Failed to delete invoice.');
+      throw err;
+    }
+  };
+
+  const handleExportRegister = async () => {
+    setActionError(null);
+    try {
+      await api.downloadB2bExport({
+        periodKey,
+        financialYear,
+        supplierGstin,
+      });
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to export B2B register.');
     }
   };
 
@@ -127,6 +138,12 @@ export const B2bInvoiceRegisterView: React.FC<B2bInvoiceRegisterViewProps> = ({ 
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
+        </div>
+      )}
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
         <div>
@@ -162,18 +179,14 @@ export const B2bInvoiceRegisterView: React.FC<B2bInvoiceRegisterViewProps> = ({ 
             </button>
           )}
 
-          <a
-            href={api.getB2bExportUrl({
-              periodKey,
-              financialYear,
-              supplierGstin,
-            })}
-            download
+          <button
+            type="button"
+            onClick={handleExportRegister}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <Download className="w-3.5 h-3.5 text-emerald-600" />
             <span>Export Register (.xlsx)</span>
-          </a>
+          </button>
         </div>
       </div>
 
@@ -444,7 +457,7 @@ export const B2bInvoiceRegisterView: React.FC<B2bInvoiceRegisterViewProps> = ({ 
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => handleDelete(inv)}
+                              onClick={() => setConfirmDeleteInvoice(inv)}
                               title="Delete invoice"
                               className="p-1 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded cursor-pointer"
                             >
@@ -623,6 +636,17 @@ export const B2bInvoiceRegisterView: React.FC<B2bInvoiceRegisterViewProps> = ({ 
           defaultPeriodKey={periodKey !== 'ALL' ? periodKey : 'August 2026'}
         />
       )}
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmDeleteInvoice)}
+        title="Delete B2B Invoice"
+        itemName={confirmDeleteInvoice ? `${confirmDeleteInvoice.invoiceNumber} (${confirmDeleteInvoice.supplierName})` : ''}
+        itemType="B2B Inward Invoice"
+        message={`Are you sure you want to delete invoice "${confirmDeleteInvoice?.invoiceNumber || ''}" for supplier ${confirmDeleteInvoice?.supplierName || ''}?`}
+        confirmText="Delete Invoice"
+        onConfirm={executeDelete}
+        onCancel={() => setConfirmDeleteInvoice(null)}
+      />
     </div>
   );
 };

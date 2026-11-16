@@ -11,10 +11,8 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import * as XLSX from 'xlsx';
 import { db } from '../server/db.ts';
-import { authenticate, requireRole, generateToken, type AuthenticatedRequest } from '../server/auth.ts';
+import { authenticate, requireRole, generateToken, JWT_SECRET, type AuthenticatedRequest } from '../server/auth.ts';
 import { generateGstExcelExport } from '../server/excel.ts';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'ske_export_documents_tracker_secret_key_2026';
 
 // ==========================================
 // MODULE 1: AUDIT HISTORY REMOVAL TESTS

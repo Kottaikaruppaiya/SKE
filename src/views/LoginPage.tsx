@@ -26,12 +26,12 @@ import { api } from '../api/client.ts';
 import { User, Role } from '../types/index.ts';
 
 interface LoginPageProps {
-  onLoginSuccess: (user: User) => void;
+  onLoginSuccess: (user: User, mustChangePassword?: boolean) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const [email, setEmail] = useState('owner@skenterprises.com');
-  const [password, setPassword] = useState('Admin@123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -55,7 +55,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     try {
       const res = await api.login(email.trim(), password);
       if (res && res.user) {
-        onLoginSuccess(res.user);
+        onLoginSuccess(res.user, res.mustChangePassword);
       }
     } catch (err: any) {
       setError(err.message || 'Invalid email or password. Please verify your credentials.');

@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, Save, CheckCircle2, ShieldAlert, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { AppSettings, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface SettingsViewProps {
   userRole: Role;
@@ -17,6 +18,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeCom
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [statutoryBrcDays, setStatutoryBrcDays] = useState(270);
   const [defaultPortCode, setDefaultPortCode] = useState('INNSA1');
   const [companyName, setCompanyName] = useState('S K Enterprises');
@@ -24,6 +26,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeCom
   const [panNumber, setPanNumber] = useState('AAECS9812K');
 
   // Purge state
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
   const [purgeSuccess, setPurgeSuccess] = useState<string | null>(null);
   const [purgeError, setPurgeError] = useState<string | null>(null);
@@ -44,6 +47,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeCom
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError(null);
+    setSaved(false);
     try {
       await api.updateSettings({
         statutoryBrcDays,
@@ -55,20 +60,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeCom
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: any) {
-      alert(err.message || 'Error saving settings');
+      setSaveError(err.message || 'Error saving settings');
     }
   };
 
-  const handlePurgeAllRecords = async () => {
-    const confirmation = window.confirm(
-      'WARNING: DATA RESET CONFIRMATION\n\n' +
-      'Are you ABSOLUTELY sure you want to permanently delete all export shipments, inward payments, allocations, incentives, BRC records, and documents?\n\n' +
-      '• Core users, financial years, consignee & bank master registries will be preserved.\n' +
-      '• This action is IRREVERSIBLE.\n\n' +
-      'Click OK to proceed with purging all records.'
-    );
-    if (!confirmation) return;
-
+  const executePurgeAllRecords = async () => {
     setIsPurging(true);
     setPurgeError(null);
     setPurgeSuccess(null);
@@ -81,6 +77,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeCom
       if (onPurgeComplete) onPurgeComplete();
     } catch (err: any) {
       setPurgeError(err.message || 'Failed to purge operational records.');
+      throw err;
     } finally {
       setIsPurging(false);
     }
@@ -106,6 +103,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeCom
           <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg flex items-center space-x-2 font-medium">
             <CheckCircle2 size={16} className="text-emerald-600" />
             <span>Settings successfully committed to system database.</span>
+          </div>
+        )}
+
+        {saveError && (
+          <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg flex items-center justify-between space-x-2 font-medium">
+            <span>{saveError}</span>
+            <button type="button" onClick={() => setSaveError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
           </div>
         )}
 
@@ -243,7 +247,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeCom
             </span>
             <button
               type="button"
-              onClick={handlePurgeAllRecords}
+              onClick={() => setShowPurgeConfirm(true)}
               disabled={isPurging}
               className="h-9 px-4 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-lg font-bold text-xs shadow-xs transition-colors inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
@@ -253,6 +257,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ userRole, onPurgeCom
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={showPurgeConfirm}
+        title="Purge All Operational Records"
+        itemName="All Shipments, Payments, BRC, Incentives & Documents"
+        itemType="System Database"
+        message="Are you sure you want to permanently delete all export shipments, inward payments, allocations, incentives, BRC records, and documents? Core users, financial years, consignees, and bank masters will be preserved. This action is irreversible."
+        confirmText="Purge All Records"
+        isLoading={isPurging}
+        onConfirm={executePurgeAllRecords}
+        onCancel={() => setShowPurgeConfirm(false)}
+      />
     </div>
   );
 };

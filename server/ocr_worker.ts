@@ -4,20 +4,30 @@
  */
 
 import fs from 'fs';
+import { promises as fsp } from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { db } from './db.ts';
 import { extractDocumentData, mergeExtractedDocuments } from './extractor.ts';
 import type { OcrJob } from '../src/types/index.ts';
 
 // Configurable concurrency based on VPS CPU / RAM
 const MAX_CONCURRENT_JOBS = Math.max(1, parseInt(process.env.OCR_CONCURRENCY || '2', 10));
-const STAGING_DIR = path.resolve('storage/staging');
-if (!fs.existsSync(STAGING_DIR)) fs.mkdirSync(STAGING_DIR, { recursive: true });
+
+export function getOcrStagingDir(): string {
+  const storageRoot = process.env.STORAGE_ROOT ? path.resolve(process.env.STORAGE_ROOT) : path.resolve('storage');
+  const stagingDir = path.resolve(storageRoot, 'staging');
+  if (!fs.existsSync(stagingDir)) {
+    fs.mkdirSync(stagingDir, { recursive: true });
+  }
+  return stagingDir;
+}
 
 class OcrQueueWorker {
   public readonly workerId: string;
   private activeJobsCount = 0;
   private isProcessing = false;
+  private needsReschedule = false;
   private timer: NodeJS.Timeout | null = null;
   private stagingBufferMap = new Map<string, Buffer>();
 
@@ -53,60 +63,81 @@ class OcrQueueWorker {
   }
 
   public async tick() {
-    if (this.isProcessing) return;
+    if (this.isProcessing) {
+      this.needsReschedule = true;
+      return;
+    }
     this.isProcessing = true;
 
     try {
-      while (this.activeJobsCount < MAX_CONCURRENT_JOBS) {
-        // Database-level atomic job claiming with 60s lease
-        const nextJob = db.claimNextOcrJob(this.workerId, 60000);
-        if (!nextJob) break;
+      do {
+        this.needsReschedule = false;
+        while (this.activeJobsCount < MAX_CONCURRENT_JOBS) {
+          // Database-level atomic job claiming with 60s lease
+          const nextJob = db.claimNextOcrJob(this.workerId, 60000);
+          if (!nextJob) break;
 
-        this.activeJobsCount++;
-        this.processJob(nextJob).finally(() => {
-          this.activeJobsCount--;
-          this.triggerProcessing();
-        });
-      }
+          this.activeJobsCount++;
+          this.processJob(nextJob).finally(() => {
+            this.activeJobsCount--;
+            this.triggerProcessing();
+          });
+        }
+      } while (this.needsReschedule && this.activeJobsCount < MAX_CONCURRENT_JOBS);
     } finally {
       this.isProcessing = false;
+      if (this.needsReschedule && this.activeJobsCount < MAX_CONCURRENT_JOBS) {
+        this.needsReschedule = false;
+        this.triggerProcessing();
+      }
+    }
+  }
+
+  private async readIfExists(filePath: string): Promise<Buffer | null> {
+    try {
+      await fsp.access(filePath);
+      return await fsp.readFile(filePath);
+    } catch {
+      return null;
     }
   }
 
   public async processJob(job: OcrJob): Promise<void> {
     const startTime = Date.now();
     let heartbeatTimer: NodeJS.Timeout | null = null;
+    const stagingDir = getOcrStagingDir();
 
     try {
       // Active lease renewal heartbeat: extends lease every 20s during long OCR processing
       heartbeatTimer = setInterval(() => {
         const renewed = db.renewOcrJobLease(job.id, this.workerId, 60000);
         if (!renewed) {
-          console.warn(`[OCR Worker ${this.workerId}] Failed to renew lease for job ${job.id} (may have been reclaimed)`);
+          console.warn(JSON.stringify({
+            level: 'warn',
+            event: 'ocr_lease_renew_failed',
+            workerId: this.workerId,
+            jobId: job.id,
+          }));
         }
       }, 20000);
       if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') {
         heartbeatTimer.unref();
       }
 
-      // 1. Resolve file buffer
+      // 1. Resolve file buffer via async filesystem I/O
       let buffer: Buffer | null = this.stagingBufferMap.get(job.id) || null;
 
       if (!buffer && job.documentId) {
         const doc = db.getDocumentById(job.documentId);
         if (doc && doc.storedPath) {
           const absPath = path.isAbsolute(doc.storedPath) ? doc.storedPath : path.resolve(doc.storedPath);
-          if (fs.existsSync(absPath)) {
-            buffer = fs.readFileSync(absPath);
-          }
+          buffer = await this.readIfExists(absPath);
         }
       }
 
       if (!buffer) {
-        const stagingFile = path.resolve(STAGING_DIR, `${job.id}.bin`);
-        if (fs.existsSync(stagingFile)) {
-          buffer = fs.readFileSync(stagingFile);
-        }
+        const stagingFile = path.resolve(stagingDir, `${job.id}.bin`);
+        buffer = await this.readIfExists(stagingFile);
       }
 
       if (!buffer) {
@@ -117,13 +148,13 @@ class OcrQueueWorker {
       const extraction = await extractDocumentData(buffer, job.category, job.originalFilename);
       const executionTimeMs = Date.now() - startTime;
 
-      // Clean up in-memory buffer to keep VPS RAM low
+      // Clean up in-memory buffer and staging file asynchronously
       this.stagingBufferMap.delete(job.id);
-      const stagingFile = path.resolve(STAGING_DIR, `${job.id}.bin`);
-      if (fs.existsSync(stagingFile)) {
-        try {
-          fs.unlinkSync(stagingFile);
-        } catch {}
+      const stagingFile = path.resolve(stagingDir, `${job.id}.bin`);
+      try {
+        await fsp.unlink(stagingFile);
+      } catch {
+        // Ignore if staging file wasn't written to disk
       }
 
       // Create draft preview
@@ -140,18 +171,16 @@ class OcrQueueWorker {
         candidateDraft: mergedDraft,
       });
 
-      // Update linked document record if present
+      // Persist linked document record metadata if present
       if (job.documentId) {
-        const doc = db.getDocumentById(job.documentId);
-        if (doc) {
-          doc.extractedData = extraction;
-          doc.ocrApplied = extraction.ocrApplied;
-          doc.ocrConfidence = extraction.ocrConfidence;
-          doc.ocrTextPreview = extraction.ocrTextPreview;
-          doc.extractionMethod = extraction.extractionMethod;
-          doc.reviewStatus = extraction.reviewStatus;
-          doc.updatedAt = new Date().toISOString();
-        }
+        db.updateDocumentExtraction(job.documentId, {
+          extractedData: extraction,
+          ocrApplied: extraction.ocrApplied,
+          ocrConfidence: extraction.ocrConfidence,
+          ocrTextPreview: extraction.ocrTextPreview,
+          extractionMethod: extraction.extractionMethod,
+          reviewStatus: extraction.reviewStatus,
+        });
       }
     } catch (err: any) {
       const executionTimeMs = Date.now() - startTime;

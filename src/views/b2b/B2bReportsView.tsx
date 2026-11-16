@@ -27,6 +27,7 @@ export const B2bReportsView: React.FC<B2bReportsViewProps> = () => {
   const [activeReport, setActiveReport] = useState<string>('monthly_summary');
   const [financialYear, setFinancialYear] = useState('2026-27');
   const [loading, setLoading] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const [monthlySummaries, setMonthlySummaries] = useState<B2bMonthlySummary[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -112,8 +113,27 @@ export const B2bReportsView: React.FC<B2bReportsViewProps> = () => {
     },
   ];
 
+  const handleExportReport = async () => {
+    setExportError(null);
+    try {
+      await api.downloadB2bExport(
+        activeReport === 'monthly_summary'
+          ? { reportType: 'monthly_summary', financialYear }
+          : { financialYear }
+      );
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export report.');
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {exportError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
+        </div>
+      )}
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
         <div>
@@ -195,18 +215,14 @@ export const B2bReportsView: React.FC<B2bReportsViewProps> = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <a
-              href={
-                activeReport === 'monthly_summary'
-                  ? api.getB2bExportUrl({ reportType: 'monthly_summary', financialYear })
-                  : api.getB2bExportUrl({ financialYear })
-              }
-              download
+            <button
+              type="button"
+              onClick={handleExportReport}
               className="px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download Excel (.xlsx)</span>
-            </a>
+            </button>
           </div>
         </div>
 

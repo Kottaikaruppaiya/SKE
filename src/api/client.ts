@@ -88,13 +88,72 @@ export const api = {
   },
 
   // Auth
-  async login(email: string, password: string): Promise<{ token: string; user: User }> {
-    const res = await this.request<{ token: string; user: User }>('/auth/login', {
+  async login(email: string, password: string): Promise<{ token: string; user: User; mustChangePassword?: boolean }> {
+    const res = await this.request<{ token: string; user: User; mustChangePassword?: boolean }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
     this.setToken(res.token);
     return res;
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{
+    success: boolean;
+    message: string;
+    token: string;
+    user: User;
+  }> {
+    const res = await this.request<{
+      success: boolean;
+      message: string;
+      token: string;
+      user: User;
+    }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    if (res.token) {
+      this.setToken(res.token);
+    }
+    return res;
+  },
+
+  async getDownloadTicket(fileId?: string): Promise<string> {
+    const q = fileId ? `?fileId=${encodeURIComponent(fileId)}` : '';
+    const res = await this.request<{ ticket: string }>(`/auth/download-ticket${q}`);
+    return res.ticket;
+  },
+
+  async downloadAuthenticated(apiPathWithQuery: string, fallbackFilename: string): Promise<void> {
+    const token = this.getToken();
+    const headers = new Headers();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    const normalizedPath = apiPathWithQuery.startsWith('/api') ? apiPathWithQuery : `/api${apiPathWithQuery}`;
+    const response = await fetch(normalizedPath, { headers });
+    if (!response.ok) {
+      let errMsg = `Download failed (${response.status})`;
+      try {
+        const json = await response.json();
+        if (json?.error) errMsg = json.error;
+      } catch {}
+      throw new Error(errMsg);
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const filename = match?.[1] ? decodeURIComponent(match[1]) : fallbackFilename;
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
 
   async getCurrentUser(): Promise<User> {
@@ -278,9 +337,12 @@ export const api = {
     });
   },
 
-  getDocumentDownloadUrl(id: string): string {
-    const token = this.getToken();
-    return `/api/documents/${id}/download${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  getDocumentDownloadUrl(id: string, ticket?: string): string {
+    return `/api/documents/${id}/download${ticket ? `?ticket=${encodeURIComponent(ticket)}` : ''}`;
+  },
+
+  async downloadDocument(id: string, filename = 'document.pdf'): Promise<void> {
+    return this.downloadAuthenticated(`/documents/${id}/download`, filename);
   },
 
   async reviewDocument(id: string, reviewStatus: string): Promise<DocumentRecord> {
@@ -360,20 +422,32 @@ export const api = {
 
   // Excel & CSV
   getExportUrl(financialYearId?: string): string {
-    const token = this.getToken();
     const q = new URLSearchParams();
     if (financialYearId) q.append('financialYearId', financialYearId);
-    if (token) q.append('token', token);
-    return `/api/excel/export?${q.toString()}`;
+    const qs = q.toString();
+    return `/api/excel/export${qs ? `?${qs}` : ''}`;
+  },
+
+  async downloadExportExcel(financialYearId?: string): Promise<void> {
+    const q = new URLSearchParams();
+    if (financialYearId) q.append('financialYearId', financialYearId);
+    const qs = q.toString();
+    return this.downloadAuthenticated(`/excel/export${qs ? `?${qs}` : ''}`, 'SKE_Export_Tracker.xlsx');
   },
 
   getExportCsvUrl(sheetName: string, financialYearId?: string): string {
-    const token = this.getToken();
     const q = new URLSearchParams();
     q.append('sheet', sheetName);
     if (financialYearId) q.append('financialYearId', financialYearId);
-    if (token) q.append('token', token);
     return `/api/excel/export-csv?${q.toString()}`;
+  },
+
+  async downloadExportCsv(sheetName: string, financialYearId?: string): Promise<void> {
+    const q = new URLSearchParams();
+    q.append('sheet', sheetName);
+    if (financialYearId) q.append('financialYearId', financialYearId);
+    const safeName = sheetName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    return this.downloadAuthenticated(`/excel/export-csv?${q.toString()}`, `SKE_${safeName}.csv`);
   },
 
   async importExcel(formData: FormData): Promise<any> {
@@ -472,10 +546,25 @@ export const api = {
     if (params?.search) q.set('search', params.search);
     if (params?.startDate) q.set('startDate', params.startDate);
     if (params?.endDate) q.set('endDate', params.endDate);
-    const token = this.getToken();
-    if (token) q.set('token', token);
     const queryString = q.toString();
     return `/api/gst-entries/export${queryString ? `?${queryString}` : ''}`;
+  },
+
+  async downloadGstExport(params?: {
+    consigneeId?: string;
+    result?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<void> {
+    const q = new URLSearchParams();
+    if (params?.consigneeId && params.consigneeId !== 'ALL') q.set('consigneeId', params.consigneeId);
+    if (params?.result && params.result !== 'ALL') q.set('result', params.result);
+    if (params?.search) q.set('search', params.search);
+    if (params?.startDate) q.set('startDate', params.startDate);
+    if (params?.endDate) q.set('endDate', params.endDate);
+    const queryString = q.toString();
+    return this.downloadAuthenticated(`/gst-entries/export${queryString ? `?${queryString}` : ''}`, 'SKE_GST_Entries.xlsx');
   },
 
   async createGstEntry(data: {
@@ -677,6 +766,20 @@ export const api = {
     if (params?.financialYear && params.financialYear !== 'ALL') qs.set('financialYear', params.financialYear);
     if (params?.supplierGstin && params.supplierGstin !== 'ALL') qs.set('supplierGstin', params.supplierGstin);
     return `/api/b2b/export?${qs.toString()}`;
+  },
+
+  async downloadB2bExport(params?: {
+    reportType?: string;
+    periodKey?: string;
+    financialYear?: string;
+    supplierGstin?: string;
+  }): Promise<void> {
+    const qs = new URLSearchParams();
+    if (params?.reportType) qs.set('reportType', params.reportType);
+    if (params?.periodKey && params.periodKey !== 'ALL') qs.set('periodKey', params.periodKey);
+    if (params?.financialYear && params.financialYear !== 'ALL') qs.set('financialYear', params.financialYear);
+    if (params?.supplierGstin && params.supplierGstin !== 'ALL') qs.set('supplierGstin', params.supplierGstin);
+    return this.downloadAuthenticated(`/b2b/export?${qs.toString()}`, 'SKE_B2B_Export.xlsx');
   },
 
   // Users (Super Admin)

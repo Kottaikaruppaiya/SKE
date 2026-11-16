@@ -83,13 +83,39 @@ class DatabaseService {
     this.state = this.loadOrInitialize();
   }
 
-  private hashPassword(password: string): string {
-    const salt = 'ske_enterprise_salt_2026';
-    return crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+  private hashPassword(password: string, customSalt?: string): string {
+    const salt = customSalt || crypto.randomBytes(16).toString('hex');
+    const iterations = 100000;
+    const derivedKey = crypto.pbkdf2Sync(password, salt, iterations, 64, 'sha512').toString('hex');
+    return `${salt}$${iterations}$${derivedKey}`;
   }
 
   public verifyPassword(password: string, hash: string): boolean {
-    return this.hashPassword(password) === hash;
+    if (!password || !hash) return false;
+
+    // Check if new secure format: salt$iterations$derivedKey
+    if (hash.includes('$')) {
+      const parts = hash.split('$');
+      if (parts.length === 3) {
+        const [salt, iterStr, key] = parts;
+        const iterations = parseInt(iterStr, 10);
+        const derived = crypto.pbkdf2Sync(password, salt, iterations, 64, 'sha512').toString('hex');
+        const bufDerived = Buffer.from(derived, 'hex');
+        const bufKey = Buffer.from(key, 'hex');
+        if (bufDerived.length !== bufKey.length) return false;
+        return crypto.timingSafeEqual(bufDerived, bufKey);
+      }
+    }
+
+    // Legacy fallback: static salt 1000 iterations (for backward compatibility with existing seeds/tests)
+    const legacySalt = 'ske_enterprise_salt_2026';
+    const legacyDerived = crypto.pbkdf2Sync(password, legacySalt, 1000, 64, 'sha512').toString('hex');
+    const bufLegacy = Buffer.from(legacyDerived, 'hex');
+    const bufHash = Buffer.from(hash, 'hex');
+    if (bufLegacy.length === bufHash.length) {
+      return crypto.timingSafeEqual(bufLegacy, bufHash);
+    }
+    return false;
   }
 
   private loadOrInitialize(): DatabaseState {
@@ -138,14 +164,24 @@ class DatabaseService {
   }
 
   public reseedWithDefaults(actorUserId?: string) {
+    const existingUsers = [...(this.state.users || [])];
+    const existingSettings = { ...this.state.settings };
     this.state = this.getInitialSeedState();
+
+    // Preserve existing users and settings so administrative sessions are never invalidated on reseed
+    if (existingUsers.length > 0) {
+      this.state.users = existingUsers;
+    }
+    if (existingSettings && Object.keys(existingSettings).length > 0) {
+      this.state.settings = { ...this.state.settings, ...existingSettings };
+    }
 
     this.save();
     return { success: true, count: this.state.shipments.length };
   }
 
   private persist(state: DatabaseState) {
-    const tempFile = `${DB_FILE}.tmp.${Date.now()}`;
+    const tempFile = `${DB_FILE}.tmp.${Date.now()}.${crypto.randomBytes(4).toString('hex')}`;
     fs.writeFileSync(tempFile, JSON.stringify(state, null, 2), 'utf-8');
     fs.renameSync(tempFile, DB_FILE);
   }
@@ -156,6 +192,19 @@ class DatabaseService {
 
   public reloadFromDisk() {
     this.state = this.loadOrInitialize();
+  }
+
+  public async runInTransaction<T>(fn: () => Promise<T> | T): Promise<T> {
+    const snapshot = structuredClone(this.state);
+    try {
+      const result = await fn();
+      this.save();
+      return result;
+    } catch (err) {
+      this.state = snapshot;
+      this.save();
+      throw err;
+    }
   }
 
   // --- Users & Auth ---
@@ -202,14 +251,22 @@ class DatabaseService {
 
     if (updates.name) user.name = updates.name;
     if (updates.role) user.role = updates.role;
-    if (updates.isActive !== undefined) user.isActive = updates.isActive;
+    if (updates.isActive !== undefined) {
+      user.isActive = updates.isActive;
+      if (!updates.isActive) {
+        this.revokeAllUserSessions(id);
+      }
+    }
     if (updates.password) {
       (user as any).passwordHash = this.hashPassword(updates.password);
+      user.mustChangePassword = false;
+      this.revokeAllUserSessions(id);
     }
     user.updatedAt = new Date().toISOString();
 
     this.save();
-    return user;
+    const { passwordHash, ...clean } = user as any;
+    return clean;
   }
 
   public deleteUser(id: string, actorUserId: string): { success: boolean } {
@@ -226,9 +283,22 @@ class DatabaseService {
       throw new Error('Cannot delete the last remaining active Super Admin.');
     }
 
+    // Reassign documents and payment allocations to the active administrator performing the deletion
+    for (const doc of this.state.documents) {
+      if (doc.uploadedByUserId === id) {
+        doc.uploadedByUserId = actorUserId;
+      }
+    }
+    for (const alloc of this.state.allocations) {
+      if (alloc.allocatedByUserId === id) {
+        alloc.allocatedByUserId = actorUserId;
+      }
+    }
+
+    this.revokeAllUserSessions(id);
+
     const old = { ...user };
     this.state.users.splice(idx, 1);
-
 
     this.save();
     return { success: true };
@@ -533,6 +603,11 @@ class DatabaseService {
     }
 
     const hasFircEvidence = Boolean(data.initialFircPaymentId || data.initialFircDocumentUploaded);
+    if (!hasFircEvidence) {
+      throw new Error(
+        'Mandatory Rule Violation: A valid FIRC/payment document or IRM reference must be linked before saving a shipment.'
+      );
+    }
 
     const shipmentId = crypto.randomUUID();
     const newShipment: Shipment = {
@@ -559,81 +634,91 @@ class DatabaseService {
       updatedAt: new Date().toISOString(),
     };
 
-    this.state.shipments.push(newShipment);
+    const initialShipmentsLen = this.state.shipments.length;
+    const initialIncentivesLen = this.state.incentives.length;
+    const initialBrcLen = this.state.brcRecords.length;
 
-    // Create default incentive records
-    if (data.incentives) {
-      if (data.incentives.dbkClaimed !== undefined && data.incentives.dbkClaimed >= 0) {
-        this.state.incentives.push({
-          id: crypto.randomUUID(),
-          shipmentId,
-          type: 'DRAWBACK',
-          claimedAmount: Number(data.incentives.dbkClaimed),
-          status: 'PENDING',
-          receivedAmount: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
+    try {
+      this.state.shipments.push(newShipment);
+
+      // Create default incentive records
+      if (data.incentives) {
+        if (data.incentives.dbkClaimed !== undefined && data.incentives.dbkClaimed >= 0) {
+          this.state.incentives.push({
+            id: crypto.randomUUID(),
+            shipmentId,
+            type: 'DRAWBACK',
+            claimedAmount: Number(data.incentives.dbkClaimed),
+            status: 'PENDING',
+            receivedAmount: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        if (data.incentives.rodtepClaimed !== undefined && data.incentives.rodtepClaimed >= 0) {
+          this.state.incentives.push({
+            id: crypto.randomUUID(),
+            shipmentId,
+            type: 'RODTEP',
+            claimedAmount: Number(data.incentives.rodtepClaimed),
+            status: 'PENDING',
+            receivedAmount: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        if (data.incentives.rosctlClaimed !== undefined && data.incentives.rosctlClaimed >= 0) {
+          this.state.incentives.push({
+            id: crypto.randomUUID(),
+            shipmentId,
+            type: 'ROSCTL',
+            claimedAmount: Number(data.incentives.rosctlClaimed),
+            status: 'PENDING',
+            receivedAmount: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
       }
-      if (data.incentives.rodtepClaimed !== undefined && data.incentives.rodtepClaimed >= 0) {
-        this.state.incentives.push({
-          id: crypto.randomUUID(),
-          shipmentId,
-          type: 'RODTEP',
-          claimedAmount: Number(data.incentives.rodtepClaimed),
-          status: 'PENDING',
-          receivedAmount: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
+
+      // Create default BRC record
+      const statutoryDays = this.state.settings.statutoryBrcDays || 270;
+      const sbDate = new Date(data.shippingBillDate);
+      const defaultDeadline = new Date(sbDate.getTime() + statutoryDays * 86400000).toISOString().split('T')[0];
+
+      this.state.brcRecords.push({
+        id: crypto.randomUUID(),
+        shipmentId,
+        uploadMode: data.brc?.uploadMode || 'SINGLE',
+        statutoryDeadline: data.brc?.statutoryDeadline || defaultDeadline,
+        status: 'PENDING',
+        remarks: data.brc?.remarks,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Handle initial FIRC payment allocation if provided (transactional)
+      if (data.initialFircPaymentId) {
+        const allocAmount = data.initialFircAllocationAmount || data.invoiceValueUsd;
+        this.allocatePayment(
+          {
+            paymentId: data.initialFircPaymentId,
+            shipmentId,
+            allocatedAmountUsd: allocAmount,
+            notes: 'Initial allocation on shipment creation',
+          },
+          actorUserId
+        );
       }
-      if (data.incentives.rosctlClaimed !== undefined && data.incentives.rosctlClaimed >= 0) {
-        this.state.incentives.push({
-          id: crypto.randomUUID(),
-          shipmentId,
-          type: 'ROSCTL',
-          claimedAmount: Number(data.incentives.rosctlClaimed),
-          status: 'PENDING',
-          receivedAmount: 0,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-      }
+
+      this.save();
+      return this.hydrateShipment(newShipment);
+    } catch (err) {
+      this.state.shipments.splice(initialShipmentsLen);
+      this.state.incentives.splice(initialIncentivesLen);
+      this.state.brcRecords.splice(initialBrcLen);
+      throw err;
     }
-
-    // Create default BRC record
-    const statutoryDays = this.state.settings.statutoryBrcDays || 270;
-    const sbDate = new Date(data.shippingBillDate);
-    const defaultDeadline = new Date(sbDate.getTime() + statutoryDays * 86400000).toISOString().split('T')[0];
-
-    this.state.brcRecords.push({
-      id: crypto.randomUUID(),
-      shipmentId,
-      uploadMode: data.brc?.uploadMode || 'SINGLE',
-      statutoryDeadline: data.brc?.statutoryDeadline || defaultDeadline,
-      status: 'PENDING',
-      remarks: data.brc?.remarks,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
-    // Handle initial FIRC payment allocation if provided
-    if (data.initialFircPaymentId) {
-      const allocAmount = data.initialFircAllocationAmount || data.invoiceValueUsd;
-      this.allocatePayment(
-        {
-          paymentId: data.initialFircPaymentId,
-          shipmentId,
-          allocatedAmountUsd: allocAmount,
-          notes: 'Initial allocation on shipment creation',
-        },
-        actorUserId
-      );
-    }
-
-
-    this.save();
-    return this.hydrateShipment(newShipment);
   }
 
   public updateShipment(id: string, updates: Partial<Shipment>, actorUserId: string): Shipment {
@@ -807,9 +892,9 @@ class DatabaseService {
 
     shipment.isArchived = true;
     shipment.archivedAt = new Date().toISOString();
+    shipment.archivedBy = actorUserId;
     shipment.archivedReason = reason?.trim() || 'Archived by administrator';
     shipment.updatedAt = new Date().toISOString();
-
 
     this.save();
     return this.hydrateShipment(shipment);
@@ -824,9 +909,9 @@ class DatabaseService {
 
     shipment.isArchived = false;
     shipment.archivedAt = undefined;
+    shipment.archivedBy = undefined;
     shipment.archivedReason = undefined;
     shipment.updatedAt = new Date().toISOString();
-
 
     this.save();
     return this.hydrateShipment(shipment);
@@ -1424,6 +1509,17 @@ class DatabaseService {
     return doc;
   }
 
+  public updateDocumentExtraction(
+    id: string,
+    updates: Partial<Pick<DocumentRecord, 'extractedData' | 'ocrApplied' | 'ocrConfidence' | 'ocrTextPreview' | 'extractionMethod' | 'reviewStatus'>>
+  ): DocumentRecord | undefined {
+    const doc = this.state.documents.find((d) => d.id === id);
+    if (!doc) return undefined;
+    Object.assign(doc, updates, { updatedAt: new Date().toISOString() });
+    this.save();
+    return doc;
+  }
+
   public deleteDocument(id: string, actorUserId: string): { success: boolean } {
     const idx = this.state.documents.findIndex((d) => d.id === id);
     if (idx === -1) throw new Error('Document not found');
@@ -1490,7 +1586,7 @@ class DatabaseService {
       originalFilename: data.originalFilename,
       fileSizeBytes: data.fileSizeBytes,
       category: data.category,
-      financialYearId: data.financialYearId || 'fy-2026-27',
+      financialYearId: data.financialYearId || this.getCurrentFinancialYear().id,
       status: 'PENDING',
       attempts: 0,
       maxAttempts: 3,
@@ -1519,8 +1615,11 @@ class DatabaseService {
 
     job.status = 'PENDING';
     job.error = undefined;
+    job.attempts = 0;
+    job.lockedByWorkerId = undefined;
+    job.lockedAt = undefined;
+    job.leaseExpiresAt = undefined;
     job.updatedAt = new Date().toISOString();
-
 
     this.save();
     return job;
@@ -1686,7 +1785,19 @@ class DatabaseService {
 
   public revokeAllUserSessions(userId: string): void {
     if (!this.state.revokedTokens) this.state.revokedTokens = [];
-    // Mark a user-level revocation timestamp in audit log and invalidate
+    const now = new Date().toISOString();
+    const user = this.state.users.find((u) => u.id === userId);
+    if (user) {
+      user.tokenRevokedBefore = now;
+      user.updatedAt = now;
+    }
+    this.state.revokedTokens.push({
+      token: `user-revocation-${userId}-${Date.now()}`,
+      userId,
+      revokedAt: now,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    this.save();
   }
 
   public approveOcrJob(
@@ -1712,7 +1823,7 @@ class DatabaseService {
         throw new Error('Invoice Number is required to commit approved shipment data.');
       }
 
-      const fyId = job.financialYearId || 'fy-2026-27';
+      const fyId = job.financialYearId || this.getCurrentFinancialYear().id;
       const normalizedKey = normalizeInvoiceKey(invoiceNumber);
       const existing = this.state.shipments.find(
         (s) => s.financialYearId === fyId && s.normalizedInvoiceKey === normalizedKey
@@ -2966,6 +3077,8 @@ class DatabaseService {
 
     let totalInvoiceValueUsd = 0;
     let totalRealisedUsd = 0;
+    let totalOutstandingUsd = 0;
+    let totalExcessReceivedUsd = 0;
     let unpaidCount = 0;
     let partPaidCount = 0;
     let fullyPaidCount = 0;
@@ -2973,8 +3086,14 @@ class DatabaseService {
     let pendingReviewCount = 0;
 
     for (const s of shipments) {
-      totalInvoiceValueUsd += s.invoiceValueUsd;
-      totalRealisedUsd += s.totalPaidUsd || 0;
+      const invUsd = Number(s.invoiceValueUsd || 0);
+      const paidUsd = Number(s.totalPaidUsd || 0);
+      totalInvoiceValueUsd += invUsd;
+      totalRealisedUsd += paidUsd;
+      totalOutstandingUsd += Math.max(0, invUsd - paidUsd);
+      if (paidUsd > invUsd) {
+        totalExcessReceivedUsd += paidUsd - invUsd;
+      }
 
       if (s.paymentStatus === 'UNPAID') unpaidCount++;
       else if (s.paymentStatus === 'PART_PAID') partPaidCount++;
@@ -3009,11 +3128,18 @@ class DatabaseService {
       else brcPendingCount++;
     }
 
+    // Archive calculations
+    const archivedShipments = this.state.shipments.filter(
+      (s) => s.isArchived && (!financialYearId || financialYearId === 'ALL' || s.financialYearId === financialYearId)
+    );
+    const archivedCount = archivedShipments.length;
+
     return {
       totalShipments: shipments.length,
       totalInvoiceValueUsd: Math.round(totalInvoiceValueUsd * 100) / 100,
       totalRealisedUsd: Math.round(totalRealisedUsd * 100) / 100,
-      totalOutstandingUsd: Math.round(Math.max(0, totalInvoiceValueUsd - totalRealisedUsd) * 100) / 100,
+      totalOutstandingUsd: Math.round(totalOutstandingUsd * 100) / 100,
+      totalExcessReceivedUsd: Math.round(totalExcessReceivedUsd * 100) / 100,
       unpaidCount,
       partPaidCount,
       fullyPaidCount,
@@ -3025,6 +3151,7 @@ class DatabaseService {
       brcRealisedCount,
       brcOverdueCount,
       pendingReviewCount,
+      archivedCount,
       gstSummary: this.getGstSummary(),
     };
   }
@@ -3064,6 +3191,7 @@ class DatabaseService {
           name: 'Suresh Kumar (Owner)',
           role: 'SUPER_ADMIN',
           isActive: true,
+          mustChangePassword: true,
           passwordHash: this.hashPassword('Admin@123'),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -3074,6 +3202,7 @@ class DatabaseService {
           name: 'Pooja Verma (Sr. Accountant)',
           role: 'ADMIN',
           isActive: true,
+          mustChangePassword: true,
           passwordHash: this.hashPassword('Admin@123'),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -3084,6 +3213,7 @@ class DatabaseService {
           name: 'Ramesh Mehta (Statutory Auditor)',
           role: 'VIEWER',
           isActive: true,
+          mustChangePassword: true,
           passwordHash: this.hashPassword('Admin@123'),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

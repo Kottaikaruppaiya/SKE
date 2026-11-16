@@ -10,11 +10,9 @@ import path from 'path';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { db } from '../server/db.ts';
-import { authenticate, generateToken, type AuthenticatedRequest } from '../server/auth.ts';
+import { authenticate, generateToken, JWT_SECRET, type AuthenticatedRequest } from '../server/auth.ts';
 import { ocrWorker, OcrQueueWorker } from '../server/ocr_worker.ts';
 import { getStorageDir } from '../server/routes.ts';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'ske_export_documents_tracker_secret_key_2026';
 
 test('Security Verification: Server-side token revocation persists and prunes expired tokens', () => {
   const testUser = db.getUsers()[0];

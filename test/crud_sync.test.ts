@@ -59,6 +59,25 @@ test('Dependency Protection: deleteShipment blocks deletion of shipment with act
 test('Archival & Restoration Workflow: Preserves financial dependencies safely', async () => {
   // Create a temporary shipment to test clean delete vs archive
   const consignees = await db.getConsignees();
+  await assert.rejects(
+    async () => {
+      await db.createShipment({
+        financialYearId: 'fy-2026-27',
+        invoiceNumber: 'SKE/26-27/NO-FIRC-REJECT',
+        invoiceDate: '2026-11-01',
+        consigneeId: consignees[0].id,
+        portCode: 'INNSA1',
+        packageCount: 10,
+        invoiceValueUsd: 5000,
+        shippingBillNumber: 'SB-TEST-998',
+        shippingBillDate: '2026-11-02',
+        sbExchangeRate: 84.5,
+        fobValueInr: 422500,
+      }, 'user-admin-1');
+    },
+    /Mandatory Rule Violation.*FIRC/i
+  );
+
   const tempShipment = await db.createShipment({
     financialYearId: 'fy-2026-27',
     invoiceNumber: 'SKE/26-27/TEST-ARCHIVE',
@@ -71,6 +90,7 @@ test('Archival & Restoration Workflow: Preserves financial dependencies safely',
     shippingBillDate: '2026-11-02',
     sbExchangeRate: 84.5,
     fobValueInr: 422500,
+    initialFircDocumentUploaded: true,
   }, 'user-admin-1');
 
   // Archive shipment

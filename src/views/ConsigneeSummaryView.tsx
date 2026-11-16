@@ -30,6 +30,16 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
   const [scopeFilter, setScopeFilter] = useState<'CURRENT_FY' | 'ALL_YEARS'>('CURRENT_FY');
   const [activityFilter, setActivityFilter] = useState<'ALL' | 'ACTIVE_WITH_INVOICES'>('ALL');
   const [ledgerScope, setLedgerScope] = useState<'AUTO' | 'ALL_YEARS'>('AUTO');
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportCsv = async () => {
+    setExportError(null);
+    try {
+      await api.downloadExportCsv('Consignee Summary', selectedFyId);
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export Consignee Summary CSV.');
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -220,14 +230,14 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
 
         {/* Action Controls & Scope Switcher */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <a
-            href={api.getExportCsvUrl('Consignee Summary', selectedFyId)}
-            download="Consignee_Summary_FY26-27.csv"
-            className="h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-colors"
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
           >
             <Download size={13} className="text-blue-600" />
             <span>Export CSV</span>
-          </a>
+          </button>
 
           <div className="relative w-full sm:w-64">
             <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
@@ -287,6 +297,13 @@ export const ConsigneeSummaryView: React.FC<ConsigneeSummaryViewProps> = ({
           </div>
         </div>
       </div>
+
+      {exportError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium flex items-center justify-between">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="font-bold px-2">×</button>
+        </div>
+      )}
 
       {/* Main Aggregation Table: Full 16 Canonical Columns */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">

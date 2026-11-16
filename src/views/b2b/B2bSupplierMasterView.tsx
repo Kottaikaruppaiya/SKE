@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../api/client.ts';
 import type { Supplier, Role, B2bInvoice } from '../../types/index.ts';
+import { ConfirmationModal } from '../../components/ConfirmationModal.tsx';
 
 interface B2bSupplierMasterViewProps {
   userRole: Role;
@@ -49,6 +50,8 @@ export const B2bSupplierMasterView: React.FC<B2bSupplierMasterViewProps> = ({ us
     state: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmDeleteSupplier, setConfirmDeleteSupplier] = useState<Supplier | null>(null);
   const [saving, setSaving] = useState(false);
 
   const isViewer = userRole === 'VIEWER';
@@ -102,21 +105,25 @@ export const B2bSupplierMasterView: React.FC<B2bSupplierMasterViewProps> = ({ us
     }
   };
 
-  const handleDelete = async (sup: Supplier) => {
+  const handleDelete = (sup: Supplier) => {
     if (isViewer) return;
+    setActionError(null);
     if (sup.invoiceCount && sup.invoiceCount > 0) {
-      alert(`Cannot delete supplier "${sup.legalName}" because it has ${sup.invoiceCount} linked B2B invoices.`);
+      setActionError(`Cannot delete supplier "${sup.legalName}" because it has ${sup.invoiceCount} linked B2B invoices.`);
       return;
     }
-    if (!confirm(`Are you sure you want to delete supplier "${sup.legalName}" (${sup.gstin})?`)) {
-      return;
-    }
+    setConfirmDeleteSupplier(sup);
+  };
 
+  const executeDeleteSupplier = async () => {
+    if (isViewer || !confirmDeleteSupplier) return;
+    setActionError(null);
     try {
-      await api.deleteB2bSupplier(sup.id);
+      await api.deleteB2bSupplier(confirmDeleteSupplier.id);
       loadSuppliers();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete supplier.');
+      setActionError(err.message || 'Failed to delete supplier.');
+      throw err;
     }
   };
 
@@ -170,6 +177,12 @@ export const B2bSupplierMasterView: React.FC<B2bSupplierMasterViewProps> = ({ us
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
+        </div>
+      )}
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
         <div>
@@ -528,6 +541,17 @@ export const B2bSupplierMasterView: React.FC<B2bSupplierMasterViewProps> = ({ us
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmDeleteSupplier)}
+        title="Delete B2B Supplier"
+        itemName={confirmDeleteSupplier ? `${confirmDeleteSupplier.legalName} (${confirmDeleteSupplier.gstin})` : ''}
+        itemType="B2B Supplier"
+        message={`Are you sure you want to delete supplier "${confirmDeleteSupplier?.legalName || ''}" (${confirmDeleteSupplier?.gstin || ''})?`}
+        confirmText="Delete Supplier"
+        onConfirm={executeDeleteSupplier}
+        onCancel={() => setConfirmDeleteSupplier(null)}
+      />
     </div>
   );
 };

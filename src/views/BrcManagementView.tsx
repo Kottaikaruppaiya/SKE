@@ -30,6 +30,7 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [editingBrcShipment, setEditingBrcShipment] = useState<Shipment | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   // Edit BRC Form State
   const [brcNumber, setBrcNumber] = useState('');
@@ -126,6 +127,15 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
 
   const isViewer = userRole === 'VIEWER';
 
+  const handleDownloadBrcDoc = async (docId: string, filename: string) => {
+    setDownloadError(null);
+    try {
+      await api.downloadDocument(docId, filename);
+    } catch (err: any) {
+      setDownloadError(err.message || 'Failed to download BRC document.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -139,6 +149,13 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
           </p>
         </div>
       </div>
+
+      {downloadError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium flex items-center justify-between">
+          <span>{downloadError}</span>
+          <button type="button" onClick={() => setDownloadError(null)} className="font-bold px-2">×</button>
+        </div>
+      )}
 
       {/* BRC Table */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
@@ -244,17 +261,19 @@ export const BrcManagementView: React.FC<BrcManagementViewProps> = ({
                               )}
                             </>
                           )}
-                          {s.documents?.find((d) => d.category.startsWith('BRC')) && (
-                            <a
-                              href={api.getDocumentDownloadUrl(s.documents.find((d) => d.category.startsWith('BRC'))!.id)}
-                              target="_blank"
-                              rel="noreferrer"
-                              title="Download BRC Document"
-                              className="w-7 h-7 flex items-center justify-center text-teal-600 hover:text-teal-800 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer shrink-0"
-                            >
-                              <Download size={14} />
-                            </a>
-                          )}
+                          {(() => {
+                            const brcDoc = s.documents?.find((d) => d.category.startsWith('BRC'));
+                            return brcDoc ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDownloadBrcDoc(brcDoc.id, brcDoc.originalFilename || `BRC_${s.invoiceNumber}.pdf`)}
+                                title="Download BRC Document"
+                                className="w-7 h-7 flex items-center justify-center text-teal-600 hover:text-teal-800 hover:bg-teal-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                              >
+                                <Download size={14} />
+                              </button>
+                            ) : null;
+                          })()}
                           <button
                             onClick={() => onSelectShipment(s.id)}
                             title="View Shipment Details"

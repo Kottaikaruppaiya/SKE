@@ -204,7 +204,7 @@
       "reviewStatus": "CONFIRMED",
       "remarks": "Export under LUT without payment of IGST. Colombo Sri Lanka. DA 90 Days. Realisation received via HDFC Inward Remittance.",
       "createdAt": "2026-04-06T10:00:00.000Z",
-      "updatedAt": "2026-11-04T07:40:52.925Z"
+      "updatedAt": "2026-11-16T05:00:07.030Z"
     },
     {
       "id": "s-ske-26-27-021",
@@ -513,6 +513,44 @@
       "reviewStatus": "CONFIRMED",
       "createdAt": "2026-11-04T07:40:55.870Z",
       "updatedAt": "2026-11-04T07:40:55.871Z"
+    },
+    {
+      "id": "68b936d3-d28b-426c-acc4-7ecf6aedf9e8",
+      "financialYearId": "fy-2026-27",
+      "invoiceNumber": "SKE-TEST-OCR-6530",
+      "normalizedInvoiceKey": "SKE-TEST-OCR-6530",
+      "invoiceDate": "2026-05-15",
+      "consigneeId": "9449af65-cef5-4d83-9ad6-33c119bcadaa",
+      "portCode": "INMAA1",
+      "packageCount": 0,
+      "invoiceValueUsd": 18500,
+      "shippingBillNumber": "PENDING",
+      "shippingBillDate": "2026-11-12",
+      "sbExchangeRate": 92.1,
+      "fobValueInr": 1703850,
+      "paymentStatus": "FULLY_PAID",
+      "reviewStatus": "CONFIRMED",
+      "createdAt": "2026-11-12T11:25:46.702Z",
+      "updatedAt": "2026-11-12T11:25:46.702Z"
+    },
+    {
+      "id": "33d9f529-9ab1-4195-915c-7fdf20b18158",
+      "financialYearId": "fy-2026-27",
+      "invoiceNumber": "SKE-TEST-OCR-0862",
+      "normalizedInvoiceKey": "SKE-TEST-OCR-862",
+      "invoiceDate": "2026-05-15",
+      "consigneeId": "9449af65-cef5-4d83-9ad6-33c119bcadaa",
+      "portCode": "INMAA1",
+      "packageCount": 0,
+      "invoiceValueUsd": 18500,
+      "shippingBillNumber": "PENDING",
+      "shippingBillDate": "2026-11-16",
+      "sbExchangeRate": 92.1,
+      "fobValueInr": 1703850,
+      "paymentStatus": "FULLY_PAID",
+      "reviewStatus": "CONFIRMED",
+      "createdAt": "2026-11-16T05:00:10.988Z",
+      "updatedAt": "2026-11-16T05:00:10.988Z"
     }
   ],
   "invoiceItems": [
@@ -874,6 +912,30 @@
       "purposeCode": "P0102",
       "createdAt": "2026-11-04T07:40:55.863Z",
       "updatedAt": "2026-11-04T07:40:55.863Z"
+    },
+    {
+      "id": "5f611700-31f2-4fc9-9a4a-83cc34a4a656",
+      "irmNumber": "TEST-IRM-1794482746696",
+      "currency": "USD",
+      "verifiedAmount": 25000,
+      "valueDate": "2026-05-15",
+      "creditDate": "2026-05-15",
+      "bankId": "b-dbs-india",
+      "purposeCode": "P0102",
+      "createdAt": "2026-11-12T11:25:46.696Z",
+      "updatedAt": "2026-11-12T11:25:46.696Z"
+    },
+    {
+      "id": "7e5313aa-5c00-45a7-a90c-839ec570e695",
+      "irmNumber": "TEST-IRM-1794805210982",
+      "currency": "USD",
+      "verifiedAmount": 25000,
+      "valueDate": "2026-05-15",
+      "creditDate": "2026-05-15",
+      "bankId": "b-dbs-india",
+      "purposeCode": "P0102",
+      "createdAt": "2026-11-16T05:00:10.982Z",
+      "updatedAt": "2026-11-16T05:00:10.982Z"
     }
   ],
   "allocations": [
@@ -1044,6 +1106,26 @@
       "allocatedAmountUsd": 18500,
       "notes": "Initial allocation on shipment creation",
       "allocatedAt": "2026-11-04T07:40:55.871Z",
+      "allocatedByUserId": "user-admin",
+      "allocatedByName": "Admin"
+    },
+    {
+      "id": "521d11b7-683e-4bcc-9fc3-db086dce34ed",
+      "paymentId": "5f611700-31f2-4fc9-9a4a-83cc34a4a656",
+      "shipmentId": "68b936d3-d28b-426c-acc4-7ecf6aedf9e8",
+      "allocatedAmountUsd": 18500,
+      "notes": "Initial allocation on shipment creation",
+      "allocatedAt": "2026-11-12T11:25:46.702Z",
+      "allocatedByUserId": "user-admin",
+      "allocatedByName": "Admin"
+    },
+    {
+      "id": "c524380d-f110-46bc-afc5-7488095211a8",
+      "paymentId": "7e5313aa-5c00-45a7-a90c-839ec570e695",
+      "shipmentId": "33d9f529-9ab1-4195-915c-7fdf20b18158",
+      "allocatedAmountUsd": 18500,
+      "notes": "Initial allocation on shipment creation",
+      "allocatedAt": "2026-11-16T05:00:10.988Z",
       "allocatedByUserId": "user-admin",
       "allocatedByName": "Admin"
     }
@@ -1568,6 +1650,66 @@
       "receivedAmount": 0,
       "createdAt": "2026-11-04T07:40:55.870Z",
       "updatedAt": "2026-11-04T07:40:55.870Z"
+    },
+    {
+      "id": "23874681-a5cf-4628-a0d2-30f4b36069df",
+      "shipmentId": "68b936d3-d28b-426c-acc4-7ecf6aedf9e8",
+      "type": "DRAWBACK",
+      "claimedAmount": 0,
+      "status": "PENDING",
+      "receivedAmount": 0,
+      "createdAt": "2026-11-12T11:25:46.702Z",
+      "updatedAt": "2026-11-12T11:25:46.702Z"
+    },
+    {
+      "id": "29c5c63a-66e4-4e67-9db1-016c872a717b",
+      "shipmentId": "68b936d3-d28b-426c-acc4-7ecf6aedf9e8",
+      "type": "RODTEP",
+      "claimedAmount": 0,
+      "status": "PENDING",
+      "receivedAmount": 0,
+      "createdAt": "2026-11-12T11:25:46.702Z",
+      "updatedAt": "2026-11-12T11:25:46.702Z"
+    },
+    {
+      "id": "36206e55-e563-42c7-abb3-b65cd28c3e6b",
+      "shipmentId": "68b936d3-d28b-426c-acc4-7ecf6aedf9e8",
+      "type": "ROSCTL",
+      "claimedAmount": 0,
+      "status": "PENDING",
+      "receivedAmount": 0,
+      "createdAt": "2026-11-12T11:25:46.702Z",
+      "updatedAt": "2026-11-12T11:25:46.702Z"
+    },
+    {
+      "id": "1af3488c-8a71-46bd-a8ad-f3fe700e932c",
+      "shipmentId": "33d9f529-9ab1-4195-915c-7fdf20b18158",
+      "type": "DRAWBACK",
+      "claimedAmount": 0,
+      "status": "PENDING",
+      "receivedAmount": 0,
+      "createdAt": "2026-11-16T05:00:10.988Z",
+      "updatedAt": "2026-11-16T05:00:10.988Z"
+    },
+    {
+      "id": "f1e4499a-906a-4330-8863-920d37ee7657",
+      "shipmentId": "33d9f529-9ab1-4195-915c-7fdf20b18158",
+      "type": "RODTEP",
+      "claimedAmount": 0,
+      "status": "PENDING",
+      "receivedAmount": 0,
+      "createdAt": "2026-11-16T05:00:10.988Z",
+      "updatedAt": "2026-11-16T05:00:10.988Z"
+    },
+    {
+      "id": "cbe2eed9-1932-4288-802a-d07adb5b7e0e",
+      "shipmentId": "33d9f529-9ab1-4195-915c-7fdf20b18158",
+      "type": "ROSCTL",
+      "claimedAmount": 0,
+      "status": "PENDING",
+      "receivedAmount": 0,
+      "createdAt": "2026-11-16T05:00:10.988Z",
+      "updatedAt": "2026-11-16T05:00:10.988Z"
     }
   ],
   "brcRecords": [
@@ -1735,6 +1877,24 @@
       "status": "PENDING",
       "createdAt": "2026-11-04T07:40:55.871Z",
       "updatedAt": "2026-11-04T07:40:55.871Z"
+    },
+    {
+      "id": "89c97192-2b28-411b-b7a5-448c0c176266",
+      "shipmentId": "68b936d3-d28b-426c-acc4-7ecf6aedf9e8",
+      "uploadMode": "SINGLE",
+      "statutoryDeadline": "2027-08-09",
+      "status": "PENDING",
+      "createdAt": "2026-11-12T11:25:46.702Z",
+      "updatedAt": "2026-11-12T11:25:46.702Z"
+    },
+    {
+      "id": "23113c8a-3d07-4b8c-8f6f-2d09ebae8238",
+      "shipmentId": "33d9f529-9ab1-4195-915c-7fdf20b18158",
+      "uploadMode": "SINGLE",
+      "statutoryDeadline": "2027-08-13",
+      "status": "PENDING",
+      "createdAt": "2026-11-16T05:00:10.988Z",
+      "updatedAt": "2026-11-16T05:00:10.988Z"
     }
   ],
   "settings": {
@@ -1747,6 +1907,1447 @@
     "panNumber": "AAECS9812K"
   },
   "ocrJobs": [
+    {
+      "id": "399fad9f-85ce-4e32-97d0-7c32abc674a6",
+      "originalFilename": "recovery_test_1794805211000.pdf",
+      "fileSizeBytes": 403592,
+      "category": "COMMERCIAL_INVOICE",
+      "financialYearId": "fy-2026-27",
+      "status": "COMPLETED",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-16T05:00:11.000Z",
+      "updatedAt": "2026-11-16T05:00:11.115Z",
+      "executionTimeMs": 107,
+      "ocrApplied": false,
+      "extractionMethod": "PDF_TEXT",
+      "candidateFields": {
+        "invoiceNumber": {
+          "value": "SKE/26-27/020",
+          "confidence": "HIGH",
+          "snippet": "Invoice No & Date:\nSKE/26-27/020",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Invoice No & Date:\nSKE/26-27/020"
+        },
+        "invoiceDate": {
+          "value": "2026-04-06",
+          "confidence": "HIGH",
+          "snippet": "Dt: 06-04-2026",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Dt: 06-04-2026"
+        },
+        "consigneeName": {
+          "value": "S K Global Ventures Pvt Ltd",
+          "confidence": "HIGH",
+          "snippet": "M/s. S K Global Ventures Pvt Ltd",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "M/s. S K Global Ventures Pvt Ltd"
+        },
+        "buyerName": {
+          "value": "International Remittance Pte Ltd",
+          "confidence": "HIGH",
+          "snippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd"
+        },
+        "invoiceValueUsd": {
+          "value": 24025.65,
+          "confidence": "HIGH",
+          "snippet": "24,025.65\t$\nBeneficiary",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "24,025.65\t$\nBeneficiary"
+        },
+        "currency": {
+          "value": "USD",
+          "confidence": "HIGH",
+          "snippet": "USD",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "USD"
+        },
+        "packageCount": {
+          "value": 88,
+          "confidence": "HIGH",
+          "snippet": "88 Packages",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "88 Packages"
+        },
+        "portCode": {
+          "value": "Port of Discharge Final Destination\nMarks",
+          "confidence": "HIGH",
+          "snippet": "Port of Loading\nPort of Discharge Final Destination\nMarks ",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Port of Loading\nPort of Discharge Final Destination\nMarks "
+        },
+        "sbExchangeRate": {
+          "value": 92.55,
+          "confidence": "HIGH",
+          "snippet": "Ex Rate 92.55",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Ex Rate 92.55"
+        },
+        "bankName": {
+          "value": "HDFC Bank Ltd",
+          "confidence": "HIGH",
+          "snippet": "Bank Name HDFC Bank Ltd",
+          "sourceDoc": "recovery_test_1794805211000.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Bank Name HDFC Bank Ltd"
+        }
+      },
+      "candidateDraft": {
+        "extractedFields": {
+          "invoiceNumber": {
+            "value": "SKE/26-27/020",
+            "confidence": "HIGH",
+            "snippet": "Invoice No & Date:\nSKE/26-27/020",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Invoice No & Date:\nSKE/26-27/020"
+          },
+          "invoiceDate": {
+            "value": "2026-04-06",
+            "confidence": "HIGH",
+            "snippet": "Dt: 06-04-2026",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Dt: 06-04-2026"
+          },
+          "consigneeName": {
+            "value": "S K Global Ventures Pvt Ltd",
+            "confidence": "HIGH",
+            "snippet": "M/s. S K Global Ventures Pvt Ltd",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "M/s. S K Global Ventures Pvt Ltd"
+          },
+          "buyerName": {
+            "value": "International Remittance Pte Ltd",
+            "confidence": "HIGH",
+            "snippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd"
+          },
+          "invoiceValueUsd": {
+            "value": 24025.65,
+            "confidence": "HIGH",
+            "snippet": "24,025.65\t$\nBeneficiary",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "24,025.65\t$\nBeneficiary"
+          },
+          "currency": {
+            "value": "USD",
+            "confidence": "HIGH",
+            "snippet": "USD",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "USD"
+          },
+          "packageCount": {
+            "value": 88,
+            "confidence": "HIGH",
+            "snippet": "88 Packages",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "88 Packages"
+          },
+          "portCode": {
+            "value": "Port of Discharge Final Destination\nMarks",
+            "confidence": "HIGH",
+            "snippet": "Port of Loading\nPort of Discharge Final Destination\nMarks ",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Port of Loading\nPort of Discharge Final Destination\nMarks "
+          },
+          "sbExchangeRate": {
+            "value": 92.55,
+            "confidence": "HIGH",
+            "snippet": "Ex Rate 92.55",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Ex Rate 92.55"
+          },
+          "bankName": {
+            "value": "HDFC Bank Ltd",
+            "confidence": "HIGH",
+            "snippet": "Bank Name HDFC Bank Ltd",
+            "sourceDoc": "recovery_test_1794805211000.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Bank Name HDFC Bank Ltd"
+          }
+        },
+        "missingFields": [
+          "Shipping Bill Number",
+          "Shipping Bill Date",
+          "FOB Value (INR)",
+          "FIRC / IRM Number"
+        ],
+        "conflicts": [],
+        "invoiceNumber": "SKE/26-27/020",
+        "invoiceDate": "2026-04-06",
+        "consigneeName": "S K Global Ventures Pvt Ltd",
+        "buyerName": "International Remittance Pte Ltd",
+        "portCode": "Port of Discharge Final Destination\nMarks",
+        "packageCount": 88,
+        "invoiceValueUsd": 24025.65,
+        "sbExchangeRate": 92.55,
+        "fircBankName": "HDFC Bank Ltd"
+      }
+    },
+    {
+      "id": "8649c760-895d-411c-932b-126c706a0915",
+      "originalFilename": "SKE-TEST-OCR-0862.pdf",
+      "fileSizeBytes": 403592,
+      "category": "COMMERCIAL_INVOICE",
+      "financialYearId": "fy-2026-27",
+      "status": "COMPLETED",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-16T05:00:10.862Z",
+      "updatedAt": "2026-11-16T05:00:10.996Z",
+      "executionTimeMs": 113,
+      "ocrApplied": false,
+      "extractionMethod": "PDF_TEXT",
+      "candidateFields": {
+        "invoiceNumber": {
+          "value": "SKE/26-27/020",
+          "confidence": "HIGH",
+          "snippet": "Invoice No & Date:\nSKE/26-27/020",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Invoice No & Date:\nSKE/26-27/020"
+        },
+        "invoiceDate": {
+          "value": "2026-04-06",
+          "confidence": "HIGH",
+          "snippet": "Dt: 06-04-2026",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Dt: 06-04-2026"
+        },
+        "consigneeName": {
+          "value": "S K Global Ventures Pvt Ltd",
+          "confidence": "HIGH",
+          "snippet": "M/s. S K Global Ventures Pvt Ltd",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "M/s. S K Global Ventures Pvt Ltd"
+        },
+        "buyerName": {
+          "value": "International Remittance Pte Ltd",
+          "confidence": "HIGH",
+          "snippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd"
+        },
+        "invoiceValueUsd": {
+          "value": 24025.65,
+          "confidence": "HIGH",
+          "snippet": "24,025.65\t$\nBeneficiary",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "24,025.65\t$\nBeneficiary"
+        },
+        "currency": {
+          "value": "USD",
+          "confidence": "HIGH",
+          "snippet": "USD",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "USD"
+        },
+        "packageCount": {
+          "value": 88,
+          "confidence": "HIGH",
+          "snippet": "88 Packages",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "88 Packages"
+        },
+        "portCode": {
+          "value": "Port of Discharge Final Destination\nMarks",
+          "confidence": "HIGH",
+          "snippet": "Port of Loading\nPort of Discharge Final Destination\nMarks ",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Port of Loading\nPort of Discharge Final Destination\nMarks "
+        },
+        "sbExchangeRate": {
+          "value": 92.55,
+          "confidence": "HIGH",
+          "snippet": "Ex Rate 92.55",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Ex Rate 92.55"
+        },
+        "bankName": {
+          "value": "HDFC Bank Ltd",
+          "confidence": "HIGH",
+          "snippet": "Bank Name HDFC Bank Ltd",
+          "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Bank Name HDFC Bank Ltd"
+        }
+      },
+      "candidateDraft": {
+        "extractedFields": {
+          "invoiceNumber": {
+            "value": "SKE/26-27/020",
+            "confidence": "HIGH",
+            "snippet": "Invoice No & Date:\nSKE/26-27/020",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Invoice No & Date:\nSKE/26-27/020"
+          },
+          "invoiceDate": {
+            "value": "2026-04-06",
+            "confidence": "HIGH",
+            "snippet": "Dt: 06-04-2026",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Dt: 06-04-2026"
+          },
+          "consigneeName": {
+            "value": "S K Global Ventures Pvt Ltd",
+            "confidence": "HIGH",
+            "snippet": "M/s. S K Global Ventures Pvt Ltd",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "M/s. S K Global Ventures Pvt Ltd"
+          },
+          "buyerName": {
+            "value": "International Remittance Pte Ltd",
+            "confidence": "HIGH",
+            "snippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd"
+          },
+          "invoiceValueUsd": {
+            "value": 24025.65,
+            "confidence": "HIGH",
+            "snippet": "24,025.65\t$\nBeneficiary",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "24,025.65\t$\nBeneficiary"
+          },
+          "currency": {
+            "value": "USD",
+            "confidence": "HIGH",
+            "snippet": "USD",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "USD"
+          },
+          "packageCount": {
+            "value": 88,
+            "confidence": "HIGH",
+            "snippet": "88 Packages",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "88 Packages"
+          },
+          "portCode": {
+            "value": "Port of Discharge Final Destination\nMarks",
+            "confidence": "HIGH",
+            "snippet": "Port of Loading\nPort of Discharge Final Destination\nMarks ",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Port of Loading\nPort of Discharge Final Destination\nMarks "
+          },
+          "sbExchangeRate": {
+            "value": 92.55,
+            "confidence": "HIGH",
+            "snippet": "Ex Rate 92.55",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Ex Rate 92.55"
+          },
+          "bankName": {
+            "value": "HDFC Bank Ltd",
+            "confidence": "HIGH",
+            "snippet": "Bank Name HDFC Bank Ltd",
+            "sourceDoc": "SKE-TEST-OCR-0862.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Bank Name HDFC Bank Ltd"
+          }
+        },
+        "missingFields": [
+          "Shipping Bill Number",
+          "Shipping Bill Date",
+          "FOB Value (INR)",
+          "FIRC / IRM Number"
+        ],
+        "conflicts": [],
+        "invoiceNumber": "SKE/26-27/020",
+        "invoiceDate": "2026-04-06",
+        "consigneeName": "S K Global Ventures Pvt Ltd",
+        "buyerName": "International Remittance Pte Ltd",
+        "portCode": "Port of Discharge Final Destination\nMarks",
+        "packageCount": 88,
+        "invoiceValueUsd": 24025.65,
+        "sbExchangeRate": 92.55,
+        "fircBankName": "HDFC Bank Ltd"
+      },
+      "targetShipmentId": "33d9f529-9ab1-4195-915c-7fdf20b18158",
+      "approvedAt": "2026-11-16T05:00:10.996Z",
+      "approvedByUserId": "user-admin",
+      "approvedByName": "Administrator"
+    },
+    {
+      "id": "9d6a777d-3ba7-4764-979f-ef1e39cd5761",
+      "originalFilename": "corrupt_doc.pdf",
+      "fileSizeBytes": 42,
+      "category": "ADDITIONAL_DOC",
+      "financialYearId": "fy-2026-27",
+      "status": "PROCESSING",
+      "attempts": 1,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-16T05:00:10.852Z",
+      "updatedAt": "2026-11-16T05:00:11.129Z",
+      "lockedByWorkerId": "worker-instance-2",
+      "leaseExpiresAt": "2026-11-16T05:01:11.129Z",
+      "lockedAt": "2026-11-16T05:00:11.129Z"
+    },
+    {
+      "id": "d14e9849-2053-48fb-b31c-cabc4bce1512",
+      "originalFilename": "dedup_test_1794805210848.pdf",
+      "fileSizeBytes": 12345,
+      "category": "BILL_OF_LADING",
+      "financialYearId": "fy-2026-27",
+      "status": "PENDING",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-16T05:00:10.848Z",
+      "updatedAt": "2026-11-16T05:00:10.848Z"
+    },
+    {
+      "id": "42d2598e-d20d-4685-b19e-d657f0102b03",
+      "originalFilename": "test_sb_1794805210744.pdf",
+      "fileSizeBytes": 499020,
+      "category": "SHIPPING_BILL",
+      "financialYearId": "fy-2026-27",
+      "status": "COMPLETED",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-16T05:00:10.744Z",
+      "updatedAt": "2026-11-16T05:00:10.844Z",
+      "executionTimeMs": 95,
+      "ocrApplied": false,
+      "extractionMethod": "PDF_TEXT",
+      "candidateFields": {
+        "shippingBillNumber": {
+          "value": "2173318",
+          "confidence": "HIGH",
+          "snippet": "SB No SB Date\nINMAA1 2173318",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "SB No SB Date\nINMAA1 2173318"
+        },
+        "shippingBillDate": {
+          "value": "2026-04-07",
+          "confidence": "HIGH",
+          "snippet": "SB Date\nINMAA1 2173318 07-APR-26",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "SB Date\nINMAA1 2173318 07-APR-26"
+        },
+        "portCode": {
+          "value": "INMAA1",
+          "confidence": "HIGH",
+          "snippet": "Port Code SB No SB Date\nINMAA1",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Port Code SB No SB Date\nINMAA1"
+        },
+        "sbExchangeRate": {
+          "value": 92.1,
+          "confidence": "HIGH",
+          "snippet": "1 USD INR 92.1",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "1 USD INR 92.1"
+        },
+        "fobValueInr": {
+          "value": 2212762.37,
+          "confidence": "HIGH",
+          "snippet": "2212762.37\n1.MODE",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "2212762.37\n1.MODE"
+        },
+        "dbkClaimed": {
+          "value": 65291,
+          "confidence": "HIGH",
+          "snippet": "DBK CLAIM 3.CESS AMT\n65291",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "DBK CLAIM 3.CESS AMT\n65291"
+        },
+        "rodtepClaimed": {
+          "value": 26254,
+          "confidence": "HIGH",
+          "snippet": "RODTEP AMT\n26254",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "RODTEP AMT\n26254"
+        },
+        "rosctlClaimed": {
+          "value": 49195,
+          "confidence": "HIGH",
+          "snippet": "ROSCTL AMT\n49195",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "ROSCTL AMT\n49195"
+        },
+        "vesselName": {
+          "value": "Digitally signed by DS CENTRAL BOARD",
+          "confidence": "HIGH",
+          "snippet": "12.Vessel Name\nDigitally signed by DS CENTRAL BOARD",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "12.Vessel Name\nDigitally signed by DS CENTRAL BOARD"
+        },
+        "statutoryDeadline": {
+          "value": "2027-01-31",
+          "confidence": "HIGH",
+          "snippet": "31-JAN-27",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "31-JAN-27"
+        },
+        "invoiceNumber": {
+          "value": "1",
+          "confidence": "HIGH",
+          "snippet": "INV NO. 4.CURRENC\n1",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "INV NO. 4.CURRENC\n1"
+        },
+        "consigneeName": {
+          "value": "S K GLOBAL VENTURES PRIVATE LIMITED",
+          "confidence": "HIGH",
+          "snippet": "CONSIGNEE NAME & ADDRESS\nS K GLOBAL VENTURES PRIVATE LIMITED",
+          "sourceDoc": "test_sb_1794805210744.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "CONSIGNEE NAME & ADDRESS\nS K GLOBAL VENTURES PRIVATE LIMITED"
+        }
+      },
+      "candidateDraft": {
+        "extractedFields": {
+          "shippingBillNumber": {
+            "value": "2173318",
+            "confidence": "HIGH",
+            "snippet": "SB No SB Date\nINMAA1 2173318",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "SB No SB Date\nINMAA1 2173318"
+          },
+          "shippingBillDate": {
+            "value": "2026-04-07",
+            "confidence": "HIGH",
+            "snippet": "SB Date\nINMAA1 2173318 07-APR-26",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "SB Date\nINMAA1 2173318 07-APR-26"
+          },
+          "portCode": {
+            "value": "INMAA1",
+            "confidence": "HIGH",
+            "snippet": "Port Code SB No SB Date\nINMAA1",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Port Code SB No SB Date\nINMAA1"
+          },
+          "sbExchangeRate": {
+            "value": 92.1,
+            "confidence": "HIGH",
+            "snippet": "1 USD INR 92.1",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "1 USD INR 92.1"
+          },
+          "fobValueInr": {
+            "value": 2212762.37,
+            "confidence": "HIGH",
+            "snippet": "2212762.37\n1.MODE",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "2212762.37\n1.MODE"
+          },
+          "dbkClaimed": {
+            "value": 65291,
+            "confidence": "HIGH",
+            "snippet": "DBK CLAIM 3.CESS AMT\n65291",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "DBK CLAIM 3.CESS AMT\n65291"
+          },
+          "rodtepClaimed": {
+            "value": 26254,
+            "confidence": "HIGH",
+            "snippet": "RODTEP AMT\n26254",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "RODTEP AMT\n26254"
+          },
+          "rosctlClaimed": {
+            "value": 49195,
+            "confidence": "HIGH",
+            "snippet": "ROSCTL AMT\n49195",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "ROSCTL AMT\n49195"
+          },
+          "vesselName": {
+            "value": "Digitally signed by DS CENTRAL BOARD",
+            "confidence": "HIGH",
+            "snippet": "12.Vessel Name\nDigitally signed by DS CENTRAL BOARD",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "12.Vessel Name\nDigitally signed by DS CENTRAL BOARD"
+          },
+          "statutoryDeadline": {
+            "value": "2027-01-31",
+            "confidence": "HIGH",
+            "snippet": "31-JAN-27",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "31-JAN-27"
+          },
+          "invoiceNumber": {
+            "value": "1",
+            "confidence": "HIGH",
+            "snippet": "INV NO. 4.CURRENC\n1",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "INV NO. 4.CURRENC\n1"
+          },
+          "consigneeName": {
+            "value": "S K GLOBAL VENTURES PRIVATE LIMITED",
+            "confidence": "HIGH",
+            "snippet": "CONSIGNEE NAME & ADDRESS\nS K GLOBAL VENTURES PRIVATE LIMITED",
+            "sourceDoc": "test_sb_1794805210744.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "CONSIGNEE NAME & ADDRESS\nS K GLOBAL VENTURES PRIVATE LIMITED"
+          }
+        },
+        "missingFields": [
+          "Invoice Date",
+          "Invoice Value (USD)",
+          "FIRC / IRM Number"
+        ],
+        "conflicts": [],
+        "invoiceNumber": "1",
+        "consigneeName": "S K GLOBAL VENTURES PRIVATE LIMITED",
+        "portCode": "INMAA1",
+        "shippingBillNumber": "2173318",
+        "shippingBillDate": "2026-04-07",
+        "sbExchangeRate": 92.1,
+        "fobValueInr": 2212762.37,
+        "vesselName": "Digitally signed by DS CENTRAL BOARD",
+        "statutoryDeadline": "2027-01-31",
+        "dbkClaimed": 65291,
+        "rodtepClaimed": 26254,
+        "rosctlClaimed": 49195
+      }
+    },
+    {
+      "id": "2dbac0b2-3239-44ec-bc8f-0e967a991816",
+      "originalFilename": "recovery_test_1794482746715.pdf",
+      "fileSizeBytes": 403592,
+      "category": "COMMERCIAL_INVOICE",
+      "financialYearId": "fy-2026-27",
+      "status": "COMPLETED",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-12T11:25:46.715Z",
+      "updatedAt": "2026-11-12T11:25:46.863Z",
+      "executionTimeMs": 140,
+      "ocrApplied": false,
+      "extractionMethod": "PDF_TEXT",
+      "candidateFields": {
+        "invoiceNumber": {
+          "value": "SKE/26-27/020",
+          "confidence": "HIGH",
+          "snippet": "Invoice No & Date:\nSKE/26-27/020",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Invoice No & Date:\nSKE/26-27/020"
+        },
+        "invoiceDate": {
+          "value": "2026-04-06",
+          "confidence": "HIGH",
+          "snippet": "Dt: 06-04-2026",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Dt: 06-04-2026"
+        },
+        "consigneeName": {
+          "value": "S K Global Ventures Pvt Ltd",
+          "confidence": "HIGH",
+          "snippet": "M/s. S K Global Ventures Pvt Ltd",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "M/s. S K Global Ventures Pvt Ltd"
+        },
+        "buyerName": {
+          "value": "International Remittance Pte Ltd",
+          "confidence": "HIGH",
+          "snippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd"
+        },
+        "invoiceValueUsd": {
+          "value": 24025.65,
+          "confidence": "HIGH",
+          "snippet": "24,025.65\t$\nBeneficiary",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "24,025.65\t$\nBeneficiary"
+        },
+        "currency": {
+          "value": "USD",
+          "confidence": "HIGH",
+          "snippet": "USD",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "USD"
+        },
+        "packageCount": {
+          "value": 88,
+          "confidence": "HIGH",
+          "snippet": "88 Packages",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "88 Packages"
+        },
+        "portCode": {
+          "value": "Port of Discharge Final Destination\nMarks",
+          "confidence": "HIGH",
+          "snippet": "Port of Loading\nPort of Discharge Final Destination\nMarks ",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Port of Loading\nPort of Discharge Final Destination\nMarks "
+        },
+        "sbExchangeRate": {
+          "value": 92.55,
+          "confidence": "HIGH",
+          "snippet": "Ex Rate 92.55",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Ex Rate 92.55"
+        },
+        "bankName": {
+          "value": "HDFC Bank Ltd",
+          "confidence": "HIGH",
+          "snippet": "Bank Name HDFC Bank Ltd",
+          "sourceDoc": "recovery_test_1794482746715.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Bank Name HDFC Bank Ltd"
+        }
+      },
+      "candidateDraft": {
+        "extractedFields": {
+          "invoiceNumber": {
+            "value": "SKE/26-27/020",
+            "confidence": "HIGH",
+            "snippet": "Invoice No & Date:\nSKE/26-27/020",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Invoice No & Date:\nSKE/26-27/020"
+          },
+          "invoiceDate": {
+            "value": "2026-04-06",
+            "confidence": "HIGH",
+            "snippet": "Dt: 06-04-2026",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Dt: 06-04-2026"
+          },
+          "consigneeName": {
+            "value": "S K Global Ventures Pvt Ltd",
+            "confidence": "HIGH",
+            "snippet": "M/s. S K Global Ventures Pvt Ltd",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "M/s. S K Global Ventures Pvt Ltd"
+          },
+          "buyerName": {
+            "value": "International Remittance Pte Ltd",
+            "confidence": "HIGH",
+            "snippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd"
+          },
+          "invoiceValueUsd": {
+            "value": 24025.65,
+            "confidence": "HIGH",
+            "snippet": "24,025.65\t$\nBeneficiary",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "24,025.65\t$\nBeneficiary"
+          },
+          "currency": {
+            "value": "USD",
+            "confidence": "HIGH",
+            "snippet": "USD",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "USD"
+          },
+          "packageCount": {
+            "value": 88,
+            "confidence": "HIGH",
+            "snippet": "88 Packages",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "88 Packages"
+          },
+          "portCode": {
+            "value": "Port of Discharge Final Destination\nMarks",
+            "confidence": "HIGH",
+            "snippet": "Port of Loading\nPort of Discharge Final Destination\nMarks ",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Port of Loading\nPort of Discharge Final Destination\nMarks "
+          },
+          "sbExchangeRate": {
+            "value": 92.55,
+            "confidence": "HIGH",
+            "snippet": "Ex Rate 92.55",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Ex Rate 92.55"
+          },
+          "bankName": {
+            "value": "HDFC Bank Ltd",
+            "confidence": "HIGH",
+            "snippet": "Bank Name HDFC Bank Ltd",
+            "sourceDoc": "recovery_test_1794482746715.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Bank Name HDFC Bank Ltd"
+          }
+        },
+        "missingFields": [
+          "Shipping Bill Number",
+          "Shipping Bill Date",
+          "FOB Value (INR)",
+          "FIRC / IRM Number"
+        ],
+        "conflicts": [],
+        "invoiceNumber": "SKE/26-27/020",
+        "invoiceDate": "2026-04-06",
+        "consigneeName": "S K Global Ventures Pvt Ltd",
+        "buyerName": "International Remittance Pte Ltd",
+        "portCode": "Port of Discharge Final Destination\nMarks",
+        "packageCount": 88,
+        "invoiceValueUsd": 24025.65,
+        "sbExchangeRate": 92.55,
+        "fircBankName": "HDFC Bank Ltd"
+      }
+    },
+    {
+      "id": "ab475bb6-4cd4-4947-96f4-5c108b4244e8",
+      "originalFilename": "SKE-TEST-OCR-6530.pdf",
+      "fileSizeBytes": 403592,
+      "category": "COMMERCIAL_INVOICE",
+      "financialYearId": "fy-2026-27",
+      "status": "COMPLETED",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-12T11:25:46.530Z",
+      "updatedAt": "2026-11-12T11:25:46.710Z",
+      "executionTimeMs": 156,
+      "ocrApplied": false,
+      "extractionMethod": "PDF_TEXT",
+      "candidateFields": {
+        "invoiceNumber": {
+          "value": "SKE/26-27/020",
+          "confidence": "HIGH",
+          "snippet": "Invoice No & Date:\nSKE/26-27/020",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Invoice No & Date:\nSKE/26-27/020"
+        },
+        "invoiceDate": {
+          "value": "2026-04-06",
+          "confidence": "HIGH",
+          "snippet": "Dt: 06-04-2026",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Dt: 06-04-2026"
+        },
+        "consigneeName": {
+          "value": "S K Global Ventures Pvt Ltd",
+          "confidence": "HIGH",
+          "snippet": "M/s. S K Global Ventures Pvt Ltd",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "M/s. S K Global Ventures Pvt Ltd"
+        },
+        "buyerName": {
+          "value": "International Remittance Pte Ltd",
+          "confidence": "HIGH",
+          "snippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd"
+        },
+        "invoiceValueUsd": {
+          "value": 24025.65,
+          "confidence": "HIGH",
+          "snippet": "24,025.65\t$\nBeneficiary",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "24,025.65\t$\nBeneficiary"
+        },
+        "currency": {
+          "value": "USD",
+          "confidence": "HIGH",
+          "snippet": "USD",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "USD"
+        },
+        "packageCount": {
+          "value": 88,
+          "confidence": "HIGH",
+          "snippet": "88 Packages",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "88 Packages"
+        },
+        "portCode": {
+          "value": "Port of Discharge Final Destination\nMarks",
+          "confidence": "HIGH",
+          "snippet": "Port of Loading\nPort of Discharge Final Destination\nMarks ",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Port of Loading\nPort of Discharge Final Destination\nMarks "
+        },
+        "sbExchangeRate": {
+          "value": 92.55,
+          "confidence": "HIGH",
+          "snippet": "Ex Rate 92.55",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Ex Rate 92.55"
+        },
+        "bankName": {
+          "value": "HDFC Bank Ltd",
+          "confidence": "HIGH",
+          "snippet": "Bank Name HDFC Bank Ltd",
+          "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Bank Name HDFC Bank Ltd"
+        }
+      },
+      "candidateDraft": {
+        "extractedFields": {
+          "invoiceNumber": {
+            "value": "SKE/26-27/020",
+            "confidence": "HIGH",
+            "snippet": "Invoice No & Date:\nSKE/26-27/020",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Invoice No & Date:\nSKE/26-27/020"
+          },
+          "invoiceDate": {
+            "value": "2026-04-06",
+            "confidence": "HIGH",
+            "snippet": "Dt: 06-04-2026",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Dt: 06-04-2026"
+          },
+          "consigneeName": {
+            "value": "S K Global Ventures Pvt Ltd",
+            "confidence": "HIGH",
+            "snippet": "M/s. S K Global Ventures Pvt Ltd",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "M/s. S K Global Ventures Pvt Ltd"
+          },
+          "buyerName": {
+            "value": "International Remittance Pte Ltd",
+            "confidence": "HIGH",
+            "snippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Buyer (if other than Consignee)\nM/s. International Remittance Pte Ltd"
+          },
+          "invoiceValueUsd": {
+            "value": 24025.65,
+            "confidence": "HIGH",
+            "snippet": "24,025.65\t$\nBeneficiary",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "24,025.65\t$\nBeneficiary"
+          },
+          "currency": {
+            "value": "USD",
+            "confidence": "HIGH",
+            "snippet": "USD",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "USD"
+          },
+          "packageCount": {
+            "value": 88,
+            "confidence": "HIGH",
+            "snippet": "88 Packages",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "88 Packages"
+          },
+          "portCode": {
+            "value": "Port of Discharge Final Destination\nMarks",
+            "confidence": "HIGH",
+            "snippet": "Port of Loading\nPort of Discharge Final Destination\nMarks ",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Port of Loading\nPort of Discharge Final Destination\nMarks "
+          },
+          "sbExchangeRate": {
+            "value": 92.55,
+            "confidence": "HIGH",
+            "snippet": "Ex Rate 92.55",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Ex Rate 92.55"
+          },
+          "bankName": {
+            "value": "HDFC Bank Ltd",
+            "confidence": "HIGH",
+            "snippet": "Bank Name HDFC Bank Ltd",
+            "sourceDoc": "SKE-TEST-OCR-6530.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Bank Name HDFC Bank Ltd"
+          }
+        },
+        "missingFields": [
+          "Shipping Bill Number",
+          "Shipping Bill Date",
+          "FOB Value (INR)",
+          "FIRC / IRM Number"
+        ],
+        "conflicts": [],
+        "invoiceNumber": "SKE/26-27/020",
+        "invoiceDate": "2026-04-06",
+        "consigneeName": "S K Global Ventures Pvt Ltd",
+        "buyerName": "International Remittance Pte Ltd",
+        "portCode": "Port of Discharge Final Destination\nMarks",
+        "packageCount": 88,
+        "invoiceValueUsd": 24025.65,
+        "sbExchangeRate": 92.55,
+        "fircBankName": "HDFC Bank Ltd"
+      },
+      "targetShipmentId": "68b936d3-d28b-426c-acc4-7ecf6aedf9e8",
+      "approvedAt": "2026-11-12T11:25:46.710Z",
+      "approvedByUserId": "user-admin",
+      "approvedByName": "Administrator"
+    },
+    {
+      "id": "c13c166e-ad51-4707-a3ce-e19398160c00",
+      "originalFilename": "corrupt_doc.pdf",
+      "fileSizeBytes": 42,
+      "category": "ADDITIONAL_DOC",
+      "financialYearId": "fy-2026-27",
+      "status": "PROCESSING",
+      "attempts": 1,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-12T11:25:46.476Z",
+      "updatedAt": "2026-11-12T11:25:46.878Z",
+      "lockedByWorkerId": "worker-instance-2",
+      "leaseExpiresAt": "2026-11-12T11:26:46.878Z",
+      "executionTimeMs": 1,
+      "lockedAt": "2026-11-12T11:25:46.878Z"
+    },
+    {
+      "id": "166c19fb-cabb-42b2-9da4-768b8005b808",
+      "originalFilename": "dedup_test_1794482746467.pdf",
+      "fileSizeBytes": 12345,
+      "category": "BILL_OF_LADING",
+      "financialYearId": "fy-2026-27",
+      "status": "PENDING",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-12T11:25:46.467Z",
+      "updatedAt": "2026-11-12T11:25:46.467Z"
+    },
+    {
+      "id": "0539491e-ee5e-4955-9832-80e806db3b2d",
+      "originalFilename": "test_sb_1794482746262.pdf",
+      "fileSizeBytes": 499020,
+      "category": "SHIPPING_BILL",
+      "financialYearId": "fy-2026-27",
+      "status": "COMPLETED",
+      "attempts": 0,
+      "maxAttempts": 3,
+      "createdAt": "2026-11-12T11:25:46.262Z",
+      "updatedAt": "2026-11-12T11:25:46.460Z",
+      "executionTimeMs": 191,
+      "ocrApplied": false,
+      "extractionMethod": "PDF_TEXT",
+      "candidateFields": {
+        "shippingBillNumber": {
+          "value": "2173318",
+          "confidence": "HIGH",
+          "snippet": "SB No SB Date\nINMAA1 2173318",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "SB No SB Date\nINMAA1 2173318"
+        },
+        "shippingBillDate": {
+          "value": "2026-04-07",
+          "confidence": "HIGH",
+          "snippet": "SB Date\nINMAA1 2173318 07-APR-26",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "SB Date\nINMAA1 2173318 07-APR-26"
+        },
+        "portCode": {
+          "value": "INMAA1",
+          "confidence": "HIGH",
+          "snippet": "Port Code SB No SB Date\nINMAA1",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "Port Code SB No SB Date\nINMAA1"
+        },
+        "sbExchangeRate": {
+          "value": 92.1,
+          "confidence": "HIGH",
+          "snippet": "1 USD INR 92.1",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "1 USD INR 92.1"
+        },
+        "fobValueInr": {
+          "value": 2212762.37,
+          "confidence": "HIGH",
+          "snippet": "2212762.37\n1.MODE",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "2212762.37\n1.MODE"
+        },
+        "dbkClaimed": {
+          "value": 65291,
+          "confidence": "HIGH",
+          "snippet": "DBK CLAIM 3.CESS AMT\n65291",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "DBK CLAIM 3.CESS AMT\n65291"
+        },
+        "rodtepClaimed": {
+          "value": 26254,
+          "confidence": "HIGH",
+          "snippet": "RODTEP AMT\n26254",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "RODTEP AMT\n26254"
+        },
+        "rosctlClaimed": {
+          "value": 49195,
+          "confidence": "HIGH",
+          "snippet": "ROSCTL AMT\n49195",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "ROSCTL AMT\n49195"
+        },
+        "vesselName": {
+          "value": "Digitally signed by DS CENTRAL BOARD",
+          "confidence": "HIGH",
+          "snippet": "12.Vessel Name\nDigitally signed by DS CENTRAL BOARD",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "12.Vessel Name\nDigitally signed by DS CENTRAL BOARD"
+        },
+        "statutoryDeadline": {
+          "value": "2027-01-31",
+          "confidence": "HIGH",
+          "snippet": "31-JAN-27",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "31-JAN-27"
+        },
+        "invoiceNumber": {
+          "value": "1",
+          "confidence": "HIGH",
+          "snippet": "INV NO. 4.CURRENC\n1",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "INV NO. 4.CURRENC\n1"
+        },
+        "consigneeName": {
+          "value": "S K GLOBAL VENTURES PRIVATE LIMITED",
+          "confidence": "HIGH",
+          "snippet": "CONSIGNEE NAME & ADDRESS\nS K GLOBAL VENTURES PRIVATE LIMITED",
+          "sourceDoc": "test_sb_1794482746262.pdf",
+          "pageNumber": 1,
+          "extractionMethod": "PDF_TEXT",
+          "rawSnippet": "CONSIGNEE NAME & ADDRESS\nS K GLOBAL VENTURES PRIVATE LIMITED"
+        }
+      },
+      "candidateDraft": {
+        "extractedFields": {
+          "shippingBillNumber": {
+            "value": "2173318",
+            "confidence": "HIGH",
+            "snippet": "SB No SB Date\nINMAA1 2173318",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "SB No SB Date\nINMAA1 2173318"
+          },
+          "shippingBillDate": {
+            "value": "2026-04-07",
+            "confidence": "HIGH",
+            "snippet": "SB Date\nINMAA1 2173318 07-APR-26",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "SB Date\nINMAA1 2173318 07-APR-26"
+          },
+          "portCode": {
+            "value": "INMAA1",
+            "confidence": "HIGH",
+            "snippet": "Port Code SB No SB Date\nINMAA1",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "Port Code SB No SB Date\nINMAA1"
+          },
+          "sbExchangeRate": {
+            "value": 92.1,
+            "confidence": "HIGH",
+            "snippet": "1 USD INR 92.1",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "1 USD INR 92.1"
+          },
+          "fobValueInr": {
+            "value": 2212762.37,
+            "confidence": "HIGH",
+            "snippet": "2212762.37\n1.MODE",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "2212762.37\n1.MODE"
+          },
+          "dbkClaimed": {
+            "value": 65291,
+            "confidence": "HIGH",
+            "snippet": "DBK CLAIM 3.CESS AMT\n65291",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "DBK CLAIM 3.CESS AMT\n65291"
+          },
+          "rodtepClaimed": {
+            "value": 26254,
+            "confidence": "HIGH",
+            "snippet": "RODTEP AMT\n26254",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "RODTEP AMT\n26254"
+          },
+          "rosctlClaimed": {
+            "value": 49195,
+            "confidence": "HIGH",
+            "snippet": "ROSCTL AMT\n49195",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "ROSCTL AMT\n49195"
+          },
+          "vesselName": {
+            "value": "Digitally signed by DS CENTRAL BOARD",
+            "confidence": "HIGH",
+            "snippet": "12.Vessel Name\nDigitally signed by DS CENTRAL BOARD",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "12.Vessel Name\nDigitally signed by DS CENTRAL BOARD"
+          },
+          "statutoryDeadline": {
+            "value": "2027-01-31",
+            "confidence": "HIGH",
+            "snippet": "31-JAN-27",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "31-JAN-27"
+          },
+          "invoiceNumber": {
+            "value": "1",
+            "confidence": "HIGH",
+            "snippet": "INV NO. 4.CURRENC\n1",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "INV NO. 4.CURRENC\n1"
+          },
+          "consigneeName": {
+            "value": "S K GLOBAL VENTURES PRIVATE LIMITED",
+            "confidence": "HIGH",
+            "snippet": "CONSIGNEE NAME & ADDRESS\nS K GLOBAL VENTURES PRIVATE LIMITED",
+            "sourceDoc": "test_sb_1794482746262.pdf",
+            "pageNumber": 1,
+            "extractionMethod": "PDF_TEXT",
+            "rawSnippet": "CONSIGNEE NAME & ADDRESS\nS K GLOBAL VENTURES PRIVATE LIMITED"
+          }
+        },
+        "missingFields": [
+          "Invoice Date",
+          "Invoice Value (USD)",
+          "FIRC / IRM Number"
+        ],
+        "conflicts": [],
+        "invoiceNumber": "1",
+        "consigneeName": "S K GLOBAL VENTURES PRIVATE LIMITED",
+        "portCode": "INMAA1",
+        "shippingBillNumber": "2173318",
+        "shippingBillDate": "2026-04-07",
+        "sbExchangeRate": 92.1,
+        "fobValueInr": 2212762.37,
+        "vesselName": "Digitally signed by DS CENTRAL BOARD",
+        "statutoryDeadline": "2027-01-31",
+        "dbkClaimed": 65291,
+        "rodtepClaimed": 26254,
+        "rosctlClaimed": 49195
+      }
+    },
     {
       "id": "24d6992f-45b5-415e-abbb-c5bc061c47d7",
       "originalFilename": "recovery_test_1793778055886.pdf",
@@ -12540,127 +14141,89 @@
   ],
   "revokedTokens": [
     {
-      "token": "test-jwt-token-1793623681157-79df00f4-9b1a-42ff-a55c-41a033152c58",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTQ0ODI3NDIsImV4cCI6MTc5NTA4NzU0Mn0.VwcH11cFf28jCdVuAbTVAOPyyzR1_c9VpvsGqia7Ap8",
       "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-02T12:48:01.157Z",
-      "expiresAt": "2026-11-09T12:48:01.157Z"
+      "revokedAt": "2026-11-12T11:25:42.143Z",
+      "expiresAt": "2026-11-19T11:25:42.148Z"
     },
     {
-      "token": "test-jwt-token-1793623715364-4012c3f4-830f-445a-8a20-37b44e8a85a6",
+      "token": "test-jwt-token-1794482746978-b39ea986-c848-4dd1-a819-651de46e04d8",
       "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-02T12:48:35.364Z",
-      "expiresAt": "2026-11-09T12:48:35.364Z"
+      "revokedAt": "2026-11-12T11:25:46.978Z",
+      "expiresAt": "2026-11-19T11:25:46.978Z"
     },
     {
-      "token": "test-jwt-token-1793683278337-c66b71d0-2db2-472e-abff-5d3abc6630b9",
+      "token": "test-jwt-token-1794805211229-0219846b-2922-4fac-896d-ea1de1fc1afd",
       "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-03T05:21:18.337Z",
-      "expiresAt": "2026-11-10T05:21:18.337Z"
-    },
-    {
-      "token": "test-jwt-token-1793683840540-7e4c9bfc-1bae-48a4-9144-b414c741ef03",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-03T05:30:40.540Z",
-      "expiresAt": "2026-11-10T05:30:40.540Z"
-    },
-    {
-      "token": "test-jwt-token-1793683873674-c63de3fb-4b35-422d-92a5-594e4f5b284d",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-03T05:31:13.674Z",
-      "expiresAt": "2026-11-10T05:31:13.674Z"
-    },
-    {
-      "token": "test-jwt-token-1793770860558-4fe5e13a-bc65-4c07-b163-d202b9bfc7b0",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T05:41:00.559Z",
-      "expiresAt": "2026-11-11T05:41:00.559Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzQyNDcsImV4cCI6MTc5NDM3OTA0N30.X5HfReWdiLtW8FVpj3KSxQhHh0j7ERdpVmpVTSxFHSo",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T06:37:27.477Z",
-      "expiresAt": "2026-11-11T06:37:27.477Z"
-    },
-    {
-      "token": "test-jwt-token-1793774251337-0dea8340-c0e8-45c2-bd29-7c31bf75964a",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T06:37:31.337Z",
-      "expiresAt": "2026-11-11T06:37:31.337Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzQyNzAsImV4cCI6MTc5NDM3OTA3MH0.OAVR2iCBz8nFYbs3g3sxqQ4MorRo5jz9RgQ4VWK79aY",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T06:37:50.281Z",
-      "expiresAt": "2026-11-11T06:37:50.281Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzQzMDIsImV4cCI6MTc5NDM3OTEwMn0.0ZxKWqwmXkn7Kvs0hHkJKONGfJ_RO1ukN3Pnlif8yLU",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T06:38:22.741Z",
-      "expiresAt": "2026-11-11T06:38:22.742Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzQzMjMsImV4cCI6MTc5NDM3OTEyM30.eDYgEo0PyN-M0j1gGiAO8BO6oLMrX5P1wZ7GHY8j2E0",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T06:38:43.824Z",
-      "expiresAt": "2026-11-11T06:38:43.824Z"
-    },
-    {
-      "token": "test-jwt-token-1793774327188-f978d885-2644-4ec3-97d0-30ded3ce9cee",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T06:38:47.189Z",
-      "expiresAt": "2026-11-11T06:38:47.189Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzU5MTAsImV4cCI6MTc5NDM4MDcxMH0.1lIjiIF3CRF0iDBJ1zGYL-qe8nliTNymijrBxzy3mMs",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T07:05:10.498Z",
-      "expiresAt": "2026-11-11T07:05:10.498Z"
-    },
-    {
-      "token": "test-jwt-token-1793775915121-e606e644-2cd1-4fc3-9aff-ca01b051d7a7",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T07:05:15.121Z",
-      "expiresAt": "2026-11-11T07:05:15.121Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzU5MzAsImV4cCI6MTc5NDM4MDczMH0.jBZDnWoFN3-d0jOxzzsNr-K2QQU5NDCt3O3vW6No9iE",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T07:05:30.904Z",
-      "expiresAt": "2026-11-11T07:05:30.904Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzU5NzYsImV4cCI6MTc5Mzc3OTU3Nn0.xCVeXk_rycgvm6XseXLybMvC74aqlqF_3tLDlrKlmWE",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T07:06:16.704Z",
-      "expiresAt": "2026-11-04T08:06:16.000Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzU5NzYsImV4cCI6MTc5NDM4MDc3Nn0.51SAGWUJB0HJnMCsO-mhliiVCoCHjZ-RmbksbXBVfsU",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T07:06:16.724Z",
-      "expiresAt": "2026-11-11T07:06:16.724Z"
-    },
-    {
-      "token": "test-jwt-token-1793775984897-a801b707-4eb4-42de-b1b1-3cf7eefe1354",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T07:06:24.897Z",
-      "expiresAt": "2026-11-11T07:06:24.897Z"
-    },
-    {
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImI4MjgwN2VhLTk3ZTgtNGY5OS05MjBjLTc5ODdlNWIwMDQyYSIsImVtYWlsIjoib3duZXJAc2tlbnRlcnByaXNlcy5jb20iLCJyb2xlIjoiU1VQRVJfQURNSU4iLCJuYW1lIjoiU3VyZXNoIEt1bWFyIChPd25lcikiLCJpYXQiOjE3OTM3NzgwNTIsImV4cCI6MTc5NDM4Mjg1Mn0.xBnDQ_ecS5ZI50MuR84tZv7vzyOBkuPSZku8WU9uUDw",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T07:40:52.425Z",
-      "expiresAt": "2026-11-11T07:40:52.425Z"
-    },
-    {
-      "token": "test-jwt-token-1793778056140-1df4bed7-3678-470b-adba-4ddcdbeb9c50",
-      "userId": "b82807ea-97e8-4f99-920c-7987e5b0042a",
-      "revokedAt": "2026-11-04T07:40:56.141Z",
-      "expiresAt": "2026-11-11T07:40:56.141Z"
+      "revokedAt": "2026-11-16T05:00:11.229Z",
+      "expiresAt": "2026-11-23T05:00:11.229Z"
     }
   ],
   "gstEntries": [
+    {
+      "id": "GST-2026-037",
+      "entryDate": "2026-11-03",
+      "consigneeId": "c-sk-global-lk",
+      "consigneeName": "S K GLOBAL VENTURES PRIVATE LIMITED",
+      "igst": 100.55,
+      "cgst": 200.33,
+      "sgst": 300.12,
+      "totalGst": 601,
+      "refundEligible": 700,
+      "difference": 99,
+      "result": "GAIN",
+      "remarks": "Decimal precision test",
+      "createdAt": "2026-11-12T11:25:42.222Z",
+      "updatedAt": "2026-11-12T11:25:42.222Z"
+    },
+    {
+      "id": "GST-2026-036",
+      "entryDate": "2026-11-03",
+      "consigneeId": "c-precision-tex-lanka",
+      "consigneeName": "PRECISION TEX LANKA PVT LTD",
+      "igst": 10000,
+      "cgst": 2000,
+      "sgst": 2000,
+      "totalGst": 14000,
+      "refundEligible": 14000,
+      "difference": 0,
+      "result": "NIL",
+      "remarks": "Test NIL calculation",
+      "createdAt": "2026-11-12T11:25:42.203Z",
+      "updatedAt": "2026-11-12T11:25:42.203Z"
+    },
+    {
+      "id": "GST-2026-035",
+      "entryDate": "2026-11-02",
+      "consigneeId": "c-shasvanth-impex",
+      "consigneeName": "SHASVANTH IMPEX PRIVATE LIMITED",
+      "igst": 10000,
+      "cgst": 2000,
+      "sgst": 2000,
+      "totalGst": 14000,
+      "refundEligible": 12000,
+      "difference": -2000,
+      "result": "LOSS",
+      "remarks": "Test LOSS calculation",
+      "createdAt": "2026-11-12T11:25:42.196Z",
+      "updatedAt": "2026-11-12T11:25:42.196Z"
+    },
+    {
+      "id": "GST-2026-034",
+      "entryDate": "2026-11-01",
+      "consigneeId": "c-sk-global-lk",
+      "consigneeName": "S K GLOBAL VENTURES PRIVATE LIMITED",
+      "igst": 10000,
+      "cgst": 2000,
+      "sgst": 2000,
+      "totalGst": 14000,
+      "refundEligible": 20000,
+      "difference": 6000,
+      "result": "GAIN",
+      "remarks": "Test GAIN calculation",
+      "createdAt": "2026-11-12T11:25:42.184Z",
+      "updatedAt": "2026-11-12T11:25:42.184Z"
+    },
     {
       "id": "GST-2026-033",
       "entryDate": "2026-11-03",
@@ -13559,9 +15122,267 @@
       "tradeName": "TEST SUPPLIER",
       "createdAt": "2026-11-04T07:40:52.365Z",
       "updatedAt": "2026-11-04T07:40:52.365Z"
+    },
+    {
+      "id": "sup-1794482742028-g0dsn",
+      "gstin": "33AABCS1390B1Z0",
+      "legalName": "TEST SUPPLIER",
+      "tradeName": "TEST SUPPLIER",
+      "createdAt": "2026-11-12T11:25:42.028Z",
+      "updatedAt": "2026-11-12T11:25:42.028Z"
+    },
+    {
+      "id": "sup-1794482742066-2g7zw",
+      "gstin": "29AABCS3589Z1Z5",
+      "legalName": "KARNATAKA ELECTRONICS LTD",
+      "tradeName": "KARNATAKA ELECTRONICS LTD",
+      "state": "Karnataka",
+      "createdAt": "2026-11-12T11:25:42.066Z",
+      "updatedAt": "2026-11-12T11:25:42.066Z"
+    },
+    {
+      "id": "sup-1794805206481-4v5wk",
+      "gstin": "33AABCS5191B1Z0",
+      "legalName": "TEST SUPPLIER",
+      "tradeName": "TEST SUPPLIER",
+      "createdAt": "2026-11-16T05:00:06.481Z",
+      "updatedAt": "2026-11-16T05:00:06.481Z"
+    },
+    {
+      "id": "sup-1794805206525-r5arj",
+      "gstin": "29AABCS2702Z1Z5",
+      "legalName": "KARNATAKA ELECTRONICS LTD",
+      "tradeName": "KARNATAKA ELECTRONICS LTD",
+      "state": "Karnataka",
+      "createdAt": "2026-11-16T05:00:06.525Z",
+      "updatedAt": "2026-11-16T05:00:06.525Z"
+    },
+    {
+      "id": "sup-1794805206549-z54u6",
+      "gstin": "33AABCT4211A1Z1",
+      "legalName": "33AABCT4211A1Z1",
+      "state": "Tamil Nadu",
+      "createdAt": "2026-11-16T05:00:06.549Z",
+      "updatedAt": "2026-11-16T05:00:06.549Z"
     }
   ],
   "b2bInvoices": [
+    {
+      "id": "b2b-inv-1794805206554-gqnc2",
+      "supplierId": "sup-1794805206549-z54u6",
+      "supplierGstin": "33AABCT4211A1Z1",
+      "supplierName": "33AABCT4211A1Z1",
+      "invoiceNumber": "INV-COMM-01",
+      "invoiceType": "Regular",
+      "invoiceDate": "2026-08-15",
+      "invoiceValue": 23600,
+      "placeOfSupply": "33-Tamil Nadu",
+      "reverseCharge": "N",
+      "taxableValue": 20000,
+      "integratedTax": 0,
+      "centralTax": 1800,
+      "stateUtTax": 1800,
+      "cess": 0,
+      "totalGst": 3600,
+      "gstrPeriod": "August 2026",
+      "periodKey": "2026-08",
+      "financialYear": "2026-27",
+      "filingDate": "2026-11-09",
+      "itcAvailability": "Yes",
+      "applicableTaxRate": 18,
+      "source": "GSTR-2B",
+      "importBatchId": "batch-1794805206549",
+      "createdBy": "admin-id",
+      "createdAt": "2026-11-16T05:00:06.554Z",
+      "updatedAt": "2026-11-16T05:00:06.570Z",
+      "updatedBy": "admin-id"
+    },
+    {
+      "id": "b2b-inv-1794805206529-ulm13",
+      "supplierId": "sup-1794805206525-r5arj",
+      "supplierGstin": "29AABCS2702Z1Z5",
+      "supplierName": "KARNATAKA ELECTRONICS LTD",
+      "invoiceNumber": "KA-9901-1794805206525",
+      "invoiceType": "Regular",
+      "invoiceDate": "2026-09-10",
+      "invoiceValue": 11800,
+      "placeOfSupply": "29-Karnataka",
+      "reverseCharge": "N",
+      "taxableValue": 10000,
+      "integratedTax": 1800,
+      "centralTax": 0,
+      "stateUtTax": 0,
+      "cess": 0,
+      "totalGst": 1800,
+      "gstrPeriod": "September 2026",
+      "periodKey": "2026-09",
+      "financialYear": "2026-27",
+      "itcAvailability": "Yes",
+      "applicableTaxRate": 100,
+      "source": "GSTR-1",
+      "createdAt": "2026-11-16T05:00:06.529Z",
+      "updatedAt": "2026-11-16T05:00:06.529Z"
+    },
+    {
+      "id": "b2b-inv-1794805206521-3hycy",
+      "supplierId": "sup-1794805206481-4v5wk",
+      "supplierGstin": "33AABCS5191B1Z0",
+      "supplierName": "TEST SUPPLIER",
+      "invoiceNumber": "DUP-TEST-1794805206480",
+      "invoiceType": "SEZ supplies with payment",
+      "invoiceDate": "2026-08-01",
+      "invoiceValue": 5900,
+      "reverseCharge": "N",
+      "taxableValue": 5000,
+      "integratedTax": 900,
+      "centralTax": 0,
+      "stateUtTax": 0,
+      "cess": 0,
+      "totalGst": 900,
+      "gstrPeriod": "August 2026",
+      "periodKey": "2026-08",
+      "financialYear": "2026-27",
+      "itcAvailability": "Yes",
+      "applicableTaxRate": 100,
+      "source": "GSTR-1",
+      "createdAt": "2026-11-16T05:00:06.521Z",
+      "updatedAt": "2026-11-16T05:00:06.521Z"
+    },
+    {
+      "id": "b2b-inv-1794805206488-014kp",
+      "supplierId": "sup-1794805206481-4v5wk",
+      "supplierGstin": "33AABCS5191B1Z0",
+      "supplierName": "TEST SUPPLIER",
+      "invoiceNumber": "DUP-TEST-1794805206480",
+      "invoiceType": "Regular",
+      "invoiceDate": "2026-08-01",
+      "invoiceValue": 5900,
+      "reverseCharge": "N",
+      "taxableValue": 5000,
+      "integratedTax": 0,
+      "centralTax": 450,
+      "stateUtTax": 450,
+      "cess": 0,
+      "totalGst": 900,
+      "gstrPeriod": "August 2026",
+      "periodKey": "2026-08",
+      "financialYear": "2026-27",
+      "itcAvailability": "Yes",
+      "applicableTaxRate": 100,
+      "source": "GSTR-1",
+      "createdAt": "2026-11-16T05:00:06.488Z",
+      "updatedAt": "2026-11-16T05:00:06.488Z"
+    },
+    {
+      "id": "b2b-inv-1794805206457-yh9vw",
+      "supplierId": "sup-1793770852592-kkbsp",
+      "supplierGstin": "33AABCS1429B1Z5",
+      "supplierName": "PRECISION AUTO COMPONENTS PVT LTD",
+      "invoiceNumber": "TEST-INV-1794805206456",
+      "invoiceType": "Regular",
+      "invoiceDate": "2026-07-25",
+      "invoiceValue": 120500.5,
+      "placeOfSupply": "33-Tamil Nadu",
+      "reverseCharge": "N",
+      "taxableValue": 100000,
+      "integratedTax": 0,
+      "centralTax": 9000,
+      "stateUtTax": 9000,
+      "cess": 500,
+      "totalGst": 18500,
+      "gstrPeriod": "August 2026",
+      "periodKey": "2026-08",
+      "financialYear": "2026-27",
+      "filingDate": "2026-08-11",
+      "itcAvailability": "Yes",
+      "applicableTaxRate": 18,
+      "source": "GSTR-2B",
+      "irn": "e7f1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "irnDate": "2026-07-25",
+      "createdBy": "admin-user-id",
+      "createdAt": "2026-11-16T05:00:06.456Z",
+      "updatedAt": "2026-11-16T05:00:06.456Z"
+    },
+    {
+      "id": "b2b-inv-1794482742058-kmm5g",
+      "supplierId": "sup-1794482742028-g0dsn",
+      "supplierGstin": "33AABCS1390B1Z0",
+      "supplierName": "TEST SUPPLIER",
+      "invoiceNumber": "DUP-TEST-1794482742028",
+      "invoiceType": "SEZ supplies with payment",
+      "invoiceDate": "2026-08-01",
+      "invoiceValue": 5900,
+      "reverseCharge": "N",
+      "taxableValue": 5000,
+      "integratedTax": 900,
+      "centralTax": 0,
+      "stateUtTax": 0,
+      "cess": 0,
+      "totalGst": 900,
+      "gstrPeriod": "August 2026",
+      "periodKey": "2026-08",
+      "financialYear": "2026-27",
+      "itcAvailability": "Yes",
+      "applicableTaxRate": 100,
+      "source": "GSTR-1",
+      "createdAt": "2026-11-12T11:25:42.058Z",
+      "updatedAt": "2026-11-12T11:25:42.058Z"
+    },
+    {
+      "id": "b2b-inv-1794482742040-7biqu",
+      "supplierId": "sup-1794482742028-g0dsn",
+      "supplierGstin": "33AABCS1390B1Z0",
+      "supplierName": "TEST SUPPLIER",
+      "invoiceNumber": "DUP-TEST-1794482742028",
+      "invoiceType": "Regular",
+      "invoiceDate": "2026-08-01",
+      "invoiceValue": 5900,
+      "reverseCharge": "N",
+      "taxableValue": 5000,
+      "integratedTax": 0,
+      "centralTax": 450,
+      "stateUtTax": 450,
+      "cess": 0,
+      "totalGst": 900,
+      "gstrPeriod": "August 2026",
+      "periodKey": "2026-08",
+      "financialYear": "2026-27",
+      "itcAvailability": "Yes",
+      "applicableTaxRate": 100,
+      "source": "GSTR-1",
+      "createdAt": "2026-11-12T11:25:42.040Z",
+      "updatedAt": "2026-11-12T11:25:42.040Z"
+    },
+    {
+      "id": "b2b-inv-1794482741987-rgq4z",
+      "supplierId": "sup-1793775910433-8oofk",
+      "supplierGstin": "33AABCS1429B1Z6",
+      "supplierName": "PRECISION AUTO COMPONENTS PVT LTD",
+      "invoiceNumber": "TEST-INV-1794482741986",
+      "invoiceType": "Regular",
+      "invoiceDate": "2026-07-25",
+      "invoiceValue": 120500.5,
+      "placeOfSupply": "33-Tamil Nadu",
+      "reverseCharge": "N",
+      "taxableValue": 100000,
+      "integratedTax": 0,
+      "centralTax": 9000,
+      "stateUtTax": 9000,
+      "cess": 500,
+      "totalGst": 18500,
+      "gstrPeriod": "August 2026",
+      "periodKey": "2026-08",
+      "financialYear": "2026-27",
+      "filingDate": "2026-08-11",
+      "itcAvailability": "Yes",
+      "applicableTaxRate": 18,
+      "source": "GSTR-2B",
+      "irn": "e7f1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "irnDate": "2026-07-25",
+      "createdBy": "admin-user-id",
+      "createdAt": "2026-11-12T11:25:41.987Z",
+      "updatedAt": "2026-11-12T11:25:41.987Z"
+    },
     {
       "id": "b2b-inv-1793778052373-8o782",
       "supplierId": "sup-1793778052365-ek2h5",
@@ -15381,6 +17202,46 @@
     }
   ],
   "importBatches": [
+    {
+      "id": "batch-1794805206569",
+      "fileName": "Commit_Test.csv",
+      "uploadedAt": "2026-11-16T05:00:06.580Z",
+      "uploadedBy": "admin-id",
+      "totalRows": 1,
+      "successfulRows": 1,
+      "failedRows": 0,
+      "duplicateRows": 1,
+      "importStatus": "COMPLETED",
+      "gstrPeriodSummary": {
+        "2026-08": 1
+      }
+    },
+    {
+      "id": "batch-1794805206563",
+      "fileName": "Commit_Test.csv",
+      "uploadedAt": "2026-11-16T05:00:06.563Z",
+      "uploadedBy": "admin-id",
+      "totalRows": 1,
+      "successfulRows": 0,
+      "failedRows": 0,
+      "duplicateRows": 1,
+      "importStatus": "FAILED",
+      "gstrPeriodSummary": {}
+    },
+    {
+      "id": "batch-1794805206549",
+      "fileName": "Commit_Test.csv",
+      "uploadedAt": "2026-11-16T05:00:06.554Z",
+      "uploadedBy": "admin-id",
+      "totalRows": 1,
+      "successfulRows": 1,
+      "failedRows": 0,
+      "duplicateRows": 0,
+      "importStatus": "COMPLETED",
+      "gstrPeriodSummary": {
+        "2026-08": 1
+      }
+    },
     {
       "id": "batch-1793778044031",
       "fileName": "Commit_Test.csv",

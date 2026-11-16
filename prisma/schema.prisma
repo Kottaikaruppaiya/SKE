@@ -69,6 +69,8 @@ model User {
   name         String
   role         Role        @default(ADMIN)
   isActive     Boolean     @default(true)
+  mustChangePassword Boolean @default(false)
+  tokenRevokedBefore DateTime?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   documents    Document[]
@@ -133,6 +135,10 @@ model Shipment {
   paymentStatus        PaymentStatus       @default(UNPAID)
   reviewStatus         ReviewStatus        @default(NEEDS_REVIEW)
   remarks              String?
+  isArchived           Boolean             @default(false)
+  archivedAt           DateTime?
+  archivedBy           String?
+  archivedReason       String?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
 

@@ -13,6 +13,7 @@ import { EditShipmentModal } from './components/EditShipmentModal.tsx';
 import { AllocatePaymentModal } from './components/AllocatePaymentModal.tsx';
 import { DocumentUploadModal } from './components/DocumentUploadModal.tsx';
 import { MobileBottomNav } from './components/MobileBottomNav.tsx';
+import { ForcePasswordChangeModal } from './components/ForcePasswordChangeModal.tsx';
 
 import { LoginPage } from './views/LoginPage.tsx';
 
@@ -52,7 +53,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<NavItemKey>('dashboard');
   const [selectedB2bPeriodKey, setSelectedB2bPeriodKey] = useState<string>('2026-08');
   const [financialYears, setFinancialYears] = useState<FinancialYear[]>([]);
-  const [selectedFyId, setSelectedFyId] = useState<string>('fy-2026-27');
+  const [selectedFyId, setSelectedFyId] = useState<string>('');
   const [consignees, setConsignees] = useState<ConsigneeMaster[]>([]);
   const [banks, setBanks] = useState<BankMaster[]>([]);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -120,15 +121,19 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleLoginSuccess = async (user: User) => {
-    setCurrentUser(user);
-    // Explicit requirement: "they login then they came in dashboard"
+  const handleLoginSuccess = async (user: User, mustChangePassword?: boolean) => {
+    const resolvedUser = mustChangePassword !== undefined ? { ...user, mustChangePassword } : user;
+    setCurrentUser(resolvedUser);
     setCurrentTab('dashboard');
     await loadInitialData();
   };
 
-  const handleQuickExport = () => {
-    window.open(api.getExportUrl(selectedFyId), '_blank');
+  const handleQuickExport = async () => {
+    try {
+      await api.downloadExportExcel(selectedFyId || undefined);
+    } catch (err) {
+      console.error('Export failed:', err);
+    }
   };
 
   const handleLogout = async () => {
@@ -154,6 +159,24 @@ export default function App() {
   if (!currentUser) {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;
   }
+
+  if (currentUser.mustChangePassword) {
+    return (
+      <ForcePasswordChangeModal
+        user={currentUser}
+        onPasswordChanged={(updatedUser) => {
+          setCurrentUser({ ...updatedUser, mustChangePassword: false });
+          loadInitialData();
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  const activeFyLabel =
+    selectedFyId === 'ALL'
+      ? 'All Years'
+      : financialYears.find((f) => f.id === selectedFyId)?.label || 'Current';
 
   const handleNavigate = (tab: NavItemKey) => {
     if (tab === 'new-shipment') {
@@ -193,6 +216,7 @@ export default function App() {
           {currentTab === 'dashboard' && (
             <DashboardView
               selectedFyId={selectedFyId}
+              selectedFyLabel={activeFyLabel}
               onNavigate={handleNavigate}
               onSelectShipment={setSelectedShipmentId}
               userRole={currentUser.role}
@@ -358,6 +382,7 @@ export default function App() {
           {currentTab === 'documents' && (
             <DocumentReviewView
               userRole={currentUser.role}
+              selectedFyId={selectedFyId}
               onSelectShipment={setSelectedShipmentId}
               refreshKey={refreshKey}
             />

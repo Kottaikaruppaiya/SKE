@@ -24,6 +24,7 @@ import { api } from '../api/client.ts';
 
 interface DashboardViewProps {
   selectedFyId: string;
+  selectedFyLabel?: string;
   onNavigate: (tab: any) => void;
   onSelectShipment: (id: string) => void;
   userRole: Role;
@@ -32,6 +33,7 @@ interface DashboardViewProps {
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   selectedFyId,
+  selectedFyLabel,
   onNavigate,
   onSelectShipment,
   userRole,
@@ -56,10 +58,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     );
   }
 
-  const realisationPercent =
+  const realisationNum =
     metrics.totalInvoiceValueUsd > 0
-      ? ((metrics.totalRealisedUsd / metrics.totalInvoiceValueUsd) * 100).toFixed(1)
-      : '0.0';
+      ? (metrics.totalRealisedUsd / metrics.totalInvoiceValueUsd) * 100
+      : 0;
+  const realisationPercent = realisationNum.toFixed(1);
+  const clampedBarWidth = Math.min(100, Math.max(0, realisationNum));
+
+  const fyBadgeText =
+    selectedFyLabel || (selectedFyId === 'ALL' ? 'All Years' : selectedFyId ? selectedFyId.replace(/^fy-/i, '') : 'Current');
 
   const isViewer = userRole === 'VIEWER';
 
@@ -68,10 +75,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Top Welcome & Quick Actions */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 rounded-2xl p-4 sm:p-6 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30">
-              FY {selectedFyId.replace('fy-', '')}
+              FY {fyBadgeText}
             </span>
+            {(metrics.archivedCount ?? 0) > 0 && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-700/80 text-slate-300 border border-slate-600">
+                {metrics.archivedCount} Archived Excluded
+              </span>
+            )}
             <span className="text-xs text-slate-400 font-medium">Export Realisation Console</span>
           </div>
           <h2 className="text-lg sm:text-xl font-bold tracking-tight">S K Enterprises — Export Document Vault</h2>
@@ -151,12 +163,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
           <div className="text-2xl font-bold text-amber-700 mt-2">
-            ${metrics.totalOutstandingUsd.toLocaleString()}
+            ${Math.max(0, metrics.totalOutstandingUsd).toLocaleString()}
           </div>
           <div className="text-xs text-slate-500 mt-1 flex items-center justify-between">
             <span>{metrics.partPaidCount} Part Paid</span>
             <span>{metrics.unpaidCount} Unpaid</span>
           </div>
+          {((metrics.totalExcessReceivedUsd ?? 0) > 0 || metrics.excessCount > 0) && (
+            <div className="mt-1.5 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5">
+              Excess Received: +${(metrics.totalExcessReceivedUsd || 0).toLocaleString()} ({metrics.excessCount} inv.)
+            </div>
+          )}
         </div>
 
         {/* Incentives */}
@@ -189,7 +206,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
         <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
           <div
-            style={{ width: `${realisationPercent}%` }}
+            style={{ width: `${clampedBarWidth}%` }}
             className="bg-emerald-500 h-full transition-all duration-500"
           ></div>
         </div>

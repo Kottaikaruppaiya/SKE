@@ -41,6 +41,7 @@ export const B2bMonthlyView: React.FC<B2bMonthlyViewProps> = ({ userRole, onOpen
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedMonthFilter, setSelectedMonthFilter] = useState<string>('ALL');
   const [onlyWithInvoices, setOnlyWithInvoices] = useState<boolean>(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const isViewer = userRole === 'VIEWER';
 
@@ -107,8 +108,23 @@ export const B2bMonthlyView: React.FC<B2bMonthlyViewProps> = ({ userRole, onOpen
 
   const hasActiveFilters = searchQuery.trim() !== '' || selectedMonthFilter !== 'ALL' || onlyWithInvoices;
 
+  const handleExport = async (params: { reportType?: string; periodKey?: string; financialYear?: string }) => {
+    setExportError(null);
+    try {
+      await api.downloadB2bExport(params);
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export B2B Excel.');
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {exportError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
+        </div>
+      )}
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
         <div>
@@ -158,14 +174,14 @@ export const B2bMonthlyView: React.FC<B2bMonthlyViewProps> = ({ userRole, onOpen
             </button>
           )}
 
-          <a
-            href={api.getB2bExportUrl({ reportType: 'monthly_summary', financialYear: selectedFy })}
-            download
+          <button
+            type="button"
+            onClick={() => handleExport({ reportType: 'monthly_summary', financialYear: selectedFy })}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <Download className="w-3.5 h-3.5 text-emerald-600" />
             <span>Export FY Summary</span>
-          </a>
+          </button>
         </div>
       </div>
 
@@ -440,14 +456,14 @@ export const B2bMonthlyView: React.FC<B2bMonthlyViewProps> = ({ userRole, onOpen
                       </button>
                     )}
                     {hasInvoices && (
-                      <a
-                        href={api.getB2bExportUrl({ periodKey: month.periodKey })}
-                        download
+                      <button
+                        type="button"
+                        onClick={() => handleExport({ periodKey: month.periodKey })}
                         title={`Export Excel for ${month.displayPeriod}`}
                         className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-white rounded-lg border border-transparent hover:border-slate-300 transition-colors cursor-pointer"
                       >
                         <Download className="w-4 h-4" />
-                      </a>
+                      </button>
                     )}
                   </div>
                 </div>

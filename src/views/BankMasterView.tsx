@@ -32,8 +32,18 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
   const [accountNumber, setAccountNumber] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const isViewer = userRole === 'VIEWER';
+
+  const handleExportCsv = async () => {
+    setExportError(null);
+    try {
+      await api.downloadExportCsv('Bank Master');
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export Bank Master CSV.');
+    }
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteModalState, setDeleteModalState] = useState<{
@@ -156,14 +166,14 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
             className="px-3 py-2 sm:py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-full sm:w-64"
           />
 
-          <a
-            href={api.getExportCsvUrl('Bank Master')}
-            download="Bank_Master.csv"
-            className="h-9 sm:h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-colors whitespace-nowrap"
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="h-9 sm:h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center justify-center gap-1.5 shrink-0 transition-colors whitespace-nowrap cursor-pointer"
           >
             <Download size={13} className="text-blue-600" />
             <span>Export Bank Master CSV</span>
-          </a>
+          </button>
 
           {!isViewer && (
             <button
@@ -176,6 +186,13 @@ export const BankMasterView: React.FC<BankMasterViewProps> = ({
           )}
         </div>
       </div>
+
+      {exportError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium flex items-center justify-between">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="font-bold px-2">×</button>
+        </div>
+      )}
 
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
         <div className="overflow-x-auto">

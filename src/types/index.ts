@@ -41,6 +41,8 @@ export interface User {
   name: string;
   role: Role;
   isActive: boolean;
+  mustChangePassword?: boolean;
+  tokenRevokedBefore?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -292,6 +294,7 @@ export interface Shipment {
   remarks?: string;
   isArchived?: boolean;
   archivedAt?: string;
+  archivedBy?: string;
   archivedReason?: string;
   createdAt: string;
   updatedAt: string;
@@ -518,6 +521,7 @@ export interface DashboardMetrics {
   totalInvoiceValueUsd: number;
   totalRealisedUsd: number;
   totalOutstandingUsd: number;
+  totalExcessReceivedUsd?: number;
   unpaidCount: number;
   partPaidCount: number;
   fullyPaidCount: number;
@@ -529,6 +533,7 @@ export interface DashboardMetrics {
   brcRealisedCount: number;
   brcOverdueCount: number;
   pendingReviewCount: number;
+  archivedCount?: number;
   gstSummary?: GstSummary;
 }
 

@@ -61,11 +61,12 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
   consignees,
   banks,
 }) => {
-  // 1. Financial Year (default 2026-2027)
+  // 1. Financial Year (dynamic current or selected FY)
   const defaultFy =
-    financialYears.find(
-      (f) => f.label.includes('2026') || f.id.includes('2026') || f.isCurrent
-    )?.id || selectedFyId || 'fy-2026-27';
+    selectedFyId ||
+    financialYears.find((f) => f.isCurrent)?.id ||
+    financialYears[0]?.id ||
+    '';
 
   const [fyId, setFyId] = useState(defaultFy);
 
@@ -139,10 +140,12 @@ export const NewShipmentModal: React.FC<NewShipmentModalProps> = ({
   // Sync initial financial year & masters when modal opens
   useEffect(() => {
     if (isOpen) {
-      const match = financialYears.find(
-        (f) => f.label.includes('2026') || f.id.includes('2026') || f.isCurrent
-      )?.id;
-      setFyId(match || selectedFyId || 'fy-2026-27');
+      const match =
+        selectedFyId ||
+        financialYears.find((f) => f.isCurrent)?.id ||
+        financialYears[0]?.id ||
+        '';
+      setFyId(match);
       if (consignees[0]?.id && !consigneeId) {
         setConsigneeId(consignees[0].id);
       }

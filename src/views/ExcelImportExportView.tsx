@@ -29,8 +29,21 @@ export const ExcelImportExportView: React.FC<ExcelImportExportViewProps> = ({
   userRole,
 }) => {
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [report, setReport] = useState<ImportValidationReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handleExportWorkbook = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      await api.downloadExportExcel(selectedFyId);
+    } catch (err: any) {
+      setError(err.message || 'Excel export failed.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -89,13 +102,15 @@ export const ExcelImportExportView: React.FC<ExcelImportExportViewProps> = ({
             </ul>
           </div>
 
-          <a
-            href={api.getExportUrl(selectedFyId)}
-            className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors inline-flex items-center justify-center gap-2"
+          <button
+            type="button"
+            disabled={exporting}
+            onClick={handleExportWorkbook}
+            className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-xs font-bold shadow-xs transition-colors inline-flex items-center justify-center gap-2 cursor-pointer"
           >
             <Download size={15} />
-            <span>Download Live Workbook (.xlsx)</span>
-          </a>
+            <span>{exporting ? 'Preparing Workbook...' : 'Download Live Workbook (.xlsx)'}</span>
+          </button>
         </div>
 
         {/* IMPORT / HISTORICAL MIGRATION CARD */}

@@ -66,6 +66,9 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const [incReceivedDate, setIncReceivedDate] = useState<string>('');
   const [incScrollNo, setIncScrollNo] = useState<string>('');
   const [incRemarks, setIncRemarks] = useState<string>('');
+  const [brcError, setBrcError] = useState<string | null>(null);
+  const [incError, setIncError] = useState<string | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
 
   const loadData = async () => {
     if (!shipmentId) return;
@@ -233,6 +236,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   };
 
   const openEditBrc = () => {
+    setBrcError(null);
     setBrcNumber(shipment?.brcRecord?.brcNumber || '');
     setBrcStatus((shipment?.brcRecord?.status as any) || 'PENDING');
     setBrcIssueDate(shipment?.brcRecord?.issueDate || '');
@@ -245,6 +249,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const handleSaveBrc = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shipment) return;
+    setBrcError(null);
     try {
       await api.updateBrc(shipment.brcRecord?.id || shipment.id, {
         brcNumber,
@@ -258,7 +263,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
       await loadData();
       if (onDeleted) onDeleted();
     } catch (err: any) {
-      alert(err.message || 'Failed to save BRC');
+      setBrcError(err.message || 'Failed to save BRC');
     }
   };
 
@@ -292,6 +297,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   };
 
   const openEditIncentive = (inc: any) => {
+    setIncError(null);
     setEditingIncentive(inc);
     setIncType(inc.type);
     setIncClaimed(inc.claimedAmount || 0);
@@ -305,6 +311,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const handleSaveIncentive = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingIncentive) return;
+    setIncError(null);
     try {
       await api.updateIncentive(editingIncentive.id, {
         status: incStatus as any,
@@ -318,7 +325,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
       await loadData();
       if (onDeleted) onDeleted();
     } catch (err: any) {
-      alert(err.message || 'Failed to update incentive');
+      setIncError(err.message || 'Failed to update incentive');
     }
   };
 
@@ -377,6 +384,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   };
 
   const openCreateIncentive = () => {
+    setIncError(null);
     setIsAddingIncentive(true);
     setIncType('DRAWBACK');
     setIncClaimed(0);
@@ -390,6 +398,7 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
   const handleCreateIncentive = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!shipment) return;
+    setIncError(null);
     try {
       await api.createIncentive({
         shipmentId: shipment.id,
@@ -405,7 +414,16 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
       await loadData();
       if (onDeleted) onDeleted();
     } catch (err: any) {
-      alert(err.message || 'Failed to create incentive');
+      setIncError(err.message || 'Failed to create incentive');
+    }
+  };
+
+  const handleDownloadDoc = async (docId: string, filename: string) => {
+    setDocError(null);
+    try {
+      await api.downloadDocument(docId, filename);
+    } catch (err: any) {
+      setDocError(err.message || 'Failed to download document');
     }
   };
 
@@ -708,6 +726,13 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                     )}
                   </div>
 
+                  {docError && (
+                    <div className="p-2.5 bg-red-50 border border-red-200 text-red-800 rounded-lg text-xs font-medium flex items-center justify-between">
+                      <span>{docError}</span>
+                      <button type="button" onClick={() => setDocError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
+                    </div>
+                  )}
+
                   <div className="border border-slate-200 rounded-xl overflow-hidden">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
@@ -740,15 +765,14 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                             <td className="p-3 text-slate-600">{doc.uploadedByName}</td>
                             <td className="p-3 text-right">
                               <div className="flex items-center justify-end space-x-1.5">
-                                <a
-                                  href={api.getDocumentDownloadUrl(doc.id)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 font-medium px-2 py-1 bg-blue-50 rounded"
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadDoc(doc.id, doc.originalFilename)}
+                                  className="inline-flex items-center space-x-1 text-blue-600 hover:text-blue-800 font-medium px-2 py-1 bg-blue-50 rounded cursor-pointer"
                                 >
                                   <Download size={13} />
                                   <span>Download</span>
-                                </a>
+                                </button>
                                 {!isViewer && (
                                   <button
                                     onClick={() => promptDeleteDocument(doc.id, doc.originalFilename)}
@@ -886,6 +910,9 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                     {isEditingBrc ? (
                       <form onSubmit={handleSaveBrc} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4 text-xs">
                         <div className="font-bold text-slate-800 text-sm">Update Bank Realisation Certificate</div>
+                        {brcError && (
+                          <div className="p-2.5 bg-red-50 border border-red-200 text-red-800 rounded-lg font-medium">{brcError}</div>
+                        )}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="font-semibold text-slate-700 block mb-1">BRC Reference Number</label>
@@ -1040,6 +1067,9 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                   {isAddingIncentive && (
                     <form onSubmit={handleCreateIncentive} className="p-4 bg-blue-50/50 rounded-xl border border-blue-200 space-y-3 text-xs">
                       <div className="font-bold text-slate-900 text-sm">Add New Incentive Claim</div>
+                      {incError && (
+                        <div className="p-2.5 bg-red-50 border border-red-200 text-red-800 rounded-lg font-medium">{incError}</div>
+                      )}
                       <div className="grid grid-cols-3 gap-3">
                         <div>
                           <label className="font-semibold text-slate-700 block mb-1">Scheme Type *</label>
@@ -1131,6 +1161,9 @@ export const ShipmentDetailModal: React.FC<ShipmentDetailModalProps> = ({
                       <div className="font-bold text-slate-900 text-sm">
                         Edit Incentive: {editingIncentive.type === 'DRAWBACK' ? 'Duty Drawback (DBK)' : editingIncentive.type}
                       </div>
+                      {incError && (
+                        <div className="p-2.5 bg-red-50 border border-red-200 text-red-800 rounded-lg font-medium">{incError}</div>
+                      )}
                       <div className="grid grid-cols-3 gap-3">
                         <div>
                           <label className="font-semibold text-slate-700 block mb-1">Claimed Amount (INR)</label>

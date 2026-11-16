@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, PlusCircle, ShieldAlert, ShieldCheck, UserCheck, Edit, Lock, Trash2 } from 'lucide-react';
 import { User, Role } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 export const UserManagementView: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -9,6 +10,7 @@ export const UserManagementView: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<User | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -16,6 +18,7 @@ export const UserManagementView: React.FC = () => {
   const [role, setRole] = useState<Role>('ADMIN');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const loadUsers = async () => {
@@ -24,7 +27,7 @@ export const UserManagementView: React.FC = () => {
       const data = await api.getUsers();
       setUsers(data);
     } catch (e: any) {
-      setError(e.message || 'Failed to load user list.');
+      setActionError(e.message || 'Failed to load user list.');
     } finally {
       setLoading(false);
     }
@@ -39,7 +42,7 @@ export const UserManagementView: React.FC = () => {
     setName('');
     setEmail('');
     setRole('ADMIN');
-    setPassword('Admin@123');
+    setPassword('');
     setError(null);
     setShowModal(true);
   };
@@ -84,26 +87,28 @@ export const UserManagementView: React.FC = () => {
   };
 
   const toggleActive = async (u: User) => {
+    setActionError(null);
     try {
       await api.updateUser(u.id, { isActive: !u.isActive });
       loadUsers();
     } catch (err: any) {
-      alert(err.message);
+      setActionError(err.message || 'Failed to update user status.');
     }
   };
 
-  const handleDeleteUser = async (u: User) => {
-    const ok = window.confirm(`Permanently delete user account "${u.name}" (${u.email})? This action cannot be undone.`);
-    if (!ok) return;
-
+  const executeDeleteUser = async () => {
+    if (!confirmDeleteUser) return;
+    const u = confirmDeleteUser;
     setDeletingId(u.id);
+    setActionError(null);
     try {
       await api.deleteUser(u.id);
       setActionSuccess(`User "${u.name}" deleted successfully.`);
       setTimeout(() => setActionSuccess(null), 4000);
       loadUsers();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete user.');
+      setActionError(err.message || 'Failed to delete user.');
+      throw err;
     } finally {
       setDeletingId(null);
     }
@@ -135,6 +140,13 @@ export const UserManagementView: React.FC = () => {
         <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-medium flex items-center justify-between">
           <span>{actionSuccess}</span>
           <button onClick={() => setActionSuccess(null)} className="font-bold text-slate-500 hover:text-slate-800">×</button>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
         </div>
       )}
 
@@ -199,7 +211,7 @@ export const UserManagementView: React.FC = () => {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDeleteUser(u)}
+                        onClick={() => setConfirmDeleteUser(u)}
                         disabled={deletingId === u.id}
                         className="p-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-semibold transition-colors disabled:opacity-50"
                         title="Delete User Account"
@@ -297,6 +309,17 @@ export const UserManagementView: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={Boolean(confirmDeleteUser)}
+        title="Delete User Account"
+        itemName={confirmDeleteUser ? `${confirmDeleteUser.name} (${confirmDeleteUser.email})` : ''}
+        itemType="User Account"
+        message={`Permanently delete user account "${confirmDeleteUser?.name || ''}" (${confirmDeleteUser?.email || ''})? This action cannot be undone.`}
+        confirmText="Delete User"
+        onConfirm={executeDeleteUser}
+        onCancel={() => setConfirmDeleteUser(null)}
+      />
     </div>
   );
 };

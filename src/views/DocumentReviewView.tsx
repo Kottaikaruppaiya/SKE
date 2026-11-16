@@ -23,15 +23,18 @@ import {
 } from 'lucide-react';
 import { DocumentRecord, Role, ReviewStatus, OcrJob, DocumentCategory } from '../types/index.ts';
 import { api } from '../api/client.ts';
+import { ConfirmationModal } from '../components/ConfirmationModal.tsx';
 
 interface DocumentReviewViewProps {
   userRole: Role;
+  selectedFyId?: string;
   onSelectShipment: (id: string) => void;
   refreshKey?: number;
 }
 
 export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
   userRole,
+  selectedFyId,
   onSelectShipment,
   refreshKey,
 }) => {
@@ -42,6 +45,8 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [selectedDoc, setSelectedDoc] = useState<DocumentRecord | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmDoc, setDeleteConfirmDoc] = useState<{ id: string; filename: string } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // OCR Queue state
   const [ocrJobs, setOcrJobs] = useState<OcrJob[]>([]);
@@ -136,27 +141,38 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
   }, [activeTab, selectedJob?.id]);
 
   const handleUpdateReviewStatus = async (id: string, status: ReviewStatus) => {
+    setActionError(null);
     try {
       const updated = await api.reviewDocument(id, status);
       setDocuments((prev) => prev.map((d) => (d.id === id ? updated : d)));
       if (selectedDoc?.id === id) setSelectedDoc(updated);
     } catch (err: any) {
-      alert(err.message || 'Failed to update review status');
+      setActionError(err.message || 'Failed to update review status');
     }
   };
 
-  const handleDeleteDocument = async (id: string, filename: string) => {
-    const ok = window.confirm(`Are you sure you want to permanently delete document "${filename}"?`);
-    if (!ok) return;
-
+  const executeDeleteDocument = async () => {
+    if (!deleteConfirmDoc) return;
+    const { id } = deleteConfirmDoc;
     setDeletingId(id);
+    setActionError(null);
     try {
       await api.deleteDocument(id);
       await loadDocs();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete document');
+      setActionError(err.message || 'Failed to delete document');
+      throw err;
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleDownloadDoc = async (id: string, filename: string) => {
+    setActionError(null);
+    try {
+      await api.downloadDocument(id, filename);
+    } catch (err: any) {
+      setActionError(err.message || 'Failed to download document');
     }
   };
 
@@ -166,17 +182,20 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
 
     setIsUploading(true);
     setCommitMessage(null);
+    setActionError(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('category', queueCategory);
-      fd.append('financialYearId', 'fy-2026-27');
+      if (selectedFyId && selectedFyId !== 'ALL') {
+        fd.append('financialYearId', selectedFyId);
+      }
 
       const res = await api.queueOcrJob(fd);
       await loadOcrJobs();
       if (res.job) selectJob(res.job);
     } catch (err: any) {
-      alert(err.message || 'Failed to queue document for OCR.');
+      setActionError(err.message || 'Failed to queue document for OCR.');
     } finally {
       setIsUploading(false);
       e.target.value = '';
@@ -184,21 +203,23 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
   };
 
   const handleRetryJob = async (jobId: string) => {
+    setActionError(null);
     try {
       const updated = await api.retryOcrJob(jobId);
       selectJob(updated);
       await loadOcrJobs();
     } catch (err: any) {
-      alert(err.message || 'Retry failed.');
+      setActionError(err.message || 'Retry failed.');
     }
   };
 
   const handleDeleteJob = async (jobId: string) => {
+    setActionError(null);
     try {
       await api.deleteOcrJob(jobId);
       await loadOcrJobs();
     } catch (err: any) {
-      alert(err.message || 'Delete job failed.');
+      setActionError(err.message || 'Delete job failed.');
     }
   };
 
@@ -206,14 +227,15 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
     if (!selectedJob) return;
     setIsCommitting(true);
     setCommitMessage(null);
+    setActionError(null);
     try {
       const res = await api.approveOcrJob(selectedJob.id, reviewedDraft);
-      setCommitMessage(res.message || 'Approved and committed into PostgreSQL records!');
+      setCommitMessage(res.message || 'Approved and committed into system records!');
       await loadOcrJobs();
       await loadDocs();
       if (res.job) selectJob(res.job);
     } catch (err: any) {
-      alert(err.message || 'Approval failed.');
+      setActionError(err.message || 'Approval failed.');
     } finally {
       setIsCommitting(false);
     }
@@ -223,6 +245,12 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="font-bold text-red-600 hover:text-red-900">×</button>
+        </div>
+      )}
       {/* View Header with Tab Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
         <div>
@@ -748,15 +776,14 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <a
-                      href={api.getDocumentDownloadUrl(selectedDoc.id)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors"
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadDoc(selectedDoc.id, selectedDoc.originalFilename)}
+                      className="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <Download size={13} />
                       <span>Download</span>
-                    </a>
+                    </button>
 
                     {selectedDoc.shipmentId && (
                       <button
@@ -769,7 +796,7 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
 
                     {!isViewer && (
                       <button
-                        onClick={() => handleDeleteDocument(selectedDoc.id, selectedDoc.originalFilename)}
+                        onClick={() => setDeleteConfirmDoc({ id: selectedDoc.id, filename: selectedDoc.originalFilename })}
                         disabled={deletingId === selectedDoc.id}
                         className="h-8 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                         title="Permanently delete document"
@@ -874,6 +901,16 @@ export const DocumentReviewView: React.FC<DocumentReviewViewProps> = ({
           </div>
         </div>
       )}
+      <ConfirmationModal
+        isOpen={Boolean(deleteConfirmDoc)}
+        title="Delete Document"
+        itemName={deleteConfirmDoc?.filename || ''}
+        itemType="Export Document"
+        message={`Are you sure you want to permanently delete "${deleteConfirmDoc?.filename || ''}"?`}
+        confirmText="Delete Document"
+        onConfirm={executeDeleteDocument}
+        onCancel={() => setDeleteConfirmDoc(null)}
+      />
     </div>
   );
 };

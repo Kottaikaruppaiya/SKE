@@ -32,6 +32,16 @@ export const SummaryReportsView: React.FC<SummaryReportsViewProps> = ({
   const [consignees, setConsignees] = useState<ConsigneeMaster[]>([]);
   const [banks, setBanks] = useState<BankMaster[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportCsv = async () => {
+    setExportError(null);
+    try {
+      await api.downloadExportCsv('Summary', selectedFyId);
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export summary CSV.');
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -313,16 +323,23 @@ export const SummaryReportsView: React.FC<SummaryReportsViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <a
-            href={api.getExportCsvUrl('Summary', selectedFyId)}
-            download={`SKE_Summary_Report_${selectedFyId}_${new Date().toISOString().split('T')[0]}.csv`}
-            className="h-9 px-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 transition-colors"
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="h-9 px-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Download size={14} className="text-blue-600" />
             <span>Export Summary CSV</span>
-          </a>
+          </button>
         </div>
       </div>
+
+      {exportError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium flex items-center justify-between">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="font-bold px-2">×</button>
+        </div>
+      )}
 
       {/* FINANCIAL RECONCILIATION & FOREX CARD (Part 9.1) */}
       <div className="p-5 bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl text-white shadow-sm space-y-4">

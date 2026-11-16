@@ -77,8 +77,18 @@ export const QuickView: React.FC<QuickViewProps> = ({
   // Delete & Archive Modal State
   const [targetShipmentForDelete, setTargetShipmentForDelete] = useState<Shipment | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const isViewer = userRole === 'VIEWER';
+
+  const handleExportCsv = async () => {
+    setExportError(null);
+    try {
+      await api.downloadExportCsv('Export Tracker', selectedFyId !== 'ALL' ? selectedFyId : undefined);
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export Quick View CSV.');
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -328,16 +338,23 @@ export const QuickView: React.FC<QuickViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <a
-            href={api.getExportCsvUrl('Export Tracker', selectedFyId !== 'ALL' ? selectedFyId : undefined)}
-            download="QuickView_Tracker.csv"
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs"
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-300 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
           >
             <Download size={14} />
             <span>Download CSV</span>
-          </a>
+          </button>
         </div>
       </div>
+
+      {exportError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-center justify-between">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="font-bold px-2">×</button>
+        </div>
+      )}
 
       {/* Notifications */}
       {rowSuccess && (

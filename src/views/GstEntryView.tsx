@@ -247,6 +247,20 @@ export const GstEntryView: React.FC<GstEntryViewProps> = ({ userRole }) => {
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
+  const handleExportGst = async () => {
+    try {
+      await api.downloadGstExport({
+        consigneeId: selectedConsigneeId,
+        result: selectedResult,
+        search,
+        startDate,
+        endDate,
+      });
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to export GST Excel.', 'error');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header Bar */}
@@ -262,21 +276,14 @@ export const GstEntryView: React.FC<GstEntryViewProps> = ({ userRole }) => {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <a
-            href={api.getGstExportUrl({
-              consigneeId: selectedConsigneeId,
-              result: selectedResult,
-              search,
-              startDate,
-              endDate,
-            })}
-            target="_blank"
-            rel="noreferrer"
-            className="h-9 px-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg shadow-2xs flex items-center gap-2 transition-colors"
+          <button
+            type="button"
+            onClick={handleExportGst}
+            className="h-9 px-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-lg shadow-2xs flex items-center gap-2 transition-colors cursor-pointer"
           >
             <Download size={14} className="text-teal-600" />
             <span>Export Excel (.xlsx)</span>
-          </a>
+          </button>
 
           {!isViewer && (
             <button

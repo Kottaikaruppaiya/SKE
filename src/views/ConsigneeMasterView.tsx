@@ -52,6 +52,16 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
 
   const isViewer = userRole === 'VIEWER';
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExportCsv = async () => {
+    setExportError(null);
+    try {
+      await api.downloadExportCsv('Consignee Master');
+    } catch (err: any) {
+      setExportError(err.message || 'Failed to export Consignee Master CSV.');
+    }
+  };
 
   // Load fresh data directly to avoid any stale state
   const loadData = async () => {
@@ -223,14 +233,14 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
             </button>
           </div>
 
-          <a
-            href={api.getExportCsvUrl('Consignee Master')}
-            download="Consignee_Master.csv"
-            className="h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-colors"
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="h-8 px-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold shadow-2xs inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
           >
             <Download size={13} className="text-blue-600" />
             <span>Export CSV</span>
-          </a>
+          </button>
 
           {!isViewer && (
             <button
@@ -243,6 +253,13 @@ export const ConsigneeMasterView: React.FC<ConsigneeMasterViewProps> = ({
           )}
         </div>
       </div>
+
+      {exportError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium flex items-center justify-between">
+          <span>{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} className="font-bold px-2">×</button>
+        </div>
+      )}
 
       {/* Main Table Container: No vertical height clamp to ensure all rows display naturally */}
       <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">

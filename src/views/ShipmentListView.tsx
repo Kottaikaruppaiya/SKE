@@ -145,6 +145,14 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
 
   const isViewer = userRole === 'VIEWER';
 
+  const handleExportExcel = async () => {
+    try {
+      await api.downloadExportExcel(selectedFyId);
+    } catch (err: any) {
+      setActionMessage({ text: err.message || 'Failed to export tracker.', type: 'error' });
+    }
+  };
+
   // Pagination calculation
   const totalCount = shipments.length;
   const displayedShipments =
@@ -177,13 +185,14 @@ export const ShipmentListView: React.FC<ShipmentListViewProps> = ({
               <span>New Shipment</span>
             </button>
           )}
-          <a
-            href={api.getExportUrl(selectedFyId)}
-            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-300 transition-all flex items-center space-x-1.5 flex-1 sm:flex-none justify-center"
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-300 transition-all flex items-center space-x-1.5 flex-1 sm:flex-none justify-center cursor-pointer"
           >
             <Download size={14} />
             <span>Export Tracker (.xlsx)</span>
-          </a>
+          </button>
         </div>
       </div>
 
