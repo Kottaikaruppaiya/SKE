@@ -3,25 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import fs from 'fs';
 import { promises as fsp } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import type { OcrJob } from '../src/types/index.ts';
+import { env } from './config/environment.ts';
+import { getStagingDir } from './config/storage.ts';
 import { db } from './db.ts';
 import { extractDocumentData, mergeExtractedDocuments } from './extractor.ts';
-import type { OcrJob } from '../src/types/index.ts';
 
-// Configurable concurrency based on VPS CPU / RAM
-const MAX_CONCURRENT_JOBS = Math.max(1, parseInt(process.env.OCR_CONCURRENCY || '2', 10));
-
-export function getOcrStagingDir(): string {
-  const storageRoot = process.env.STORAGE_ROOT ? path.resolve(process.env.STORAGE_ROOT) : path.resolve('storage');
-  const stagingDir = path.resolve(storageRoot, 'staging');
-  if (!fs.existsSync(stagingDir)) {
-    fs.mkdirSync(stagingDir, { recursive: true });
-  }
-  return stagingDir;
-}
+export const getOcrStagingDir = getStagingDir;
 
 class OcrQueueWorker {
   public readonly workerId: string;
@@ -43,9 +34,8 @@ class OcrQueueWorker {
   public startPolling(intervalMs = 4000) {
     if (this.timer) clearInterval(this.timer);
     this.timer = setInterval(() => {
-      this.tick();
+      void this.tick();
     }, intervalMs);
-    // Unref timer so it doesn't block graceful shutdown in tests
     if (this.timer && typeof this.timer.unref === 'function') {
       this.timer.unref();
     }
@@ -59,7 +49,9 @@ class OcrQueueWorker {
   }
 
   public triggerProcessing() {
-    setImmediate(() => this.tick());
+    setImmediate(() => {
+      void this.tick();
+    });
   }
 
   public async tick() {
@@ -69,24 +61,24 @@ class OcrQueueWorker {
     }
     this.isProcessing = true;
 
+    const maxConcurrent = Math.max(1, env.ocrConcurrency || 2);
     try {
       do {
         this.needsReschedule = false;
-        while (this.activeJobsCount < MAX_CONCURRENT_JOBS) {
-          // Database-level atomic job claiming with 60s lease
+        while (this.activeJobsCount < maxConcurrent) {
           const nextJob = db.claimNextOcrJob(this.workerId, 60000);
           if (!nextJob) break;
 
           this.activeJobsCount++;
-          this.processJob(nextJob).finally(() => {
+          void this.processJob(nextJob).finally(() => {
             this.activeJobsCount--;
             this.triggerProcessing();
           });
         }
-      } while (this.needsReschedule && this.activeJobsCount < MAX_CONCURRENT_JOBS);
+      } while (this.needsReschedule && this.activeJobsCount < maxConcurrent);
     } finally {
       this.isProcessing = false;
-      if (this.needsReschedule && this.activeJobsCount < MAX_CONCURRENT_JOBS) {
+      if (this.needsReschedule && this.activeJobsCount < maxConcurrent) {
         this.needsReschedule = false;
         this.triggerProcessing();
       }
@@ -108,25 +100,14 @@ class OcrQueueWorker {
     const stagingDir = getOcrStagingDir();
 
     try {
-      // Active lease renewal heartbeat: extends lease every 20s during long OCR processing
       heartbeatTimer = setInterval(() => {
-        const renewed = db.renewOcrJobLease(job.id, this.workerId, 60000);
-        if (!renewed) {
-          console.warn(JSON.stringify({
-            level: 'warn',
-            event: 'ocr_lease_renew_failed',
-            workerId: this.workerId,
-            jobId: job.id,
-          }));
-        }
+        db.renewOcrJobLease(job.id, this.workerId, 60000);
       }, 20000);
       if (heartbeatTimer && typeof heartbeatTimer.unref === 'function') {
         heartbeatTimer.unref();
       }
 
-      // 1. Resolve file buffer via async filesystem I/O
       let buffer: Buffer | null = this.stagingBufferMap.get(job.id) || null;
-
       if (!buffer && job.documentId) {
         const doc = db.getDocumentById(job.documentId);
         if (doc && doc.storedPath) {
@@ -134,33 +115,24 @@ class OcrQueueWorker {
           buffer = await this.readIfExists(absPath);
         }
       }
-
       if (!buffer) {
-        const stagingFile = path.resolve(stagingDir, `${job.id}.bin`);
-        buffer = await this.readIfExists(stagingFile);
+        buffer = await this.readIfExists(path.resolve(stagingDir, `${job.id}.bin`));
       }
-
       if (!buffer) {
         throw new Error(`Document binary could not be located in storage for OCR Job ${job.id}`);
       }
 
-      // 2. Execute local OCR extraction
       const extraction = await extractDocumentData(buffer, job.category, job.originalFilename);
       const executionTimeMs = Date.now() - startTime;
 
-      // Clean up in-memory buffer and staging file asynchronously
       this.stagingBufferMap.delete(job.id);
-      const stagingFile = path.resolve(stagingDir, `${job.id}.bin`);
       try {
-        await fsp.unlink(stagingFile);
+        await fsp.unlink(path.resolve(stagingDir, `${job.id}.bin`));
       } catch {
-        // Ignore if staging file wasn't written to disk
+        // Ignore missing staging file
       }
 
-      // Create draft preview
       const mergedDraft = mergeExtractedDocuments([extraction]);
-
-      // 3. Atomically commit extraction results, verifying worker lease remains valid
       db.completeOcrJob(job.id, this.workerId, {
         executionTimeMs,
         ocrApplied: extraction.ocrApplied,
@@ -171,7 +143,6 @@ class OcrQueueWorker {
         candidateDraft: mergedDraft,
       });
 
-      // Persist linked document record metadata if present
       if (job.documentId) {
         db.updateDocumentExtraction(job.documentId, {
           extractedData: extraction,
@@ -184,8 +155,7 @@ class OcrQueueWorker {
       }
     } catch (err: any) {
       const executionTimeMs = Date.now() - startTime;
-      const errorMsg = err?.message || 'Local OCR extraction failed.';
-      db.failOcrJob(job.id, this.workerId, errorMsg, executionTimeMs);
+      db.failOcrJob(job.id, this.workerId, err?.message || 'Local OCR extraction failed.', executionTimeMs);
     } finally {
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
@@ -197,7 +167,7 @@ class OcrQueueWorker {
   public getConcurrencyMetrics() {
     return {
       activeJobs: this.activeJobsCount,
-      maxConcurrency: MAX_CONCURRENT_JOBS,
+      maxConcurrency: Math.max(1, env.ocrConcurrency || 2),
     };
   }
 }

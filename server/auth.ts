@@ -3,19 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { Request, Response, NextFunction } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { db } from './db.ts';
 import type { Role, User } from '../src/types/index.ts';
+import { env } from './config/environment.ts';
+import { db } from './db.ts';
 
-// Enforce strong JWT secret - fail fast if missing or shorter than 32 characters
-const rawSecret = process.env.JWT_SECRET;
-if (!rawSecret || rawSecret.trim().length < 32) {
-  throw new Error(
-    'FATAL SECURITY ERROR: JWT_SECRET environment variable is missing or shorter than 32 characters. A cryptographically secure key of at least 32 characters is required.'
-  );
-}
-export const JWT_SECRET: string = rawSecret.trim();
+export const JWT_SECRET: string = env.jwtSecret;
 
 export interface AuthenticatedRequest extends Request {
   user?: User;
@@ -36,10 +30,6 @@ export function generateToken(user: User): string {
   );
 }
 
-/**
- * Generates a short-lived, signed download ticket (valid for 60 seconds)
- * strictly scoped to document retrieval without exposing long-lived session tokens in query strings.
- */
 export function generateDownloadTicket(user: User, fileId?: string): string {
   return jwt.sign(
     {
@@ -55,11 +45,6 @@ export function generateDownloadTicket(user: User, fileId?: string): string {
   );
 }
 
-/**
- * Standard authentication middleware for all API endpoints.
- * Strictly requires Authorization: Bearer <token> in headers.
- * Tokens in query strings are rejected to prevent leakage in URLs, proxy logs, and browser history.
- */
 export function authenticate(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   let token: string | undefined;
@@ -68,10 +53,10 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     token = authHeader.substring(7);
   }
 
-  // Explicitly reject query string tokens on general endpoints (Item 5)
   if (!token && (req.query?.token || req.query?.access_token)) {
     return res.status(401).json({
-      error: 'Security Warning: Authentication tokens in query strings are prohibited. Provide credentials via Authorization: Bearer <token> header.',
+      error:
+        'Security Warning: Authentication tokens in query strings are prohibited. Provide credentials via Authorization: Bearer <token> header.',
     });
   }
 
@@ -80,14 +65,12 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
   }
 
   try {
-    // Check server-side session revocation store
     if (db.isTokenRevoked(token)) {
       return res.status(401).json({ error: 'Session has been revoked or logged out. Please sign in again.' });
     }
 
     const decoded = jwt.verify(token, JWT_SECRET) as any;
 
-    // Reject short-lived download tickets on general operational API endpoints
     if (decoded.purpose === 'download') {
       return res.status(401).json({ error: 'Download tickets cannot be used for operational API requests.' });
     }
@@ -97,7 +80,6 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
       return res.status(401).json({ error: 'User session expired or account deactivated.' });
     }
 
-    // Check user-level session revocation (e.g., password change or account reset)
     if (user.tokenRevokedBefore && (decoded.iatMs || decoded.iat)) {
       const revokedTime = new Date(user.tokenRevokedBefore).getTime();
       const tokenIssuedTime = typeof decoded.iatMs === 'number' ? decoded.iatMs : decoded.iat * 1000;
@@ -111,17 +93,11 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     req.user = user;
     req.token = token;
     next();
-  } catch (err: any) {
+  } catch {
     return res.status(401).json({ error: 'Invalid, expired, or revoked session token.' });
   }
 }
 
-/**
- * Authentication middleware for document downloads and file exports.
- * Accepts either:
- * 1. Authorization: Bearer <token> header (recommended for programmatic downloads)
- * 2. ?ticket=<signed_ticket> (short-lived 60s single-use download token)
- */
 export function authenticateDownload(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   let token: string | undefined;
@@ -132,10 +108,10 @@ export function authenticateDownload(req: AuthenticatedRequest, res: Response, n
     token = String(req.query.ticket);
   }
 
-  // Reject general session token in query string
   if (!token && req.query?.token) {
     return res.status(401).json({
-      error: 'Security Warning: Full session tokens cannot be passed via URL. Use a short-lived download ticket or Bearer header.',
+      error:
+        'Security Warning: Full session tokens cannot be passed via URL. Use a short-lived download ticket or Bearer header.',
     });
   }
 
@@ -165,7 +141,7 @@ export function authenticateDownload(req: AuthenticatedRequest, res: Response, n
     req.user = user;
     req.token = token;
     next();
-  } catch (err: any) {
+  } catch {
     return res.status(401).json({ error: 'Invalid or expired download ticket.' });
   }
 }

@@ -4,8 +4,18 @@
  */
 
 import * as XLSX from 'xlsx';
+import type {
+  BankMaster,
+  ConsigneeMaster,
+  DashboardMetrics,
+  GstEntry,
+  GstResult,
+  GstSummary,
+  Payment,
+  Shipment,
+} from '../shared/contracts/index.ts';
+import { normalizeInvoiceKey } from '../shared/utils/invoiceNormalizer.ts';
 import { db } from './db.ts';
-import { normalizeInvoiceKey } from './normalizer.ts';
 
 export interface ImportValidationReport {
   totalRowsRead: number;
@@ -27,13 +37,35 @@ export interface ImportValidationReport {
   importedShipmentIds: string[];
 }
 
-export function generateExportWorkbook(financialYearId?: string): Buffer {
+export interface ExportWorkbookSourceData {
+  shipments: Shipment[];
+  consignees: ConsigneeMaster[];
+  banks: BankMaster[];
+  payments: Payment[];
+  metrics: DashboardMetrics;
+}
+
+export interface HistoricalMigrationAdapter {
+  getBanks(): Promise<BankMaster[]> | BankMaster[];
+  createBank(
+    data: Omit<BankMaster, 'id' | 'createdAt' | 'updatedAt'>,
+    actorUserId: string
+  ): Promise<BankMaster> | BankMaster;
+  getConsignees(): Promise<ConsigneeMaster[]> | ConsigneeMaster[];
+  createConsignee(
+    data: Omit<ConsigneeMaster, 'id' | 'createdAt' | 'updatedAt'>,
+    actorUserId: string
+  ): Promise<ConsigneeMaster> | ConsigneeMaster;
+  getShipmentByNormalizedKey(key: string, fyId: string): Promise<Shipment | undefined> | Shipment | undefined;
+  getPayments(): Promise<Payment[]> | Payment[];
+  createPayment(data: any, actorUserId: string): Promise<Payment> | Payment;
+  createShipment(data: any, actorUserId: string): Promise<Shipment> | Shipment;
+  updateBrcRecord(shipmentId: string, updates: any, actorUserId: string): Promise<any> | any;
+}
+
+export function buildExportWorkbookBuffer(source: ExportWorkbookSourceData): Buffer {
   const wb = XLSX.utils.book_new();
-  const shipments = db.getShipments(financialYearId ? { financialYearId } : undefined);
-  const consignees = db.getConsignees();
-  const banks = db.getBanks();
-  const payments = db.getPayments();
-  const metrics = db.getDashboardMetrics(financialYearId);
+  const { shipments, consignees, banks, payments, metrics } = source;
 
   // 1. Export Tracker Sheet (Exact 31 Columns A through AE matching workbook specification)
   const trackerData = shipments.map((s, idx) => {
@@ -49,7 +81,8 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
     const fobInr = Number(s.fobValueInr || 0);
     const diffUsd = Number(s.invoiceValueUsd || 0) - usdReceived;
     const forexVarianceInr = inrReceived > 0 ? inrReceived - fobInr : 0;
-    const gainLossTag = inrReceived === 0 ? 'NIL' : forexVarianceInr > 0 ? 'GAIN' : forexVarianceInr < 0 ? 'LOSS' : 'NIL';
+    const gainLossTag =
+      inrReceived === 0 ? 'NIL' : forexVarianceInr > 0 ? 'GAIN' : forexVarianceInr < 0 ? 'LOSS' : 'NIL';
 
     return {
       'S.No': idx + 1,
@@ -88,11 +121,8 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
   const wsTracker = XLSX.utils.json_to_sheet(trackerData);
   XLSX.utils.book_append_sheet(wb, wsTracker, 'Export Tracker');
 
-  // Helper to build a specific consignee ledger sheet
   const buildConsigneeLedgerRows = (targetConsigneePattern: string) => {
-    const matched = consignees.find((c) =>
-      c.name.toLowerCase().includes(targetConsigneePattern.toLowerCase())
-    );
+    const matched = consignees.find((c) => c.name.toLowerCase().includes(targetConsigneePattern.toLowerCase()));
     const targetShipments = shipments.filter(
       (s) =>
         s.consigneeId === matched?.id ||
@@ -125,18 +155,18 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
 
   // 2. Quick View Sheet
   const quickViewData = [
-    { 'Metric': 'Total Export Shipments', 'Value': metrics.totalShipments },
-    { 'Metric': 'Total Invoice Value (USD)', 'Value': `$${metrics.totalInvoiceValueUsd.toLocaleString()}` },
-    { 'Metric': 'Total Realised Amount (USD)', 'Value': `$${metrics.totalRealisedUsd.toLocaleString()}` },
-    { 'Metric': 'Outstanding USD Balance', 'Value': `$${metrics.totalOutstandingUsd.toLocaleString()}` },
-    { 'Metric': 'Fully Realised Invoices', 'Value': metrics.fullyPaidCount },
-    { 'Metric': 'Partially Realised Invoices', 'Value': metrics.partPaidCount },
-    { 'Metric': 'Unrealised / Pending Invoices', 'Value': metrics.unpaidCount },
-    { 'Metric': 'Total Incentives Claimed (INR)', 'Value': `₹${metrics.incentivesClaimedInr.toLocaleString()}` },
-    { 'Metric': 'Total Incentives Received (INR)', 'Value': `₹${metrics.incentivesReceivedInr.toLocaleString()}` },
-    { 'Metric': 'Pending Incentives (INR)', 'Value': `₹${metrics.incentivesPendingInr.toLocaleString()}` },
-    { 'Metric': 'BRC Complete Count', 'Value': metrics.brcRealisedCount },
-    { 'Metric': 'BRC Pending Count', 'Value': metrics.brcPendingCount },
+    { Metric: 'Total Export Shipments', Value: metrics.totalShipments },
+    { Metric: 'Total Invoice Value (USD)', Value: `$${metrics.totalInvoiceValueUsd.toLocaleString()}` },
+    { Metric: 'Total Realised Amount (USD)', Value: `$${metrics.totalRealisedUsd.toLocaleString()}` },
+    { Metric: 'Outstanding USD Balance', Value: `$${metrics.totalOutstandingUsd.toLocaleString()}` },
+    { Metric: 'Fully Realised Invoices', Value: metrics.fullyPaidCount },
+    { Metric: 'Partially Realised Invoices', Value: metrics.partPaidCount },
+    { Metric: 'Unrealised / Pending Invoices', Value: metrics.unpaidCount },
+    { Metric: 'Total Incentives Claimed (INR)', Value: `₹${metrics.incentivesClaimedInr.toLocaleString()}` },
+    { Metric: 'Total Incentives Received (INR)', Value: `₹${metrics.incentivesReceivedInr.toLocaleString()}` },
+    { Metric: 'Pending Incentives (INR)', Value: `₹${metrics.incentivesPendingInr.toLocaleString()}` },
+    { Metric: 'BRC Complete Count', Value: metrics.brcRealisedCount },
+    { Metric: 'BRC Pending Count', Value: metrics.brcPendingCount },
   ];
   const wsQuick = XLSX.utils.json_to_sheet(quickViewData);
   XLSX.utils.book_append_sheet(wb, wsQuick, 'Quick View');
@@ -154,9 +184,12 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
     const avgRate = totalInvoicedUsd > 0 ? totalFobInr / totalInvoicedUsd : 0;
     const outstandingUsd = Math.max(0, totalInvoicedUsd - totalPaidUsd);
 
-    let dbkClaimed = 0, dbkRecd = 0;
-    let rodtepClaimed = 0, rodtepRecd = 0;
-    let rosctlClaimed = 0, rosctlRecd = 0;
+    let dbkClaimed = 0,
+      dbkRecd = 0;
+    let rodtepClaimed = 0,
+      rodtepRecd = 0;
+    let rosctlClaimed = 0,
+      rosctlRecd = 0;
 
     for (const s of cShipments) {
       if (s.incentives) {
@@ -182,7 +215,7 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
     const netForexInr = totalRealisedInr > 0 ? totalRealisedInr - totalFobInr : 0;
 
     return {
-      'Consignee': c.name,
+      Consignee: c.name,
       'No. of Invoices': cShipments.length,
       'No. of Pkgs': totalPkgs,
       'Invoice Value USD': totalInvoicedUsd,
@@ -204,46 +237,41 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
   XLSX.utils.book_append_sheet(wb, wsConsignee, 'Consignee Summary');
 
   // 4. Five Specific Buyer Ledgers (All 5 original workbook consignees)
-  const wsSKGlobal = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('sk global'));
-  XLSX.utils.book_append_sheet(wb, wsSKGlobal, 'SK Global Ventures');
-
-  const wsShasvanth = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('shasvanth'));
-  XLSX.utils.book_append_sheet(wb, wsShasvanth, 'Shasvanth Impex');
-
-  const wsPrecision = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('precision tex'));
-  XLSX.utils.book_append_sheet(wb, wsPrecision, 'Precision Tex Lanka');
-
-  const wsTexFab = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('tex fab'));
-  XLSX.utils.book_append_sheet(wb, wsTexFab, 'Tex Fab Lanka');
-
-  const wsWinfield = XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('winfield'));
-  XLSX.utils.book_append_sheet(wb, wsWinfield, 'Winfield Merchant');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('sk global')), 'SK Global Ventures');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('shasvanth')), 'Shasvanth Impex');
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('precision tex')),
+    'Precision Tex Lanka'
+  );
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('tex fab')), 'Tex Fab Lanka');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildConsigneeLedgerRows('winfield')), 'Winfield Merchant');
 
   // 6. Consignee Master Sheet
   const wsConsigneeMaster = XLSX.utils.json_to_sheet(
     consignees.map((c) => ({
-      'ID': c.id,
-      'Name': c.name,
-      'Country': c.country,
+      ID: c.id,
+      Name: c.name,
+      Country: c.country,
       'Port of Discharge': c.portOfDischarge,
       'Payment Terms': c.paymentTerms,
-      'Currency': c.currency,
+      Currency: c.currency,
       'Contact Email': c.contactEmail || '',
-      'Status': c.isActive ? 'Active' : 'Inactive',
+      Status: c.isActive ? 'Active' : 'Inactive',
     }))
   );
   XLSX.utils.book_append_sheet(wb, wsConsigneeMaster, 'Consignee Master');
 
-  // 7. Bank Master Sheet (Matches uploaded CSV format)
+  // 7. Bank Master Sheet
   const wsBankMaster = XLSX.utils.json_to_sheet(
     banks.map((b) => ({
       'Bank (receiving export proceeds)': b.name,
-      'Branch': b.branch,
+      Branch: b.branch,
       'AD Code': b.adCode,
       'IFSC Code': b.ifscCode,
       'SWIFT Code': b.swiftCode,
       'Account Number': b.accountNumber,
-      'Status': b.isActive ? 'Active' : 'Inactive',
+      Status: b.isActive ? 'Active' : 'Inactive',
     }))
   );
   XLSX.utils.book_append_sheet(wb, wsBankMaster, 'Bank Master');
@@ -259,7 +287,7 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
     'INR Amount': p.inrAmount || 0,
     'Credit Date': p.creditDate,
     'Value Date': p.valueDate,
-    'Bank': p.bankName || '',
+    Bank: p.bankName || '',
     'Purpose Code': p.purposeCode || '',
   }));
   const wsPayments = XLSX.utils.json_to_sheet(paymentsData);
@@ -268,20 +296,73 @@ export function generateExportWorkbook(financialYearId?: string): Buffer {
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
-export function generateCsvExport(sheetName: string, financialYearId?: string): string {
-  const wbBuffer = generateExportWorkbook(financialYearId);
+export function buildCsvExportString(source: ExportWorkbookSourceData, sheetName: string): string {
+  const wbBuffer = buildExportWorkbookBuffer(source);
   const wb = XLSX.read(wbBuffer, { type: 'buffer' });
   const targetSheet = wb.SheetNames.find((s) => s.toLowerCase().includes(sheetName.toLowerCase())) || wb.SheetNames[0];
   const sheet = wb.Sheets[targetSheet];
   return XLSX.utils.sheet_to_csv(sheet);
 }
 
-export function parseHistoricalExcelMigration(
+export function buildGstWorkbookBuffer(entries: GstEntry[], summary: GstSummary): Buffer {
+  const wb = XLSX.utils.book_new();
+
+  const rows = entries.map((e, idx) => ({
+    'S.No': idx + 1,
+    'Entry ID': e.id,
+    'Entry Date': e.entryDate,
+    'Consignee Name': e.consigneeName,
+    'IGST (INR)': Number(e.igst.toFixed(2)),
+    'CGST (INR)': Number(e.cgst.toFixed(2)),
+    'SGST (INR)': Number(e.sgst.toFixed(2)),
+    'Total GST (INR)': Number(e.totalGst.toFixed(2)),
+    'Refund Eligible (INR)': Number(e.refundEligible.toFixed(2)),
+    'Difference (INR)': Number(e.difference.toFixed(2)),
+    Result: e.result,
+    Remarks: e.remarks || '—',
+  }));
+
+  rows.push({
+    'S.No': '' as any,
+    'Entry ID': 'TOTAL',
+    'Entry Date': `${summary.totalEntries} Entries`,
+    'Consignee Name': '',
+    'IGST (INR)': summary.totalIgst,
+    'CGST (INR)': summary.totalCgst,
+    'SGST (INR)': summary.totalSgst,
+    'Total GST (INR)': summary.totalGst,
+    'Refund Eligible (INR)': summary.totalRefundEligible,
+    'Difference (INR)': summary.netDifference,
+    Result: (summary.netDifference > 0 ? 'GAIN' : summary.netDifference < 0 ? 'LOSS' : 'NIL') as GstResult,
+    Remarks: `Gain: ${summary.gainCount} | Loss: ${summary.lossCount} | Nil: ${summary.nilCount}`,
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [
+    { wch: 6 },
+    { wch: 16 },
+    { wch: 12 },
+    { wch: 38 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 20 },
+    { wch: 16 },
+    { wch: 10 },
+    { wch: 45 },
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'GST Entries');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
+
+export async function runHistoricalMigrationWithAdapter(
   fileBuffer: Buffer,
   targetFinancialYearId: string,
-  actorUserId: string
-): ImportValidationReport {
-  // Support both XLSX and CSV files!
+  actorUserId: string,
+  adapter: HistoricalMigrationAdapter
+): Promise<ImportValidationReport> {
   const wb = XLSX.read(fileBuffer, { type: 'buffer' });
   const rawText = fileBuffer.toString('utf-8');
 
@@ -295,10 +376,346 @@ export function parseHistoricalExcelMigration(
     importedShipmentIds: [],
   };
 
-  // Case A: User uploaded Bank Master CSV (such as Export_Realisation_Tracker_FY26-27_3d40b01e.csv)
   if (rawText.includes('BANK MASTER') || rawText.includes('Bank (receiving export proceeds)')) {
     report.importType = 'BANK_MASTER';
-    const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+    const lines = rawText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    const existingBanks = await adapter.getBanks();
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes('BANK MASTER') || line.includes('Bank (receiving export proceeds)')) continue;
+      const parts = line.split(',').map((p) => p.trim());
+      const bankName = parts[0];
+      if (!bankName) continue;
+
+      report.totalRowsRead++;
+      const exists = existingBanks.some((b) => b.name.toLowerCase() === bankName.toLowerCase());
+      if (exists) {
+        report.warnings.push({
+          rowNumber: i + 1,
+          invoiceNo: bankName,
+          message: `Bank '${bankName}' already exists in Bank Master (preserved).`,
+        });
+        report.acceptedRows++;
+      } else {
+        try {
+          const created = await adapter.createBank(
+            {
+              name: bankName,
+              branch: 'Chennai Branch',
+              adCode: '6690005',
+              ifscCode: bankName.toLowerCase().includes('dbs')
+                ? 'DBSS0IN0811'
+                : bankName.toLowerCase().includes('hdfc')
+                  ? 'HDFC0000166'
+                  : 'BANK0001234',
+              swiftCode: '',
+              accountNumber: '',
+              isActive: true,
+            },
+            actorUserId
+          );
+          existingBanks.push(created);
+          report.acceptedRows++;
+          report.warnings.push({
+            rowNumber: i + 1,
+            invoiceNo: bankName,
+            message: `Created new Bank Master entry for '${bankName}'.`,
+          });
+        } catch (e: any) {
+          report.rejectedRows++;
+          report.rejectionLog.push({
+            rowNumber: i + 1,
+            invoiceNo: bankName,
+            consignee: 'Bank Master',
+            reason: e.message,
+          });
+        }
+      }
+    }
+    return report;
+  }
+
+  if (rawText.includes('CONSIGNEE MASTER') || (rawText.includes('Country') && rawText.includes('Port of Discharge'))) {
+    report.importType = 'CONSIGNEE_MASTER';
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    report.totalRowsRead = rows.length;
+    const consignees = await adapter.getConsignees();
+
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx];
+      const name = String(row['Name'] || row['Consignee Name'] || row['CONSIGNEE'] || '').trim();
+      if (!name) continue;
+
+      const existing = consignees.find((c) => c.name.toLowerCase() === name.toLowerCase());
+      if (!existing) {
+        const created = await adapter.createConsignee(
+          {
+            name,
+            country: String(row['Country'] || 'International').trim(),
+            portOfDischarge: String(row['Port of Discharge'] || row['Port'] || '').trim(),
+            paymentTerms: String(row['Payment Terms'] || 'FOB COLOMBO | DA 90 DAYS').trim(),
+            currency: String(row['Currency'] || 'USD').trim(),
+            contactEmail: String(row['Contact Email'] || '').trim(),
+            isActive: true,
+          },
+          actorUserId
+        );
+        consignees.push(created);
+        report.acceptedRows++;
+      } else {
+        report.acceptedRows++;
+      }
+    }
+    return report;
+  }
+
+  report.importType = 'TRACKER';
+  const sheetName =
+    wb.SheetNames.find((s) => s.toLowerCase().includes('export') || s.toLowerCase().includes('tracker')) ||
+    wb.SheetNames[0];
+  const sheet = wb.Sheets[sheetName];
+  const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  report.totalRowsRead = rows.length;
+
+  const consignees = await adapter.getConsignees();
+  const banks = await adapter.getBanks();
+  const payments = await adapter.getPayments();
+  const defaultBank = banks[0];
+
+  for (let idx = 0; idx < rows.length; idx++) {
+    const row = rows[idx];
+    const rowNum = idx + 2;
+    const invoiceNo = String(row['Invoice No.'] || row['Invoice No'] || row['INVOICE NO'] || '').trim();
+    const consigneeName = String(row['Consignee Name'] || row['Consignee'] || row['BUYER'] || '').trim();
+    const fircIrm = String(
+      row['FIRC / IRM No.'] || row['FIRC No.'] || row['IRM Number'] || row['FIRC'] || row['IRM'] || ''
+    ).trim();
+
+    if (!invoiceNo) {
+      report.rejectedRows++;
+      report.rejectionLog.push({
+        rowNumber: rowNum,
+        invoiceNo: 'BLANK',
+        consignee: consigneeName,
+        reason: 'Invoice number is missing or empty.',
+      });
+      continue;
+    }
+
+    if (!fircIrm) {
+      report.rejectedRows++;
+      report.rejectionLog.push({
+        rowNumber: rowNum,
+        invoiceNo,
+        consignee: consigneeName,
+        reason: 'EXCLUDED UNDER RULE: No valid FIRC / IRM remittance record linked to this invoice.',
+      });
+      continue;
+    }
+
+    const normalizedKey = normalizeInvoiceKey(invoiceNo);
+    const existing = await adapter.getShipmentByNormalizedKey(normalizedKey, targetFinancialYearId);
+    if (existing) {
+      report.rejectedRows++;
+      report.rejectionLog.push({
+        rowNumber: rowNum,
+        invoiceNo,
+        consignee: consigneeName,
+        reason: `DUPLICATE DETECTED: Normalized key '${normalizedKey}' already exists in database.`,
+      });
+      continue;
+    }
+
+    let matchedConsignee = consignees.find((c) => c.name.toLowerCase() === consigneeName.toLowerCase());
+    if (!matchedConsignee) {
+      try {
+        matchedConsignee = await adapter.createConsignee(
+          {
+            name: consigneeName || `Consignee ${invoiceNo}`,
+            country: 'International',
+            portOfDischarge: '',
+            paymentTerms: 'FOB COLOMBO | DA 90 DAYS',
+            currency: 'USD',
+            isActive: true,
+          },
+          actorUserId
+        );
+        consignees.push(matchedConsignee);
+        report.warnings.push({
+          rowNumber: rowNum,
+          invoiceNo,
+          message: `Created new Consignee Master record for '${consigneeName}'.`,
+        });
+        report.warningsCount++;
+      } catch {
+        matchedConsignee = consignees[0];
+      }
+    }
+
+    const invoiceUsd =
+      parseFloat(String(row['Invoice Value (USD)'] || row['Invoice Value'] || '0').replace(/,/g, '')) || 1000;
+    const sbNo = String(row['Shipping Bill No.'] || row['SB No'] || `SB-${invoiceNo}`).trim();
+    const sbDate = parseExcelDate(row['Shipping Bill Date'] || row['SB Date']) || '2026-04-07';
+    const invDate = parseExcelDate(row['Invoice Date'] || row['Date']) || '2026-04-06';
+    const rate = parseFloat(String(row['SB Exchange Rate'] || row['Rate'] || '92.10')) || 92.1;
+    const fobInr =
+      parseFloat(String(row['FOB Value (INR)'] || row['FOB INR'] || '0').replace(/,/g, '')) || invoiceUsd * rate;
+
+    let payment = payments.find((p) => p.irmNumber.toUpperCase() === fircIrm.toUpperCase());
+    if (!payment) {
+      payment = await adapter.createPayment(
+        {
+          irmNumber: fircIrm,
+          senderReference: String(row['Sender Reference'] || '').trim(),
+          verifiedAmount: invoiceUsd,
+          inrAmount: fobInr,
+          exchangeRate: rate,
+          valueDate: invDate,
+          creditDate: invDate,
+          bankId: defaultBank?.id || '',
+          purposeCode: 'P0103',
+          remarks: `Migrated from Excel historical file for ${invoiceNo}`,
+        },
+        actorUserId
+      );
+      payments.push(payment);
+    }
+
+    try {
+      const createdShipment = await adapter.createShipment(
+        {
+          financialYearId: targetFinancialYearId,
+          invoiceNumber: invoiceNo,
+          invoiceDate: invDate,
+          consigneeId: matchedConsignee?.id || consignees[0]?.id,
+          portCode: String(row['Destination Port'] || row['Port'] || 'INMAA1').trim().toUpperCase(),
+          packageCount: parseInt(String(row['Package Count'] || '0'), 10) || 0,
+          invoiceValueUsd: invoiceUsd,
+          shippingBillNumber: sbNo,
+          shippingBillDate: sbDate,
+          sbExchangeRate: rate,
+          fobValueInr: fobInr,
+          blNumber: String(row['BL / Transport Doc No.'] || row['BL No'] || '').trim(),
+          vesselName: String(row['Vessel Name'] || '').trim(),
+          remarks: String(row['Remarks'] || 'Historical migration').trim(),
+          initialFircPaymentId: payment.id,
+          initialFircAllocationAmount: invoiceUsd,
+          reviewStatus: 'CONFIRMED',
+          incentives: {
+            dbkClaimed: parseFloat(String(row['DBK Claimed (INR)'] || '0').replace(/,/g, '')) || 0,
+            rodtepClaimed: parseFloat(String(row['RoDTEP Claimed (INR)'] || '0').replace(/,/g, '')) || 0,
+            rosctlClaimed: parseFloat(String(row['RoSCTL Claimed (INR)'] || '0').replace(/,/g, '')) || 0,
+          },
+          brc: {
+            uploadMode: 'SINGLE',
+            statutoryDeadline: parseExcelDate(row['BRC Deadline']) || undefined,
+            remarks: String(row['BRC Remarks'] || '').trim(),
+          },
+        },
+        actorUserId
+      );
+
+      const brcNo = String(row['BRC Number'] || row['BRC No'] || '').trim();
+      if (brcNo) {
+        await adapter.updateBrcRecord(
+          createdShipment.id,
+          {
+            brcNumber: brcNo,
+            issueDate: parseExcelDate(row['BRC Issue Date']) || undefined,
+            realisationDate: parseExcelDate(row['Bank Realisation Date']) || undefined,
+            realisedAmount: invoiceUsd,
+            realisedCurrency: 'USD',
+            status: 'REALISED',
+          },
+          actorUserId
+        );
+      }
+
+      report.acceptedRows++;
+      report.importedShipmentIds.push(createdShipment.id);
+    } catch (err: any) {
+      report.rejectedRows++;
+      report.rejectionLog.push({
+        rowNumber: rowNum,
+        invoiceNo,
+        consignee: consigneeName,
+        reason: err.message,
+      });
+    }
+  }
+
+  return report;
+}
+
+function parseExcelDate(val: any): string | null {
+  if (!val) return null;
+  if (typeof val === 'number') {
+    const date = new Date((val - (25567 + 2)) * 86400 * 1000);
+    return date.toISOString().split('T')[0];
+  }
+  const str = String(val).trim();
+  const parts = str.replace(/[\/\.]/g, '-').split('-');
+  if (parts.length === 3) {
+    if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+  }
+  return str;
+}
+
+// --- Backward-compatible synchronous facades over legacy db ---
+
+export function generateExportWorkbook(financialYearId?: string): Buffer {
+  return buildExportWorkbookBuffer({
+    shipments: db.getShipments(financialYearId ? { financialYearId } : undefined),
+    consignees: db.getConsignees(),
+    banks: db.getBanks(),
+    payments: db.getPayments(),
+    metrics: db.getDashboardMetrics(financialYearId),
+  });
+}
+
+export function generateCsvExport(sheetName: string, financialYearId?: string): string {
+  return buildCsvExportString(
+    {
+      shipments: db.getShipments(financialYearId ? { financialYearId } : undefined),
+      consignees: db.getConsignees(),
+      banks: db.getBanks(),
+      payments: db.getPayments(),
+      metrics: db.getDashboardMetrics(financialYearId),
+    },
+    sheetName
+  );
+}
+
+export function parseHistoricalExcelMigration(
+  fileBuffer: Buffer,
+  targetFinancialYearId: string,
+  actorUserId: string
+): ImportValidationReport {
+  const wb = XLSX.read(fileBuffer, { type: 'buffer' });
+  const rawText = fileBuffer.toString('utf-8');
+
+  const report: ImportValidationReport = {
+    totalRowsRead: 0,
+    acceptedRows: 0,
+    rejectedRows: 0,
+    warningsCount: 0,
+    rejectionLog: [],
+    warnings: [],
+    importedShipmentIds: [],
+  };
+
+  if (rawText.includes('BANK MASTER') || rawText.includes('Bank (receiving export proceeds)')) {
+    report.importType = 'BANK_MASTER';
+    const lines = rawText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
     const existingBanks = db.getBanks();
 
     for (let i = 0; i < lines.length; i++) {
@@ -324,7 +741,11 @@ export function parseHistoricalExcelMigration(
               name: bankName,
               branch: 'Chennai Branch',
               adCode: '6690005',
-              ifscCode: bankName.toLowerCase().includes('dbs') ? 'DBSS0IN0811' : bankName.toLowerCase().includes('hdfc') ? 'HDFC0000166' : 'BANK0001234',
+              ifscCode: bankName.toLowerCase().includes('dbs')
+                ? 'DBSS0IN0811'
+                : bankName.toLowerCase().includes('hdfc')
+                  ? 'HDFC0000166'
+                  : 'BANK0001234',
               swiftCode: '',
               accountNumber: '',
               isActive: true,
@@ -351,7 +772,6 @@ export function parseHistoricalExcelMigration(
     return report;
   }
 
-  // Case B: Consignee Master CSV
   if (rawText.includes('CONSIGNEE MASTER') || (rawText.includes('Country') && rawText.includes('Port of Discharge'))) {
     report.importType = 'CONSIGNEE_MASTER';
     const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -377,17 +797,16 @@ export function parseHistoricalExcelMigration(
           },
           actorUserId
         );
-        report.acceptedRows++;
-      } else {
-        report.acceptedRows++;
       }
+      report.acceptedRows++;
     }
     return report;
   }
 
-  // Case C: Standard Export Tracker Workbook or CSV
   report.importType = 'TRACKER';
-  const sheetName = wb.SheetNames.find((s) => s.toLowerCase().includes('export') || s.toLowerCase().includes('tracker')) || wb.SheetNames[0];
+  const sheetName =
+    wb.SheetNames.find((s) => s.toLowerCase().includes('export') || s.toLowerCase().includes('tracker')) ||
+    wb.SheetNames[0];
   const sheet = wb.Sheets[sheetName];
   const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
   report.totalRowsRead = rows.length;
@@ -415,7 +834,6 @@ export function parseHistoricalExcelMigration(
       return;
     }
 
-    // MANDATORY IMPORT RULE: Exclude legacy rows that have no FIRC under the confirmed import rule
     if (!fircIrm) {
       report.rejectedRows++;
       report.rejectionLog.push({
@@ -440,7 +858,6 @@ export function parseHistoricalExcelMigration(
       return;
     }
 
-    // Match or create Consignee
     let matchedConsignee = consignees.find((c) => c.name.toLowerCase() === consigneeName.toLowerCase());
     if (!matchedConsignee) {
       try {
@@ -461,20 +878,20 @@ export function parseHistoricalExcelMigration(
           message: `Created new Consignee Master record for '${consigneeName}'.`,
         });
         report.warningsCount++;
-      } catch (e: any) {
+      } catch {
         matchedConsignee = consignees[0];
       }
     }
 
-    // Values extraction
-    const invoiceUsd = parseFloat(String(row['Invoice Value (USD)'] || row['Invoice Value'] || '0').replace(/,/g, '')) || 1000;
+    const invoiceUsd =
+      parseFloat(String(row['Invoice Value (USD)'] || row['Invoice Value'] || '0').replace(/,/g, '')) || 1000;
     const sbNo = String(row['Shipping Bill No.'] || row['SB No'] || `SB-${invoiceNo}`).trim();
     const sbDate = parseExcelDate(row['Shipping Bill Date'] || row['SB Date']) || '2026-04-07';
     const invDate = parseExcelDate(row['Invoice Date'] || row['Date']) || '2026-04-06';
     const rate = parseFloat(String(row['SB Exchange Rate'] || row['Rate'] || '92.10')) || 92.1;
-    const fobInr = parseFloat(String(row['FOB Value (INR)'] || row['FOB INR'] || '0').replace(/,/g, '')) || invoiceUsd * rate;
+    const fobInr =
+      parseFloat(String(row['FOB Value (INR)'] || row['FOB INR'] || '0').replace(/,/g, '')) || invoiceUsd * rate;
 
-    // Check if Payment FIRC exists or create
     let payment = db.getPayments().find((p) => p.irmNumber.toUpperCase() === fircIrm.toUpperCase());
     if (!payment) {
       payment = db.createPayment(
@@ -528,7 +945,6 @@ export function parseHistoricalExcelMigration(
         actorUserId
       );
 
-      // If BRC details exist in row, update BRC
       const brcNo = String(row['BRC Number'] || row['BRC No'] || '').trim();
       if (brcNo) {
         db.updateBrcRecord(
@@ -561,22 +977,6 @@ export function parseHistoricalExcelMigration(
   return report;
 }
 
-function parseExcelDate(val: any): string | null {
-  if (!val) return null;
-  if (typeof val === 'number') {
-    // Excel date serial number
-    const date = new Date((val - (25567 + 2)) * 86400 * 1000);
-    return date.toISOString().split('T')[0];
-  }
-  const str = String(val).trim();
-  const parts = str.replace(/[\/\.]/g, '-').split('-');
-  if (parts.length === 3) {
-    if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-    if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-  }
-  return str;
-}
-
 export function generateGstExcelExport(filters?: {
   consigneeId?: string;
   result?: any;
@@ -584,56 +984,6 @@ export function generateGstExcelExport(filters?: {
   startDate?: string;
   endDate?: string;
 }): Buffer {
-  const wb = XLSX.utils.book_new();
   const { entries, summary } = db.getGstEntries({ ...filters, limit: 10000 });
-
-  const rows = entries.map((e, idx) => ({
-    'S.No': idx + 1,
-    'Entry ID': e.id,
-    'Entry Date': e.entryDate,
-    'Consignee Name': e.consigneeName,
-    'IGST (INR)': Number(e.igst.toFixed(2)),
-    'CGST (INR)': Number(e.cgst.toFixed(2)),
-    'SGST (INR)': Number(e.sgst.toFixed(2)),
-    'Total GST (INR)': Number(e.totalGst.toFixed(2)),
-    'Refund Eligible (INR)': Number(e.refundEligible.toFixed(2)),
-    'Difference (INR)': Number(e.difference.toFixed(2)),
-    'Result': e.result,
-    'Remarks': e.remarks || '—',
-  }));
-
-  // Summary row at the bottom
-  rows.push({
-    'S.No': '' as any,
-    'Entry ID': 'TOTAL',
-    'Entry Date': `${summary.totalEntries} Entries`,
-    'Consignee Name': '',
-    'IGST (INR)': summary.totalIgst,
-    'CGST (INR)': summary.totalCgst,
-    'SGST (INR)': summary.totalSgst,
-    'Total GST (INR)': summary.totalGst,
-    'Refund Eligible (INR)': summary.totalRefundEligible,
-    'Difference (INR)': summary.netDifference,
-    'Result': (summary.netDifference > 0 ? 'GAIN' : summary.netDifference < 0 ? 'LOSS' : 'NIL') as any,
-    'Remarks': `Gain: ${summary.gainCount} | Loss: ${summary.lossCount} | Nil: ${summary.nilCount}`,
-  });
-
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws['!cols'] = [
-    { wch: 6 },
-    { wch: 16 },
-    { wch: 12 },
-    { wch: 38 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 16 },
-    { wch: 20 },
-    { wch: 16 },
-    { wch: 10 },
-    { wch: 45 },
-  ];
-
-  XLSX.utils.book_append_sheet(wb, ws, 'GST Entries');
-  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  return buildGstWorkbookBuffer(entries, summary);
 }

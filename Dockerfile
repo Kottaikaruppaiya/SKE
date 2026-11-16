@@ -1,12 +1,15 @@
 # Multi-stage production Dockerfile for SKE Export Documents & Realisation Tracker
 # Self-hosted on Ubuntu VPS with native Tesseract OCR, PyMuPDF, Poppler & OpenCV
 
-# --- Stage 1: Build Frontend Assets ---
+# --- Stage 1: Build Frontend Assets & Generate Prisma Client ---
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci
+
+COPY prisma ./prisma
+RUN npx prisma generate
 
 COPY . .
 RUN npm run build
@@ -44,9 +47,13 @@ RUN pip3 install --no-cache-dir --break-system-packages \
 COPY package*.json ./
 RUN npm ci --omit=dev && npm install -g tsx
 
-# Copy built frontend assets and server application code
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Copy built frontend assets and modular server/shared application code
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server ./server
+COPY --from=builder /app/shared ./shared
 COPY --from=builder /app/server.ts ./server.ts
 COPY --from=builder /app/src/types ./src/types
 COPY --from=builder /app/public ./public
